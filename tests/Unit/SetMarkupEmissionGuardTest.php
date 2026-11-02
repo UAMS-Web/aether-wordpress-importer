@@ -135,6 +135,7 @@ it('stamps the nonce on every literal set-markup emission', function (): void {
 
 it('stamps the nonce on the dom-built set markup', function (): void {
     $missing = [];
+    $emitters = 0;
 
     foreach (setMarkupSourceFiles() as $path) {
         $raw = \file_get_contents($path);
@@ -145,15 +146,22 @@ it('stamps the nonce on the dom-built set markup', function (): void {
 
         $source = setMarkupCodeOnly($raw);
 
-        if (! \str_contains($source, "'data-set-type'")) {
+        // Only a write makes a DOM emitter; reading the attribute back
+        // (`hasAttribute()`, `getAttribute()`) builds no set markup
+        if (\preg_match("/->setAttribute\(\s*'data-set-type'/", $source) !== 1) {
             continue;
         }
+
+        $emitters++;
 
         // A DOM emitter must also call setAttribute() with the nonce
         if (! \str_contains($source, 'SetMarkupNonce::ATTRIBUTE')) {
             $missing[] = \basename($path);
         }
     }
+
+    // A pattern change that stops matching would otherwise pass vacuously
+    expect($emitters)->toBeGreaterThanOrEqual(1);
 
     expect($missing)->toBe([]);
 });
