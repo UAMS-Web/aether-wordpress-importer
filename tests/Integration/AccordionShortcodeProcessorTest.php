@@ -344,7 +344,7 @@ describe('toTiptapHtml', function (): void {
         expect(accordionFlattened("[section title=\"A\"]Line one.\n\nLine two.[/section]"))
             ->toBe("</p><h3>A</h3><p>Line one.</p>\n<p>Line two.</p>\n<p></p><p>")
             ->and(accordionFlattened('[section title="A"]<ul><li>x</li></ul>[/section]'))
-            ->toBe("</p><h3>A</h3><ul><li>x</li>\n\n</ul><p></p><p>");
+            ->toBe("</p><h3>A</h3><ul>\n\n<li>x</li>\n\n</ul><p></p><p>");
     });
 
     it('keeps the paragraph boundaries wpautop put inside a section body', function (): void {

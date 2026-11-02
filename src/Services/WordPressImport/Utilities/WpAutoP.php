@@ -139,14 +139,14 @@ class WpAutoP
         );
 
         // ---
-        // Add double line breaks before block-level opening tags.
-        // This matches opening tags that end with `>` (not self-closing tags ending with `/>`).
-        // Matches tags ending with `>` where the character before `>` is not `/`.
-        // The pattern `[^/]>` ensures `>` is not preceded by `/`, handling both tags with
-        // and without attributes.
+        // Add double line breaks before block-level opening tags, bare (`<div>`) or
+        // with attributes (`<div class="a">`), as WordPress's `wpautop()` does.
+        // The lookahead ends the tag name, so `<pre>` is not read as `<p` and
+        // `<thead>` not as `<th`. The lookbehind skips a tag ending `/>`, which
+        // the self-closing pass above has already handled.
         // ---
         $text = self::pregReplace(
-            "!(<{$allblocks}(?:\s+[^>]*)?[^/]>)!",
+            "!(<{$allblocks}(?=[\s>])[^>]*(?<=[^/])>)!",
             "\n\n$1",
             $text
         );
