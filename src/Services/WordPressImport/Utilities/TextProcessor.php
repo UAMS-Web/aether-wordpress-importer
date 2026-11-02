@@ -486,7 +486,8 @@ class TextProcessor
      * nodes. When $applyWpAutoP is true, applies WpAutoP early (before shortcode
      * and link processing) so wpautop structure in content:encoded (double line
      * breaks as paragraph boundaries) is recognized and converted to <p> tags.
-     * Replaces [caption] shortcodes early to avoid redundant image sets and text
+     * Content holding a block comment (`<!-- wp:`) skips it even then, as
+     * WordPress's do_blocks() unhooks wpautop() for such content. Replaces [caption] shortcodes early to avoid redundant image sets and text
      * nodes. Strips <span> tags with data-ccp-props attributes to prevent
      * erroneous line breaks. Processes wp:image blocks and standalone images using
      * WpImageBlockProcessor for consistent handling. Processes remaining HTML,
@@ -722,8 +723,10 @@ class TextProcessor
         // non-Gutenberg WordPress is imported with correct paragraph structure.
         // ---
 
-        // Check if WpAutoP should be applied
-        if ($applyWpAutoP) {
+        // Check if WpAutoP should be applied. Content with blocks never gets it, as
+        // WordPress's do_blocks() removes wpautop() from the_content when
+        // has_blocks() finds `<!-- wp:` (#146).
+        if ($applyWpAutoP && ! \str_contains($processedContent, '<!-- wp:')) {
             // Convert numeric HTML entities for proper WpAutoP processing. Each
             // is decoded as the content is decoded everywhere else, so a code
             // point above 127 keeps its character rather than becoming one byte,

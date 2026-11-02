@@ -39,15 +39,30 @@ namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 class WpAutoP
 {
     /**
-     * Formats text with paragraph and line break tags, replicating WordPress's
-     * wpautop().
+     * Block-level element names, as WordPress 7.0.7's `wpautop()` lists them.
+     */
+    private const string ALLBLOCKS = '(?:table|thead|tfoot|caption|col|colgroup|tbody|tr|td|th|div|dl|dd|dt|ul|ol|li|pre|form|map|area|blockquote|address|style|p|h[1-6]|hr|fieldset|legend|section|article|aside|hgroup|header|footer|nav|figure|figcaption|details|menu|summary)';
+
+    /**
+     * Elements whose newlines the line-break pass leaves alone.
+     */
+    private const array PRESERVED_ELEMENTS = ['script', 'style', 'svg', 'math'];
+
+    /**
+     * Formats text with paragraph and line break tags, as WordPress's `wpautop()`.
      *
-     * Processes input text to standardize newlines, wrap content in <p> tags for
-     * double line breaks, and optionally add <br /> tags for single line breaks.
-     * Protects block-level elements and specific tags (e.g., <pre>, <script>) from
-     * unwanted formatting. Skips <p> tag addition for content that is solely a
-     * block-level element (e.g., a single Tiptap set <div>) to prevent empty
-     * paragraphs.
+     * Follows `wpautop()` from WordPress 7.0.7's `wp-includes/formatting.php` step for
+     * step, so the same input gives the same HTML. Two things differ, and only where
+     * a regular expression in WordPress's version fails: the newlines inside
+     * `<script>`, `<style>`, `<svg>` and `<math>` are found by a string scan rather
+     * than a regular expression, so a large element cannot exhaust PCRE's backtrack
+     * limit and empty the text as it does in WordPress; and a step whose regular
+     * expression fails anyway keeps its input and is reported through
+     * {@see ImportWarningManager}, rather than passing on null (#146).
+     *
+     * Content that holds blocks is WordPress's to leave alone: `do_blocks()` unhooks
+     * `wpautop()` for it, so callers skip this for such content, as
+     * {@see TextProcessor::processForBard()} does.
      *
      * @param  string  $text  The input text or HTML to format (e.g., WYSIWYG field content)
      * @param  bool  $br  Whether to convert single line breaks to <br /> tags (default: true)
@@ -61,356 +76,314 @@ class WpAutoP
             return '';
         }
 
-        $pre_tags = [];
+        $preTags = [];
+        $allblocks = self::ALLBLOCKS;
 
         // Pad the end for processing
         $text .= "\n";
 
-        // Protect <pre> tags
-        if (
-            \str_contains(
-                $text,
-                '<pre'
-            )
-        ) {
-            $text_parts = \explode(
-                '</pre>',
-                $text
-            );
-            $last_part = array_pop($text_parts);
+        // Set <pre> elements aside behind placeholders, to restore them untouched
+        if (\str_contains($text, '<pre')) {
+            $textParts = \explode('</pre>', $text);
+            $lastPart = \array_pop($textParts);
             $text = '';
             $i = 0;
 
-            foreach ($text_parts as $text_part) {
-                $start = \strpos(
-                    $text_part,
-                    '<pre'
-                );
+            foreach ($textParts as $textPart) {
+                $start = \strpos($textPart, '<pre');
+
+                // A closing </pre> with no opener is left as it is
                 if ($start === false) {
-                    $text .= $text_part;
+                    $text .= $textPart;
 
                     continue;
                 }
 
-                $name = "<pre wp-pre-tag-$i></pre>";
-                $pre_tags[$name] = \substr(
-                    $text_part,
-                    $start
-                ).'</pre>';
-                $text .= \substr(
-                    $text_part,
-                    0,
-                    $start
-                ).$name;
+                $name = "<pre wp-pre-tag-{$i}></pre>";
+                $preTags[$name] = \substr($textPart, $start).'</pre>';
+                $text .= \substr($textPart, 0, $start).$name;
                 $i++;
             }
 
-            $text .= $last_part;
+            $text .= $lastPart;
         }
 
-        // Replace multiple <br> tags with two line breaks
-        $text = self::pregReplace(
-            '|<br\s*/?>\s*<br\s*/?>|',
-            "\n\n",
-            $text
-        );
+        // Turn two <br> tags in a row into a paragraph break
+        $text = self::pregReplace('|<br\s*/?>\s*<br\s*/?>|', "\n\n", $text);
 
-        // ---
-        // Block-level element tag names (shared by non-capturing and capturing patterns)
-        // ---
+        // Add a paragraph break above block-level opening tags
+        $text = self::pregReplace("!(<{$allblocks}[\s/>])!", "\n\n$1", $text);
 
-        // Alternation of block-level tag names for use in regex patterns
-        $blockTagNames = 'table|thead|tfoot|caption|col|colgroup|tbody|tr|td|th|div|dl|dd|dt|ul|ol|li|pre|form|map|area|blockquote|address|style|p|h[1-6]|hr|fieldset|legend|section|article|aside|hgroup|header|footer|nav|figure|figcaption|details|menu|summary|img';
+        // Add a paragraph break below block-level closing tags
+        $text = self::pregReplace("!(</{$allblocks}>)!", "$1\n\n", $text);
 
-        // Non-capturing group for use in replace patterns (no backreference)
-        $allblocks = "(?:{$blockTagNames})";
-
-        // Capturing group so the same tag can be required at open and close via \1
-        $allblocksCapture = "({$blockTagNames})";
-
-        // ---
-        // Add double line breaks after self-closing block elements (img, etc.).
-        // This must come first to avoid conflicts with opening/closing tag patterns.
-        // ---
-        $text = self::pregReplace(
-            "!(<{$allblocks}[^>]*?/>)!",
-            "\n\n$1\n\n",
-            $text
-        );
-
-        // ---
-        // Add double line breaks before block-level opening tags, bare (`<div>`) or
-        // with attributes (`<div class="a">`), as WordPress's `wpautop()` does.
-        // The lookahead ends the tag name, so `<pre>` is not read as `<p` and
-        // `<thead>` not as `<th`. The lookbehind skips a tag ending `/>`, which
-        // the self-closing pass above has already handled.
-        // ---
-        $text = self::pregReplace(
-            "!(<{$allblocks}(?=[\s>])[^>]*(?<=[^/])>)!",
-            "\n\n$1",
-            $text
-        );
-
-        // Add double line breaks after block-level closing tags
-        $text = self::pregReplace(
-            "!(</{$allblocks}>)!",
-            "$1\n\n",
-            $text
-        );
-
-        // Add double line breaks after hr tags (handled separately for compatibility)
-        $text = self::pregReplace(
-            '!(<hr\s*?/?>)!',
-            "$1\n\n",
-            $text
-        );
+        // Add a paragraph break after <hr>, which has no closing tag
+        $text = self::pregReplace('!(<hr\s*?/?>)!', "$1\n\n", $text);
 
         // Standardize newlines
-        $text = \str_replace(
-            [
-                "\r\n",
-                "\r",
-            ],
-            "\n",
-            $text
-        );
+        $text = \str_replace(["\r\n", "\r"], "\n", $text);
 
-        // Protect newlines in HTML tags
-        $text = self::pregReplaceCallback(
-            '#<(script|style|svg|math)([^>]*)>(.*?)</\1>#si',
-            fn ($matches): string => \str_replace(
-                "\n",
-                '<!-- wpnl -->',
-                $matches[0]
-            ),
-            $text
-        );
+        // Mark the newlines inside tags, so they are not read as line breaks
+        $text = self::replaceInHtmlTags($text, "\n", ' <!-- wpnl --> ');
 
-        // Remove excess line breaks
-        $text = self::pregReplace(
-            "/\n\n+/",
-            "\n\n",
-            $text
-        );
-
-        // ---
-        // Check if content is solely a single block-level element (same tag open and
-        // close). Requiring \1 backreference prevents matching mixed content like
-        // <h2>...</h2>...<p>...</p> which would otherwise skip paragraph wrapping.
-        // ---
-
-        // Trim whitespace so the block-only regex can match from start to end
-        $trimmed = \trim($text);
-
-        // Detect whether content is a single block element (same tag open and close)
-        $isBlockOnly = \preg_match(
-            "/^<{$allblocksCapture}[^>]*>.*<\\/\\1>$/s",
-            $trimmed
-        );
-
-        // Skip <p> wrapping if content is only a block-level element
-        if ($isBlockOnly === 1) {
-            // Restore protected newlines
-            $text = \str_replace(
-                [' <!-- wpnl --> ',
-                    '<!-- wpnl -->'],
-                "\n",
-                $trimmed
-            );
-            // Restore <pre> tags. str_replace() reads an array's values in order
-            // whatever their keys, so array_values() only documents the intent.
-            if ($pre_tags !== []) {
-                // @pest-mutate-ignore: UnwrapArrayValues
-                return \str_replace(
-                    \array_keys($pre_tags),
-                    \array_values($pre_tags),
-                    $text
-                );
-            }
-
-            return $text;
+        // Keep <option> elements out of paragraphs
+        if (\str_contains($text, '<option')) {
+            $text = self::pregReplace('|\s*<option|', '<option', $text);
+            $text = self::pregReplace('|</option>\s*|', '</option>', $text);
         }
+
+        // Keep the inside of an <object>, and its <param> and <embed>, together
+        if (\str_contains($text, '</object>')) {
+            $text = self::pregReplace('|(<object[^>]*>)\s*|', '$1', $text);
+            $text = self::pregReplace('|\s*</object>|', '</object>', $text);
+            $text = self::pregReplace('%\s*(</?(?:param|embed)[^>]*>)\s*%', '$1', $text);
+        }
+
+        // Keep <audio> and <video>, and their <source> and <track>, together
+        if (\str_contains($text, '<source') || \str_contains($text, '<track')) {
+            $text = self::pregReplace('%([<\[](?:audio|video)[^>\]]*[>\]])\s*%', '$1', $text);
+            $text = self::pregReplace('%\s*([<\[]/(?:audio|video)[>\]])%', '$1', $text);
+            $text = self::pregReplace('%\s*(<(?:source|track)[^>]*>)\s*%', '$1', $text);
+        }
+
+        // Keep a <figcaption> against what it captions
+        if (\str_contains($text, '<figcaption')) {
+            $text = self::pregReplace('|\s*(<figcaption[^>]*>)|', '$1', $text);
+            $text = self::pregReplace('|</figcaption>\s*|', '</figcaption>', $text);
+        }
+
+        // Collapse runs of blank lines
+        $text = self::pregReplace("/\n\n+/", "\n\n", $text);
 
         // Split into paragraphs. A limit of 0 means no limit, as -1 does.
         // @pest-mutate-ignore: IncrementInteger
-        $paragraphs = \preg_split(
-            '/\n\s*\n/',
-            $text,
-            -1,
-            PREG_SPLIT_NO_EMPTY
-        );
+        $paragraphs = \preg_split('/\n\s*\n/', $text, -1, PREG_SPLIT_NO_EMPTY);
+
         // A fixed pattern on a string cannot fail to split, so no test reaches this
         // @pest-mutate-ignore: FalseToTrue
         if ($paragraphs === false) {
+            self::reportFailure('split into paragraphs', $text);
+
             // @pest-mutate-ignore: RemoveEarlyReturn
             return $text;
         }
 
+        // Wrap each paragraph in <p>
         $text = '';
-
-        // Wrap content in <p> tags
         foreach ($paragraphs as $paragraph) {
-            $text .= '<p>'.\trim(
-                $paragraph,
-                "\n"
-            )."</p>\n";
+            $text .= '<p>'.\trim($paragraph, "\n")."</p>\n";
         }
 
-        // Clean up stray <p> tags
-        $text = self::pregReplace(
-            '|<p>\s*</p>|',
-            '',
-            $text
-        );
-        $text = self::pregReplace(
-            '!<p>([^<]+)</(div|address|form)>!',
-            '<p>$1</p></$2>',
-            $text
-        );
-        $text = self::pregReplace(
-            "!<p>\s*(</?{$allblocks}[^>]*>)\s*</p>!",
-            '$1',
-            $text
-        );
-        $text = self::pregReplace(
-            '|<p>(<li.+?)</p>|',
-            '$1',
-            $text
-        );
-        $text = self::pregReplace(
-            '|<p><blockquote([^>]*)>|i',
-            '<blockquote$1><p>',
-            $text
-        );
-        $text = \str_replace(
-            '</blockquote></p>',
-            '</p></blockquote>',
-            $text
-        );
-        $text = self::pregReplace(
-            "!<p>\s*(</?{$allblocks}[^>]*>)!",
-            '$1',
-            $text
-        );
-        $text = self::pregReplace(
-            "!(</?{$allblocks}[^>]*>)\s*</p>!",
-            '$1',
-            $text
-        );
+        // Remove paragraphs of nothing but whitespace
+        $text = self::pregReplace('|<p>\s*</p>|', '', $text);
 
-        // Handle line breaks if enabled
+        // Close a paragraph left open inside a <div>, <address> or <form>
+        $text = self::pregReplace('!<p>([^<]+)</(div|address|form)>!', '<p>$1</p></$2>', $text);
+
+        // Unwrap a block tag that sits alone in a paragraph
+        $text = self::pregReplace("!<p>\s*(</?{$allblocks}[^>]*>)\s*</p>!", '$1', $text);
+
+        // Unwrap list items from paragraphs
+        $text = self::pregReplace('|<p>(<li.+?)</p>|', '$1', $text);
+
+        // Move a paragraph around a <blockquote> inside it
+        $text = self::pregReplace('!<p><blockquote((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>!i', '<blockquote$1><p>', $text);
+        $text = \str_replace('</blockquote></p>', '</p></blockquote>', $text);
+
+        // Drop a paragraph opener before a block tag, and a closer after one
+        $text = self::pregReplace("!<p>\s*(</?{$allblocks}[^>]*>)!", '$1', $text);
+        $text = self::pregReplace("!(</?{$allblocks}[^>]*>)\s*</p>!", '$1', $text);
+
+        // Turn the remaining single newlines into <br />
         if ($br) {
-            // The wpnl pass above normally leaves no newline inside these elements,
-            // so this pass usually finds none. It does find them when that pass hit
-            // the PCRE backtrack limit on a large element and left the text unchanged
-            // while the clean-up since has shrunk it under the limit; its restore then
-            // writes `<br />` inside the element, unlike wpautop()'s plain newline (#146).
-            $text = self::pregReplaceCallback(
-                '#<(script|style|svg|math)([^>]*)>(.*?)</\1>#si',
-                fn ($matches): string => \str_replace(
-                    "\n",
-                    '<WPPreserveNewline />',
-                    $matches[0]
-                ),
-                $text
-            );
-            $text = \str_replace(
-                ['<br>',
-                    '<br/>'],
-                '<br />',
-                $text
-            );
-            $text = self::pregReplace(
-                '|(?<!<br />)\s*\n|',
-                "<br />\n",
-                $text
-            );
-            $text = \str_replace(
-                '<WPPreserveNewline />',
-                "<br />\n",
-                $text
-            );
+            // Set aside the newlines inside script, style, SVG and MathML elements
+            $text = self::preserveElementNewlines($text);
+
+            // Normalize <br> spellings
+            $text = \str_replace(['<br>', '<br/>'], '<br />', $text);
+
+            // Add <br /> before each newline that has none
+            $text = self::pregReplace('|(?<!<br />)\s*\n|', "<br />\n", $text);
+
+            // Restore the newlines set aside
+            $text = \str_replace('<WPPreserveNewline />', "\n", $text);
         }
 
-        // Clean up <br /> tags
-        $text = self::pregReplace(
-            "!(</?{$allblocks}[^>]*>)\s*<br />!",
-            '$1',
-            $text
-        );
-        $text = self::pregReplace(
-            '!<br />(\s*</?(?:p|li|div|dl|dd|dt|th|pre|td|ul|ol)[^>]*>)!',
-            '$1',
-            $text
-        );
-        $text = self::pregReplace(
-            "|\n</p>$|",
-            '</p>',
-            $text
-        );
+        // Drop a <br /> after a block tag
+        $text = self::pregReplace("!(</?{$allblocks}[^>]*>)\s*<br />!", '$1', $text);
 
-        // Restore <pre> tags; array_values() only documents the intent, as above
-        if ($pre_tags !== []) {
+        // Drop a <br /> before some block tags
+        $text = self::pregReplace('!<br />(\s*</?(?:p|li|div|dl|dd|dt|th|pre|td|ul|ol)[^>]*>)!', '$1', $text);
+
+        // Drop the newline before the last </p>
+        $text = self::pregReplace("|\n</p>$|", '</p>', $text);
+
+        // Restore <pre> elements. str_replace() reads an array's values in order
+        // whatever their keys, so array_values() only documents the intent.
+        if ($preTags !== []) {
             // @pest-mutate-ignore: UnwrapArrayValues
-            $text = \str_replace(
-                \array_keys($pre_tags),
-                \array_values($pre_tags),
-                $text
-            );
+            $text = \str_replace(\array_keys($preTags), \array_values($preTags), $text);
         }
 
-        // Restore protected newlines
-        $text = \str_replace(
-            [' <!-- wpnl --> ',
-                '<!-- wpnl -->'],
-            "\n",
-            $text
-        );
+        // Restore the newlines marked inside tags
+        if (\str_contains($text, '<!-- wpnl -->')) {
+            return \str_replace([' <!-- wpnl --> ', '<!-- wpnl -->'], "\n", $text);
+        }
 
         return $text;
     }
 
     /**
-     * Run preg_replace and preserve subject on regex failure.
+     * Replace a string inside HTML tags and comments only, as WordPress's
+     * `wp_replace_in_html_tags()` does with one replacement pair.
+     *
+     * @param  string  $haystack  The HTML to search
+     * @param  string  $needle  The string to find inside tags
+     * @param  string  $replace  Its replacement
+     * @return string The HTML with the needle replaced inside tags
+     */
+    private static function replaceInHtmlTags(
+        string $haystack,
+        string $needle,
+        string $replace
+    ): string {
+        // Split into text and tags; the tags land at the odd indexes
+        $parts = \preg_split(self::htmlSplitRegex(), $haystack, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+        if ($parts === false) {
+            self::reportFailure('find newlines inside tags', $haystack);
+
+            return $haystack;
+        }
+
+        // Replace inside each tag
+        $changed = false;
+        $count = \count($parts);
+        for ($i = 1; $i < $count; $i += 2) {
+            if (\str_contains($parts[$i], $needle)) {
+                $parts[$i] = \str_replace($needle, $replace, $parts[$i]);
+                $changed = true;
+            }
+        }
+
+        return $changed ? \implode('', $parts) : $haystack;
+    }
+
+    /**
+     * The pattern that splits HTML into text and tags, as WordPress's
+     * `get_html_split_regex()` builds it, comments and CDATA included.
+     *
+     * @return string The PCRE pattern
+     */
+    private static function htmlSplitRegex(): string
+    {
+        // A comment, after the `<`, up to `-->` or the end of the input
+        $comments = '!(?:-(?!->)[^\-]*+)*+(?:-->)?';
+
+        // A CDATA section, after the `<`, up to `]]>` or the end of the input
+        $cdata = '!\[CDATA\[[^\]]*+(?:](?!]>)[^\]]*+)*+(?:]]>)?';
+
+        // An escaped element is a comment or CDATA; anything else ends at `>`
+        $escaped = '(?=!--|!\[CDATA\[)(?(?=!-)'.$comments.'|'.$cdata.')';
+
+        return '/(<(?'.$escaped.'|[^>]*>?))/';
+    }
+
+    /**
+     * Swap each newline inside a `<script>`, `<style>`, `<svg>` or `<math>` element for
+     * a placeholder, as `wpautop()`'s `/<(script|style|svg|math).*?<\/\1>/s` pass does.
+     *
+     * A scan for the opener and its closing tag finds the same spans as that pattern,
+     * including its case-sensitive names and an opener whose name only begins with one
+     * of the four, without a backtrack limit to exhaust on a large element.
+     *
+     * @param  string  $text  The HTML to scan
+     * @return string The HTML with those newlines replaced by `<WPPreserveNewline />`
+     */
+    private static function preserveElementNewlines(string $text): string
+    {
+        $result = '';
+        $offset = 0;
+        $length = \strlen($text);
+
+        while ($offset < $length) {
+            // Find the earliest opener of any of the four elements
+            $start = null;
+            $name = '';
+            foreach (self::PRESERVED_ELEMENTS as $element) {
+                $position = \strpos($text, '<'.$element, $offset);
+                if ($position !== false && ($start === null || $position < $start)) {
+                    $start = $position;
+                    $name = $element;
+                }
+            }
+
+            if ($start === null) {
+                break;
+            }
+
+            // An opener with no closing tag after it starts no span; look past it
+            $close = \strpos($text, '</'.$name.'>', $start + 1 + \strlen($name));
+            if ($close === false) {
+                $result .= \substr($text, $offset, $start + 1 - $offset);
+                $offset = $start + 1;
+
+                continue;
+            }
+
+            // Copy the text before the span, then the span with its newlines set aside
+            $end = $close + \strlen($name) + 3;
+            $result .= \substr($text, $offset, $start - $offset)
+                .\str_replace("\n", '<WPPreserveNewline />', \substr($text, $start, $end - $start));
+            $offset = $end;
+        }
+
+        return $result.\substr($text, $offset);
+    }
+
+    /**
+     * Run preg_replace, reporting a failure and keeping the subject when it fails.
      *
      * @param  string  $pattern  PCRE pattern
      * @param  string  $replacement  Replacement string
      * @param  string  $subject  Input subject
-     * @return string Updated text or original text on failure
+     * @return string Updated text, or the subject unchanged on failure
      */
     private static function pregReplace(
         string $pattern,
         string $replacement,
         string $subject
     ): string {
-        $result = \preg_replace(
-            $pattern,
-            $replacement,
-            $subject
-        );
+        $result = \preg_replace($pattern, $replacement, $subject);
 
-        return \is_string($result) ? $result : $subject;
+        if (! \is_string($result)) {
+            self::reportFailure($pattern, $subject);
+
+            return $subject;
+        }
+
+        return $result;
     }
 
     /**
-     * Run preg_replace_callback and preserve subject on regex failure.
+     * Report a step that could not run, so the summary names the content it skipped.
      *
-     * @param  string  $pattern  PCRE pattern
-     * @param  callable(array<int|string, string>): string  $callback  Replacement callback
-     * @param  string  $subject  Input subject
-     * @return string Updated text or original text on failure
+     * @param  string  $step  The pattern or step that failed
+     * @param  string  $subject  The text it was run on
      */
-    private static function pregReplaceCallback(
-        string $pattern,
-        callable $callback,
+    private static function reportFailure(
+        string $step,
         string $subject
-    ): string {
-        $result = \preg_replace_callback(
-            $pattern,
-            $callback,
-            $subject
+    ): void {
+        ImportWarningManager::addWarning(
+            'content',
+            'wpautop_step_failed',
+            [
+                'step' => $step,
+                'error' => \preg_last_error_msg(),
+                'length' => \strlen($subject),
+                'excerpt' => \mb_substr($subject, 0, 120),
+            ]
         );
-
-        return \is_string($result) ? $result : $subject;
     }
 }

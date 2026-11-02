@@ -133,8 +133,10 @@ it('produces the same content whatever whitespace surrounds a section body', fun
 });
 
 it('processes a section body as ordinary content, not as inner blocks', function (): void {
-    // Inner-block processing strips block comments first; here the comment stays,
-    // and the hard break it leaves after "one" is the observable difference
+    // Inner-block processing strips block comments first, so WpAutoP then splits
+    // "one" from "two". Here the comment stays, and content holding a block comment
+    // skips WpAutoP as WordPress's do_blocks() skips wpautop() (#146), so the two
+    // run together in one paragraph: that is the observable difference
     $body = "one\n<!-- wp:x -->\n\ntwo";
 
     ProcessingContext::setShortcodeContent('[section title="A"]'.$body.'[/section]');
@@ -146,18 +148,18 @@ it('processes a section body as ordinary content, not as inner blocks', function
         [
             'title' => 'A',
             'content' => [
-                [
-                    'type' => 'paragraph',
-                    'content' => [['type' => 'text', 'text' => 'one'], ['type' => 'hardBreak']],
-                    'attrs' => [],
-                ],
-                accordionParagraph('two'),
+                accordionParagraph('onetwo'),
             ],
         ],
     ])
         ->and($result)->toBe([
             'type' => 'accordion',
             ['title' => 'A', 'content' => accordionSectionContent($body)],
+        ])
+        ->and(TextProcessor::processForBard($body, 'default', accordionAssetImporter(), new BufferedOutput, true, true, [], [], 'slug'))
+        ->toBe([
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'one']], 'attrs' => []],
+            accordionParagraph('two'),
         ]);
 });
 
@@ -344,7 +346,7 @@ describe('toTiptapHtml', function (): void {
         expect(accordionFlattened("[section title=\"A\"]Line one.\n\nLine two.[/section]"))
             ->toBe("</p><h3>A</h3><p>Line one.</p>\n<p>Line two.</p>\n<p></p><p>")
             ->and(accordionFlattened('[section title="A"]<ul><li>x</li></ul>[/section]'))
-            ->toBe("</p><h3>A</h3><ul>\n\n<li>x</li>\n\n</ul><p></p><p>");
+            ->toBe("</p><h3>A</h3><ul>\n<li>x</li>\n</ul>\n<p></p><p>");
     });
 
     it('keeps the paragraph boundaries wpautop put inside a section body', function (): void {
