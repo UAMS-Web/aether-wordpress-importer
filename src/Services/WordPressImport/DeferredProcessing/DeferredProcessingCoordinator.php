@@ -472,7 +472,7 @@ class DeferredProcessingCoordinator
         $entriesToProcess = [];
 
         // Loop through pageData to find entries with wp_block references
-        foreach ($pageData as $postId => $page) {
+        foreach ($pageData as $page) {
             // Skip malformed page records
             if (! is_array($page)) {
                 continue;
@@ -498,7 +498,6 @@ class DeferredProcessingCoordinator
             }
 
             unset(
-                $postId,
                 $page,
                 $entryId
             );

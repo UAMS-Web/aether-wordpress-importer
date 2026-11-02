@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets;
 
+use ErrorException;
 use Exception;
 use getID3;
 use Illuminate\Http\Client\ConnectionException;
@@ -264,9 +265,6 @@ class AssetDownloader
             null,
             true
         );
-
-        // Initialize final path before upload attempt
-        $finalPath = null;
 
         // Attempt to upload and save the asset, handling validation errors gracefully
         try {
@@ -667,12 +665,6 @@ class AssetDownloader
         // Initialize attempt counter for retry logic
         $attempt = 0;
 
-        // Preserve the original URL for fallback attempts
-        $originalUrl = $url;
-
-        // Track the current URL being attempted (may change from original)
-        $currentUrl = $url;
-
         // Initialize HTTPS version of URL (null if not applicable)
         $httpsUrl = null;
 
@@ -746,10 +738,7 @@ class AssetDownloader
                     // Log that HTTPS failed and we're falling back to HTTP
                     $output->writeln("      - <comment>HTTPS attempt failed ($errorType). Trying original HTTP URL...</comment>");
 
-                    // Switch to original URL for remaining attempts
-                    $currentUrl = $originalUrl;
-
-                    // Don't increment attempt counter, try original URL immediately
+                    // Retry straight away; the next attempt resets to the original HTTP URL
                     continue;
                 }
 
@@ -776,10 +765,7 @@ class AssetDownloader
                     // Log HTTPS failure and fallback to HTTP
                     $output->writeln('      - <comment>HTTPS attempt failed. Trying original HTTP URL...</comment>');
 
-                    // Switch to original URL for remaining attempts
-                    $currentUrl = $originalUrl;
-
-                    // Continue to next attempt without incrementing counter, try original URL immediately
+                    // Retry straight away; the next attempt resets to the original HTTP URL
                     continue;
                 }
 
@@ -806,10 +792,7 @@ class AssetDownloader
                     // Log HTTPS failure and fallback to HTTP
                     $output->writeln('      - <comment>HTTPS attempt failed. Trying original HTTP URL...</comment>');
 
-                    // Switch to original URL for remaining attempts
-                    $currentUrl = $originalUrl;
-
-                    // Continue to next attempt without incrementing counter, try original URL immediately
+                    // Retry straight away; the next attempt resets to the original HTTP URL
                     continue;
                 }
 
@@ -1041,7 +1024,7 @@ class AssetDownloader
         // Try to get image dimensions using getimagesize()
         try {
             // Get image size and type information
-            $imageSize = \getimagesize($tempPath);
+            $imageSize = $this->readImageSize($tempPath);
 
             // Check if getimagesize succeeded
             if ($imageSize !== false) {
@@ -1061,13 +1044,13 @@ class AssetDownloader
             }
         }
 
-        // Handle exceptions from getimagesize()
-        catch (Exception $exception) {
+        // Handle the notice getimagesize() raised on a file it could not read
+        catch (ErrorException $errorException) {
             // Mark getimagesize as failed
             $diagnostics['getimagesize_result'] = false;
 
             // Store getimagesize error message in diagnostics
-            $diagnostics['getimagesize_error'] = $exception->getMessage();
+            $diagnostics['getimagesize_error'] = $errorException->getMessage();
         }
 
         // ---
@@ -1085,6 +1068,43 @@ class AssetDownloader
 
         // Return diagnostics array
         return $diagnostics;
+    }
+
+    /**
+     * Read an image file's dimensions and type with getimagesize().
+     *
+     * getimagesize() raises a notice on a file it cannot read. The notice is caught
+     * here and thrown as an ErrorException, so the caller sees it whether or not an
+     * error handler of the host's would have converted it.
+     *
+     * @param  string  $path  The file to read
+     * @return array{0: int<0, max>, 1: int<0, max>, 2: int, 3: string, mime: string, channels?: int, bits?: int}|false The size details, or false when the file is not an image
+     *
+     * @throws ErrorException When getimagesize() raises a notice or warning
+     */
+    private function readImageSize(string $path): array|false
+    {
+        // Record the first notice or warning getimagesize() raises
+        $notice = null;
+        \set_error_handler(static function (int $severity, string $message) use (&$notice): bool {
+            $notice ??= $message;
+
+            return true;
+        });
+
+        // Read the file, restoring the previous handler however the call ends
+        try {
+            $imageSize = \getimagesize($path);
+        } finally {
+            \restore_error_handler();
+        }
+
+        // Report the notice to the caller
+        if ($notice !== null) {
+            throw new ErrorException($notice);
+        }
+
+        return $imageSize;
     }
 
     /**

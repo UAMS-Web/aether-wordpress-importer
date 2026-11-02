@@ -511,7 +511,6 @@ it('names an unnamed notification of an unidentified form, and maps none from a 
 });
 
 it('identifies the notification being mapped while it is mapped', function (): void {
-    $seen = null;
     $manager = new class extends FormConfigurationManager
     {
         /**

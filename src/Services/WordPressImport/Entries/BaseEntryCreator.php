@@ -1345,12 +1345,6 @@ abstract class BaseEntryCreator
                         // Generate a new slug with counter
                         $counter = 1;
 
-                        // Initialize new slug with original site-specific slug
-                        $newSlug = $siteSpecificSlug;
-
-                        // Initialize new cache key with original cache key
-                        $newCacheKey = $cacheKey;
-
                         // Loop until we find a unique slug
                         do {
                             // Append counter to create unique slug, in a form Statamic's
@@ -2197,6 +2191,9 @@ abstract class BaseEntryCreator
                     ($unmappedTermCounts[$termTaxonomy] ?? 0) + 1;
             }
         }
+
+        // The loop variable outlives the loop; release it before it is reused
+        unset($term);
 
         // Check if category taxonomy is in the list of taxonomies to process
         if (

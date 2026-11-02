@@ -1305,7 +1305,6 @@ function kbYamlFieldValidationProvider(): array
     $base_article['base_test_name'] = 'article entry with ';
     $base_article['xml_parameters']['entryVariantType'] = 'article';
     $base_article['xml_parameters']['entrySlug'] = 'sample-article-1';
-    $base_article['yaml_assertions']['blueprint']['value'] = 'article';
     $base_article['yaml_assertions']['title_options']['type'] = 'field_exists';
     unset($base_article['yaml_assertions']['header_graphic']);
     unset($base_article['yaml_assertions']['title_short']);
@@ -1835,7 +1834,6 @@ function kbYamlFieldValidationProvider(): array
         'user_roles',
     ];
     $article_restriction['yaml_assertions']['restriction_user_roles'] = $base_article['yaml_assertions']['restriction_user_roles'];
-    $article_restriction['yaml_assertions']['restriction_user_roles']['value'] = null;
     $article_restriction['yaml_assertions']['import_wordpress_notes'] = $base_article['yaml_assertions']['import_wordpress_notes'];
     $article_restriction['yaml_assertions']['import_wordpress_notes']['value'] = [
         'restriction_user_roles: "editor"',
@@ -1895,7 +1893,6 @@ function kbYamlFieldValidationProvider(): array
     $knowledge_base_breadcrumbs_home_label['yaml_assertions']['title'] = $base_knowledge_base['yaml_assertions']['title'];
     $knowledge_base_breadcrumbs_home_label['yaml_assertions']['title']['value'] = 'University of Arkansas for Medical Sciences BAR';
     $knowledge_base_breadcrumbs_home_label['yaml_assertions']['nav_alt_name'] = $base_knowledge_base['yaml_assertions']['nav_alt_name'];
-    $knowledge_base_breadcrumbs_home_label['yaml_assertions']['nav_alt_name']['value'] = null;
 
     // Add Knowledge Base entry with non-default breadcrumbs_home_label to test cases
     $entryVariantTypes[] = $knowledge_base_breadcrumbs_home_label;
@@ -1908,10 +1905,8 @@ function kbYamlFieldValidationProvider(): array
     $knowledge_base_home_sections_search = $base_knowledge_base;
     $knowledge_base_home_sections_search['base_test_name'] .= 'home_sections_switch with search';
     $knowledge_base_home_sections_search['json_parameters']['home_sections_switch'] = true;
-    $knowledge_base_home_sections_search['json_parameters']['home_sections'] = 'search,topics';
     $knowledge_base_home_sections_search['yaml_assertions'] = []; // Clear 'yaml_assertions' so we don't have to test all the defaults
     $knowledge_base_home_sections_search['yaml_assertions']['knowledge_base_search_query'] = $base_knowledge_base['yaml_assertions']['knowledge_base_search_query'];
-    $knowledge_base_home_sections_search['yaml_assertions']['knowledge_base_search_query']['value'] = true;
 
     // ---
     // Add Knowledge Base entry with home_sections_switch set to true and
@@ -2048,7 +2043,6 @@ function kbYamlFieldValidationProvider(): array
         'user_roles',
     ];
     $knowledge_base_restrict_on_global['yaml_assertions']['restriction_user_roles'] = $base_knowledge_base['yaml_assertions']['restriction_user_roles'];
-    $knowledge_base_restrict_on_global['yaml_assertions']['restriction_user_roles']['value'] = null;
     $knowledge_base_restrict_on_global['yaml_assertions']['import_wordpress_notes'] = $base_knowledge_base['yaml_assertions']['import_wordpress_notes'];
     $knowledge_base_restrict_on_global['yaml_assertions']['import_wordpress_notes']['value'] = [
         'restriction_user_roles: "editor"',
@@ -2131,10 +2125,8 @@ function kbYamlFieldValidationProvider(): array
 
     $knowledge_base_show_search_page_last_edit = $base_knowledge_base;
     $knowledge_base_show_search_page_last_edit['base_test_name'] .= 'show_search_page_last_edit';
-    $knowledge_base_show_search_page_last_edit['json_parameters']['show_search_page_last_edit'] = true;
     $knowledge_base_show_search_page_last_edit['yaml_assertions'] = []; // Clear 'yaml_assertions' so we don't have to test all the defaults
     $knowledge_base_show_search_page_last_edit['yaml_assertions']['article_last_modified_query'] = $base_knowledge_base['yaml_assertions']['article_last_modified_query'];
-    $knowledge_base_show_search_page_last_edit['yaml_assertions']['article_last_modified_query']['value'] = true;
 
     // ---
     // Add Knowledge Base entry with non-default show_search_page_last_edit to test
@@ -2673,9 +2665,6 @@ function kbGetSingleArticleXml(
 ): string {
     // Initialize categories XML variable
     $categoriesXml = '';
-
-    // Initialize tags XML variable (unused but kept for consistency)
-    $tagsXml = '';
 
     // Get centralized data
     $articles = kbGetArticleData();

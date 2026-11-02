@@ -676,7 +676,7 @@ describe('saving a table', function (): void {
         $saved = [];
         $outputs = [];
 
-        foreach ([1, 2] as $copy) {
+        for ($copy = 0; $copy < 2; $copy++) {
             $creator = new TablePressEntryCreator;
             $creator->setOverwriteBehavior('Create an additional file');
             $outputs[] = tablePressRun($export, $creator)['output'];

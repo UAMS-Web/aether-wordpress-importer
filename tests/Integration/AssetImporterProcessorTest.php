@@ -53,11 +53,9 @@ function assetImporterAttachment(string $postId, string $url): SimpleXMLElement
  */
 function assetImporterExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     /** @var list<ExpectationInterface> $expectations */
     $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
@@ -93,6 +91,7 @@ function assetImporterWarnings(): ArrayObject
 
     Log::shouldReceive('warning')->andReturnUsing(
         function (string $message, array $context = []) use ($warnings): void {
+            /** @var array<string, mixed> $context */
             $warnings->append(['message' => $message, 'context' => $context]);
         }
     );

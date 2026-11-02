@@ -165,9 +165,6 @@ class OverwriteHandler
 
                     // Update path to use new filename
                     $path = $newPath;
-
-                    // Update original filename to new filename
-                    $originalFilename = $newFilename;
                 }
 
                 // Exit case
@@ -344,9 +341,6 @@ class OverwriteHandler
 
                     // Update path to use new filename
                     $path = $newPath;
-
-                    // Update original filename to new filename
-                    $originalFilename = $newFilename;
                 }
 
                 // Exit case

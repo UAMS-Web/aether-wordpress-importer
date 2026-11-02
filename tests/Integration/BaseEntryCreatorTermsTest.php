@@ -733,6 +733,12 @@ afterEach(function (): void {
     TermFacade::swap($this->termRepository);
 
     [$taxonomies, $terms] = $this->taxonomyDirectories;
+
+    // The saved terms directory must be a path before it is restored
+    if (! \is_string($terms)) {
+        throw new RuntimeException('Expected the saved terms directory.');
+    }
+
     termsDirectory('taxonomies', $taxonomies);
     termsDirectory('terms', $terms);
 

@@ -229,9 +229,9 @@ class ReusableBlockCoordinator
         // ended the loop
         $exhausted = true;
 
-        // Loop until max iterations reached or no new wp_blocks found. Each pass is
-        // counted as it starts, so no early exit can skip the count.
-        foreach (\range(1, $maxIterations) as $pass) {
+        // Loop until max iterations reached or no new wp_blocks found. Every pass counts
+        // toward the limit, however it ends.
+        for ($pass = 0; $pass < $maxIterations; $pass++) {
             // ---
             // Get wp_block post IDs that were encountered during content processing
             // (includes newly discovered ones from previous iteration)
@@ -304,12 +304,6 @@ class ReusableBlockCoordinator
 
             // Process each wp_block individually
             foreach ($wpBlocksToProcess as $wpBlock) {
-                // Extract the WordPress post ID from the wp_block item
-                $postId = XpathHelper::getStringValue(
-                    $wpBlock,
-                    'wp:post_id'
-                );
-
                 // ---
                 // Create a new XML parser instance for this specific wp_block to avoid state
                 // conflicts

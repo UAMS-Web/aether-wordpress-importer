@@ -475,7 +475,6 @@ class PostEntryCreator extends BaseEntryCreator
             // (wordpress-importer-archive#1220). Only when tag import is enabled.
             // ---
             $tagEntryReferences = [];
-            $rawTags = [];
 
             // An `if` reads the value's truthiness, which the cast does not change
             // @pest-mutate-ignore: RemoveBooleanCast

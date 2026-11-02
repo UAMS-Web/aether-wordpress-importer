@@ -107,6 +107,12 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     [$taxonomies, $terms] = $this->taxonomyDirectories;
+
+    // The saved terms directory must be a path before it is restored
+    if (! \is_string($terms)) {
+        throw new RuntimeException('Expected the saved terms directory.');
+    }
+
     audioSeriesTermDirectory('taxonomies', $taxonomies);
     audioSeriesTermDirectory('terms', $terms);
 

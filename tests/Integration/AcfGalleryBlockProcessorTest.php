@@ -76,11 +76,9 @@ function acfGalleryImporter(array $paths, array $attachments, BufferedOutput $ou
  */
 function acfGalleryExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     /** @var list<ExpectationInterface> $expectations */
     $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
@@ -125,9 +123,12 @@ function acfGalleryWarnings(): ArrayObject
 {
     $warnings = new ArrayObject;
 
-    Log::shouldReceive('warning')->andReturnUsing(function (string $message, array $context) use ($warnings): void {
-        $warnings->append([$message, $context]);
-    });
+    Log::shouldReceive('warning')->andReturnUsing(
+        function (string $message, array $context) use ($warnings): void {
+            /** @var array<string, mixed> $context */
+            $warnings->append([$message, $context]);
+        }
+    );
 
     return $warnings;
 }

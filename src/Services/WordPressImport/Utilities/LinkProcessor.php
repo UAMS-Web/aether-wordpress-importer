@@ -181,7 +181,7 @@ class LinkProcessor
         $link = $doc->getElementsByTagName('a')->item(0);
 
         // Extract the processed URL or fall back to original if processing failed
-        $processedUrl = $link !== null ? $link->getAttribute('href') : $url;
+        $processedUrl = $link?->getAttribute('href') ?? $url;
 
         // Return the processed URL
         return $processedUrl;
@@ -3062,7 +3062,7 @@ class LinkProcessor
                     $categoryElements = $item->xpath(
                         'category[@domain="category"]/@nicename'
                     );
-                    $hasMatchingCategory = array_any(\is_array($categoryElements) ? $categoryElements : [], fn ($categoryNicename): bool => (string) $categoryNicename === $urlCategorySlug);
+                    $hasMatchingCategory = array_any(\is_array($categoryElements) ? $categoryElements : [], fn (SimpleXMLElement $categoryNicename): bool => (string) $categoryNicename === $urlCategorySlug);
 
                     // ---
                     // Add item if category matches
@@ -3639,8 +3639,7 @@ class LinkProcessor
                     ['exception' => $e->getMessage()]
                 );
 
-                // Treat the failed attempt as a miss so the retry runs
-                $statamicEntry = null;
+                // The failed attempt leaves the entry null, so the retry runs
             }
 
             // Check if entry was found successfully

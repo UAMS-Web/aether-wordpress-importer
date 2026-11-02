@@ -453,7 +453,6 @@ function pageBuilderYamlFieldValidationProvider(): array
     // Create base page for logo list block
     $base_logo_list_block = $base;
     $base_logo_list_block['xml_parameters']['entryVariantType'] = 'logo_list_v01';
-    $base_logo_list_block['xml_parameters']['acfName'] = 'acf/logo-list';
     $base_logo_list_block['xml_parameters']['acfData'] = [
         'heading' => 'Sample Logo List Block',
         'hide_heading' => '0',
@@ -604,7 +603,6 @@ function pageBuilderYamlFieldValidationProvider(): array
     // Logo List Block v01 (base)
     $logo_list_block_v01 = $base_logo_list_block;
     $logo_list_block_v01['base_test_name'] = 'logo list block v01';
-    $logo_list_block_v01['xml_parameters']['entryVariantType'] = 'logo_list_v01';
     $entryVariantTypes[] = $logo_list_block_v01;
 
     // Logo List Block v02 (hide_heading = 1)
@@ -1021,7 +1019,7 @@ function pageBuilderYamlFieldValidationProvider(): array
         // still asserted individually inside the test (wordpress-importer-archive#391).
         $fieldAssertions = [];
 
-        foreach ($entryVariantType['yaml_assertions'] as $fieldName => $assertion) {
+        foreach ($entryVariantType['yaml_assertions'] as $assertion) {
             if (
                 ! \is_array($assertion)
                 || ! isset($assertion['field'], $assertion['value'], $assertion['type'])

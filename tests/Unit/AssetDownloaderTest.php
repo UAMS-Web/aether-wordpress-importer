@@ -46,7 +46,7 @@ afterEach(function (): void {
  * fail trait.unused. tests/Feature/ImportWordPressCommandTest.php carries its own
  * copy for the same reason.
  */
-function unwrapExpectation(CompositeExpectation $composite): Expectation
+function unwrapExpectation(ExpectationInterface $composite): Expectation
 {
     $reflection = new ReflectionClass(CompositeExpectation::class);
     $property = $reflection->getProperty('_expectations');
@@ -189,16 +189,9 @@ it('returns null and reports a missing asset container instead of fataling', fun
 
     // The not-found branch must log an error; ignore other log calls
     $log = Mockery::mock();
-    $errorComposite = $log->shouldReceive('error');
-
-    // Narrow the shouldReceive() union to CompositeExpectation, then unwrap the
-    // inner Expectation so ->once() is visible to PHPStan (the composite only
-    // proxies the fluent methods through __call).
-    if (! $errorComposite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
-
-    unwrapExpectation($errorComposite)->once();
+    // Unwrap the inner Expectation so ->once() is visible to PHPStan (the
+    // composite shouldReceive() returns only proxies it through __call)
+    unwrapExpectation($log->shouldReceive('error'))->once();
     $log->shouldIgnoreMissing();
     Log::swap($log);
 
@@ -412,11 +405,9 @@ it('treats a redirect loop as a failed download', function (): void {
  */
 function assetDownloaderExpect(MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     return unwrapExpectation($composite);
 }

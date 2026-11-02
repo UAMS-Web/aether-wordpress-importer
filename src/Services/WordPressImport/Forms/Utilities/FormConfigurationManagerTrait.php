@@ -1061,6 +1061,9 @@ trait FormConfigurationManagerTrait
                             }
                         }
 
+                        // The loop variable outlives the loop; release it before it is reused
+                        unset($processedValue);
+
                         // Process statamic_other_field_value if configured
                         $this->processStatamicOtherFieldValue(
                             $mappingConfig,
@@ -1144,8 +1147,7 @@ trait FormConfigurationManagerTrait
             $statamicKey,
             $value,
             $multipleResults,
-            $targetAttribute,
-            $processedValue
+            $targetAttribute
         );
 
         return $contentMappings;
@@ -1896,10 +1898,6 @@ trait FormConfigurationManagerTrait
             $defaultTranslations = isset($translationConfig['default']) && \is_array($translationConfig['default'])
                 ? $translationConfig['default']
                 : [];
-            $specificTranslations = isset($translationConfig['specific']) && \is_array($translationConfig['specific'])
-                ? $translationConfig['specific']
-                : [];
-
             // Check for exact value match in default translations
             if (\is_int($value) || \is_string($value)) {
                 if (
@@ -1925,8 +1923,8 @@ trait FormConfigurationManagerTrait
                 }
             }
 
-            // Check for exact value match in specific translations (if we had a fieldtype context)
-            // For now, just use default translations
+            // Specific translations need a fieldtype context this method does not have,
+            // so only the default translations apply
         }
 
         // Return original value if no translation found

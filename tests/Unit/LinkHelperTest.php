@@ -29,6 +29,16 @@ class LinkHelperWakeProbe
     {
         self::$woken = true;
     }
+
+    /**
+     * Report whether any instance has been unserialized.
+     *
+     * @return bool Whether an instance was woken
+     */
+    public static function wasWoken(): bool
+    {
+        return self::$woken;
+    }
 }
 
 /**
@@ -89,7 +99,7 @@ it('does not wake an object out of a serialized link', function (): void {
 
     // The URL is not a string, so the link value comes back as it was given
     expect($url)->toBe($serialized)
-        ->and(LinkHelperWakeProbe::$woken)->toBeFalse();
+        ->and(LinkHelperWakeProbe::wasWoken())->toBeFalse();
 });
 
 it('prefers the fallback to a bare string when a fallback is given', function (): void {

@@ -154,7 +154,7 @@ function metadataSetterFind(mixed $asset): ArrayObject
 /**
  * Record the warnings logged.
  *
- * @return ArrayObject<int, mixed> Each warning's message and context
+ * @return ArrayObject<int, array{mixed, mixed}> Each warning's message and context
  */
 function metadataSetterWarnings(): ArrayObject
 {

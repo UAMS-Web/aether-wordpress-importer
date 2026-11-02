@@ -224,6 +224,9 @@ class Editor extends BaseEditor
                 }
             }
 
+            // The loop variable outlives the loop; release it before it is reused
+            unset($child);
+
             // Add the final paragraph if it exists
             if ($currentParagraph !== null) {
                 $newContent[] = $currentParagraph;

@@ -10,12 +10,6 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWa
 require_once __DIR__.'/../Support/gravity-forms-test-support.php';
 
 it('generates field handles with a field id suffix', function (): void {
-    $fieldData = [
-        'id' => '2',
-        'label' => 'Email Address',
-        'type' => 'email',
-    ];
-
     // Test that field handles are generated with field ID for uniqueness
     $expectedHandle = 'email_address_2';
 

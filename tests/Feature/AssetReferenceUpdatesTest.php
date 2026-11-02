@@ -73,7 +73,6 @@ it('restores the listener when the callback throws', function (): void {
 
     $before = assetRefDeletedListenerCount();
 
-    $exceptionMessage = null;
     try {
         AssetReferenceUpdates::withDisabled(function () {
             throw new RuntimeException('import blew up');

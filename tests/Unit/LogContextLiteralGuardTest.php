@@ -43,7 +43,6 @@ declare(strict_types=1);
  */
 function logContextDeclaredClasses(): array
 {
-    $root = \dirname(__DIR__, 2).'/src';
     $map = [];
 
     foreach (logContextSourceFiles() as $path) {

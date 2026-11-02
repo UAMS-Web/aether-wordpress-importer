@@ -485,10 +485,7 @@ class TreeBuilder
     ): array {
         usort(
             $nodes,
-            fn ($a, $b): int => self::compareTreeNodes(
-                $a,
-                $b
-            )
+            self::compareTreeNodes(...)
         );
 
         return $nodes;

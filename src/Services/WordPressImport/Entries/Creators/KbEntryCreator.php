@@ -1823,12 +1823,6 @@ class KbEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Fetch the default value for the title_options field from the article blueprint
-        $titleOptionsDefault = FieldDefaultHelper::getDefaultValueForBlueprintField(
-            "collections.{$collectionHandle}.article",
-            'title_options'
-        );
-
         // ---
         // Map restriction_query from _mkb_restrict_role postmeta
         // ---

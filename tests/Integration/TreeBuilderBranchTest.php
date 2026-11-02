@@ -161,11 +161,9 @@ final class TreeBuilderProbeTreeWithoutTree
  */
 function treeBuilderExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     $property = (new ReflectionClass(CompositeExpectation::class))->getProperty('_expectations');
     $property->setAccessible(true);
