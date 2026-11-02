@@ -6,6 +6,7 @@ use Illuminate\Testing\PendingCommand;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Antlers;
 use Statamic\Facades\Entry as EntryFacade;
+use Statamic\Fields\Blueprint;
 use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
@@ -94,31 +95,33 @@ function blueprintImportEntry(string $collection, string $slug): Entry
 }
 
 /**
- * Render a Bard page's body through the host's set partials.
+ * The handle of an entry's blueprint.
  *
- * @param  Entry  $page  The page
- * @return string The rendered body
+ * @param  Entry  $entry  The entry
+ * @return ?string The handle
  */
-function blueprintImportRenderBard(Entry $page): string
+function blueprintImportHandle(Entry $entry): ?string
 {
-    return (string) Antlers::parse(
-        '{{ content scope="block" }}{{ partial src="sets/{type}" }}{{ /content }}',
-        $page->toAugmentedArray(['content']),
-        true
-    );
+    $blueprint = $entry->blueprint();
+
+    return $blueprint instanceof Blueprint ? $blueprint->handle() : null;
 }
 
 /**
- * Render a landing page's body through the host's page builder partials.
+ * Render one field of a page through the host's partials.
  *
  * @param  Entry  $page  The page
+ * @param  string  $field  The field holding the page's body
+ * @param  string  $partials  The partial directory for that field's sets
  * @return string The rendered body
  */
-function blueprintImportRenderLanding(Entry $page): string
+function blueprintImportRender(Entry $page, string $field, string $partials): string
 {
+    $values = $page->toAugmentedArray([$field]);
+
     return (string) Antlers::parse(
-        '{{ page_builder scope="block" }}{{ partial src="page_builder/{type}" }}{{ /page_builder }}',
-        $page->toAugmentedArray(['page_builder']),
+        "{{ {$field} scope=\"block\" }}{{ partial src=\"{$partials}/{type}\" }}{{ /{$field} }}",
+        is_array($values) ? $values : [],
         true
     );
 }
@@ -139,20 +142,20 @@ it('gives each block the blueprint its content needs, and the host renders it fr
         $plain = blueprintImportEntry('reusable_content', 'zz-blueprint-plain');
         $built = blueprintImportEntry('reusable_content', 'zz-blueprint-built');
 
-        expect($plain->blueprint()?->handle())->toBe('reusable_content_basic_page')
+        expect(blueprintImportHandle($plain))->toBe('reusable_content_basic_page')
             ->and($plain->get('content'))->toBeArray()->not->toBeEmpty()
             ->and($plain->has('page_builder'))->toBeFalse()
-            ->and($built->blueprint()?->handle())->toBe('reusable_content_landing_page')
+            ->and(blueprintImportHandle($built))->toBe('reusable_content_landing_page')
             ->and($built->get('page_builder'))->toBeArray()->not->toBeEmpty()
             ->and($built->has('content'))->toBeFalse();
 
         $bardPage = blueprintImportEntry('pages', 'zz-blueprint-bard');
         $landingPage = blueprintImportEntry('pages', 'zz-blueprint-landing');
 
-        expect($bardPage->blueprint()?->handle())->toBe('basic_page')
-            ->and($landingPage->blueprint()?->handle())->toBe('landing_page')
-            ->and(blueprintImportRenderBard($bardPage))->toContain('ReusedWords')
-            ->and(blueprintImportRenderLanding($landingPage))->toContain('ReusedWords');
+        expect(blueprintImportHandle($bardPage))->toBe('basic_page')
+            ->and(blueprintImportHandle($landingPage))->toBe('landing_page')
+            ->and(blueprintImportRender($bardPage, 'content', 'sets'))->toContain('ReusedWords')
+            ->and(blueprintImportRender($landingPage, 'page_builder', 'page_builder'))->toContain('ReusedWords');
     } finally {
         foreach ([['pages', 'zz-blueprint-bard'], ['pages', 'zz-blueprint-landing'], ['reusable_content', 'zz-blueprint-plain'], ['reusable_content', 'zz-blueprint-built']] as [$collection, $slug]) {
             foreach (EntryFacade::whereCollection($collection) as $entry) {
