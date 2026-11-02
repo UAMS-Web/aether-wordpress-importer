@@ -8,7 +8,8 @@ description: >-
   the default branch, each with its value for a public and a private repository, where it is set,
   and why. Also the open questions the project owner has not decided, the rows the organization
   could set instead of each repository, a checklist for moving a repository to public, and a
-  read-only `check-repository-settings.mjs` that prints every departure from the baseline.
+  read-only `check-repository-settings.mjs` that prints every departure from the baseline, and
+  `apply-addon-settings.mjs`, which brings a new add-on repository to it with the owner's yes.
   Activate when creating a repository, moving one to public, changing a repository or
   organization setting, auditing settings across repositories, or when asked why a repository
   is set the way it is.
@@ -22,13 +23,13 @@ description: >-
 
 Repository settings are not in any repository's tree, so nothing a pull request reviews shows them, and each one is whatever someone last set by hand. The three moves to a new public repository (`UAMS-Web/uamswp-migration-api-archive#465`, `UAMS-Web/wordpress-importer-archive#1244`, `UAMS-Web/uams-statamic-archive#2649`) each read the same settings off the old repository and recreated them one at a time. This skill writes them down once: a baseline, the questions it leaves open, and a checker that reports where a repository departs from it.
 
-The checker reads and never writes. Changing a setting, in a repository or for the organization, is the project owner's decision, and each departure it reports is one to raise, not one to fix on sight.
+The checker reads and never writes. Changing a setting, in a repository or for the organization, is the project owner's decision, and each departure it reports is one to raise, not one to fix on sight. The one command that writes is `apply-addon-settings.mjs` for a new add-on repository (*Applying the standard to a new add-on*), and it asks first.
 
 ## Where a setting lives
 
 | Level | What it holds | Read with an ordinary token |
 | --- | --- | --- |
-| Organization rulesets | `deletion`, `non_fast_forward` and `pull_request` on the default branch (rulesets `24525022` and `24525074`), and the five Statamic add-ons' required checks (ruleset `24965287`), each for the repositories it lists by id | no: `orgs/UAMS-Web/rulesets` needs `admin:org`; `repos/{o}/{r}/rules/branches/{branch}` shows the effective rules |
+| Organization rulesets | `deletion`, `non_fast_forward` and `pull_request` on the default branch (rulesets `24525022` and `24525074`), the legacy add-ons' required checks (ruleset `24965287`) and the add-on checks (ruleset `25097852`); each reaches the repositories whose `ruleset_family` custom property holds one of its values (see *The ruleset family property*) | no: `orgs/UAMS-Web/rulesets` needs `admin:org`; `repos/{o}/{r}/rules/branches/{branch}` shows the effective rules |
 | Organization code security configurations | Dependabot alerts and security updates, secret scanning, push protection, non-provider patterns and validity checks | yes: `orgs/UAMS-Web/code-security/configurations` |
 | Organization Actions settings | whether Actions runs, which actions are allowed, the default workflow token permissions | no: needs `admin:org`; `repos/{o}/{r}/actions/permissions` and `.../permissions/workflow` show the effective values. Every target reads the same values, which is what an organization default produces; the organization setting itself is not confirmed |
 | Organization variables and secrets | `RUN_REMOTE_CI`, scoped to private repositories | no: needs `admin:org`; `repos/{o}/{r}/actions/organization-variables` lists the ones that reach a repository |
@@ -75,12 +76,28 @@ One row per setting the checker reads, in the order it reads them. *Public* and 
 | `secret_scanning_push_protection` | enabled | disabled | organization code security configuration | As above. GitHub's own check on pushes to a public repository refused the migration API's first snapshot push with `GH013` while this setting read off (`UAMS-Web/uamswp-migration-api-archive#468`), so that refusal is not evidence the setting is on. |
 | `secret_scanning_non_provider_patterns` | enabled | disabled | organization code security configuration | As above. |
 | `secret_scanning_validity_checks` | enabled | disabled | organization code security configuration | As above. |
-| `rule_deletion` | present | present | organization ruleset `24525022` (`main: no deletion or force push`) | `pre-merge-check`, *Why this is a standing order* (`UAMS-Web/uams-statamic-archive#2016`). The ruleset lists repositories by id, so a new repository is added to it. |
+| `rule_deletion` | present | present | organization ruleset `24525022` (`main: no deletion or force push`) | `pre-merge-check`, *Why this is a standing order* (`UAMS-Web/uams-statamic-archive#2016`). The ruleset targets the `ruleset_family` property, so a new repository receives it by being given a value that includes it. |
 | `rule_non_fast_forward` | present | present | organization ruleset `24525022` | As above. |
 | `rule_pull_request` | present | present | organization ruleset `24525074` (`main: pull request required`) | `pre-merge-check`, *Why this is a standing order*; the `closing-a-ticket` rule's step 1. |
-| `rule_required_status_checks` | Attribution footer, CI, Closing keywords | none | organization ruleset `24965287` for the five Statamic add-ons; a repository ruleset for `aether-wordpress-migration-api` (`25835660`) and `aether-wordpress-importer` (`25970115`) | Public: `main` requires the `code-quality` skill's three contexts, which `apply-required-checks-ruleset.mjs` applies (`UAMS-Web/uamswp-migration-api#7`, `UAMS-Web/aether-wordpress-importer-cleanup#12`, `UAMS-Web/uams-statamic#337`). Private: remote CI is off (`RUN_REMOTE_CI`), so a required check would either block every merge or pass without running, depending on whether `CI` carries the switch (`pre-merge-check`, *Making CI a merge gate*), and the local runner is the gate. |
+| `rule_required_status_checks` | Attribution footer, CI, Closing keywords or Attribution footer, Built assets (resources/dist matches source), Closing keywords, Compatibility (PHP 8.5), Compatibility (lowest statamic/cms), Composer validate (composer.lock freshness), Guard-script tests (vitest), Larastan (PHPStan), Mutation annotations (none inert), Parallel-safe tests (no shared state), Pest (Unit and Integration), Pint, Rector (gating profile), Repository guards (emoji, decision log), Required checks (ruleset matches jobs) | none | organization ruleset `24965287` for the five Statamic add-ons; a repository ruleset for `aether-wordpress-migration-api` (`25835660`) and `aether-wordpress-importer` (`25970115`) | Public: `main` requires the `code-quality` skill's three contexts, or, for a repository whose `ruleset_family` is `addon`, the add-on family's fifteen contexts (its own repository ruleset may add job names; the row reads that union as the family's), which `apply-required-checks-ruleset.mjs` applies (`UAMS-Web/uamswp-migration-api#7`, `UAMS-Web/aether-wordpress-importer-cleanup#12`, `UAMS-Web/uams-statamic#337`). Private: remote CI is off (`RUN_REMOTE_CI`), so a required check would either block every merge or pass without running, depending on whether `CI` carries the switch (`pre-merge-check`, *Making CI a merge gate*), and the local runner is the gate. |
+| `ruleset_family` | agrees | agrees | organization custom property `ruleset_family` on the repository | Reads `repos/{o}/{r}/properties/values` and compares the value (unset reads `none`) with the organization-sourced rules in effect: `deletion`, `non_fast_forward`, `pull_request` and the required check contexts, each from a ruleset whose `ruleset_source_type` is `Organization`. A repository-sourced ruleset is not counted. A departure reads `property <value>, rules <family>`. Until the owner applies the property, every repository reads `property none` against whatever it carries today. (`UAMS-Web/uams-claude-skills#415`) |
 
 **What the checker does not read:** labels, topics, the description and homepage, webhooks, deploy keys, collaborators and teams, environments, Pages, autolink references, GitHub App installations, tag rules, and the merge-commit title and message defaults, which matter only where merge commits are allowed. The going-public checklist below covers the ones a move has to recreate.
+
+## The ruleset family property
+
+The four organization rulesets target repositories through one single-select organization custom property, `ruleset_family`, instead of a list of repository ids (`UAMS-Web/uams-claude-skills#415`; switched by the owner on 2026-11-02). A new repository gets its rules by being given a value; no ruleset is edited.
+
+| Value | Rulesets that reach the repository | Today's repositories |
+| --- | --- | --- |
+| `none` (or unset) | none | every repository not named below (100) |
+| `base` | `24525022`, `24525074` | the ten with the default-branch rules only |
+| `addon-legacy` | `24525022`, `24525074`, `24965287` | five add-ons on the aggregate `CI` check |
+| `addon` | `24525022`, `24525074`, `25097852` | five add-ons, including the template, on the fifteen-context list |
+
+Each ruleset's repository condition is a `repository_property` include listing the values whose row names it: `24525022` and `24525074` list `base`, `addon-legacy` and `addon`; `24965287` lists `addon-legacy`; `25097852` lists `addon`. A ruleset condition is one of repository name, id or property, so a property condition cannot also exclude an id.
+
+Setting the property and rewriting the rulesets are organization settings made by the owner. The `ruleset_family` row reports a repository whose property value and rules in effect disagree, before and after the switch.
 
 ## Open questions
 
@@ -96,7 +113,7 @@ The current repositories disagree on these, or agree only by default, and no rea
 Each row below is set per repository today and could be set or enforced once for the organization. Moving one is the project owner's act; none is moved by this skill. Rows only a repository can set (the squash commit defaults, branch deletion, update-branch, auto-merge, the feature toggles) stay what the checker mainly watches.
 
 - **Merge methods, through the shared `pull_request` rule.** Ruleset `24525074`'s `pull_request` rule allows `merge`, `squash` and `rebase` (read 2026-10-28 through `rules/branches/main` on the 9 targets it reaches). Setting its `allowed_merge_methods` to `squash` alone would enforce `allow_merge_commit` and `allow_rebase_merge` on every repository the ruleset lists, whatever each repository's own toggles say. All 9 already allow only squash, so it changes nothing there today. It would bind any repository added to the list later.
-- **The default branch rules for every repository.** Rulesets `24525022` and `24525074` list repositories by id, so a new repository has none of the three rules until someone with `admin:org` adds it, and 42 of the 51 targets carry none today. Targeting all of the organization's repositories would give every one of them the deletion, force-push and pull-request rules at once, and would require a pull request on `main` in each of those 42. Targeting by custom property is a separate follow-up (#358, *Out of scope*).
+- **The default branch rules for every repository.** Rulesets `24525022` and `24525074` list repositories by id, so a new repository has none of the three rules until someone with `admin:org` adds it, and 42 of the 51 targets carry none today. Targeting all of the organization's repositories would give every one of them the deletion, force-push and pull-request rules at once, and would require a pull request on `main` in each of those 42. Targeting by custom property is described under *The ruleset family property* (#415).
 - **The default workflow token.** Setting the organization's default workflow permissions to `read`, with *Allow GitHub Actions to create and approve pull requests* off, would change only workflows that declare no `permissions:`. Every shared template declares its own. A repository workflow written without a declaration would lose write access and need one added, so the change is preceded by a read of each repository's workflows.
 - **`COMPOSER_AUTH_TOKEN` as an organization secret.** Today it is a repository secret in each store. An organization Actions secret and an organization Dependabot secret, each limited to the repositories that read it, would make a new repository's access one list entry instead of two secrets set by hand. Its value is a fine-grained token whose own repository access is also extended per repository (`UAMS-Web/uams-statamic-archive#2659`, step 7).
 - **The required checks.** The five add-ons already share one organization ruleset (`24965287`), while `aether-wordpress-migration-api` and `aether-wordpress-importer` each carry a repository ruleset. The `code-quality` skill warns against adding the checks to a shared ruleset that reaches a repository with no job of those names, which it would block. Listing in `24965287` exactly the public repositories that ship all three would keep the requirement in one place; it would be edited whenever a repository goes public, and it needs `admin:org`.
@@ -112,7 +129,7 @@ Before anything is transferred:
 3. **Labels**, name, color and description, copied before any issue is transferred so the moved issues keep theirs (A, I, S).
 4. **Actions permissions, variables and secrets.** Secret values cannot be read, so each is set again by its owner. `COMPOSER_AUTH_TOKEN` was set again, and the fine-grained token's repository access was extended to the new repository (S). Organization variables reach the new repository through their own scope (A, I, S).
 5. **Dependabot**: alerts and security updates turned back on. `.github/dependabot.yml` copies with the tree. A secret a pull-request workflow reads is also set in the Dependabot store (A, I, S).
-6. **Organization rulesets**: the new repository's id added to rulesets `24525022` and `24525074`, which needs `admin:org`, then read back from `repos/{o}/{r}/rules/branches/main` (A, I, S).
+6. **Organization rulesets**: the `ruleset_family` property set on the new repository (a value that includes the rulesets it should receive; an add-on takes `addon`), which needs the organization's custom property permission, then read back from `repos/{o}/{r}/rules/branches/main` (A, I, S).
 7. **GitHub App installations** that select repositories: the new repository added to each (S).
 8. **Webhooks, deploy keys, collaborators and teams, environments, Pages and autolink references**: each read, and recreated where one exists (A, I, S).
 9. **The sync target**: `shared/manifest.json` marks the repository `"public": true` and records its review in `shared/public-reviews.json` once it is public (S, `UAMS-Web/uams-claude-skills#352`).
@@ -135,7 +152,7 @@ node .claude/skills/repository-settings/scripts/check-repository-settings.mjs UA
 
 Name as many repositories as needed, or pass `--manifest <path>` to check every target a sync manifest lists (in `UAMS-Web/uams-claude-skills`, `--manifest shared/manifest.json`). With `--manifest` it also reports, as `manifest_public`, a target whose manifest `public` flag disagrees with its visibility: the flag that holds a public target's sync back for review (checklist item 9). `--open` also prints each repository's value for every open-question row. `--from <dir>` reads `<dir>/<repo>.json` snapshots instead of calling the API.
 
-It makes eleven or twelve REST reads per repository, all `GET` (the twelfth looks for `.github/dependabot.yaml` when `.yml` is absent), and passes nothing to `gh api` but a `repos/` path and `-i`, so no flag that writes can reach it. A list read whose `total_count` differs from the items it returned, and an existence read answered with anything but `200`, `204` or `404`, are failed reads (exit 2), never values. It needs only a token that can read the repository; the organization's own settings are read through each repository, which shows the effective value. Before it reads anything, it runs its controls: a public and a private snapshot built to match the baseline must report nothing, a planted merge-commit departure must be the one departure reported, an open-question row must never be reported, and paused security updates must be. It prints how many repositories and rows it is checking before the first result.
+It makes twelve or thirteen REST reads per repository, all `GET` (the thirteenth looks for `.github/dependabot.yaml` when `.yml` is absent), and passes nothing to `gh api` but a `repos/` path and `-i`, so no flag that writes can reach it. A list read whose `total_count` differs from the items it returned, and an existence read answered with anything but `200`, `204` or `404`, are failed reads (exit 2), never values. It needs only a token that can read the repository; the organization's own settings are read through each repository, which shows the effective value. Before it reads anything, it runs its controls: a public and a private snapshot built to match the baseline must report nothing, a planted merge-commit departure must be the one departure reported, an open-question row must never be reported, and paused security updates must be. It prints how many repositories and rows it is checking before the first result.
 
 | Exit | Meaning |
 | --- | --- |
@@ -144,6 +161,31 @@ It makes eleven or twelve REST reads per repository, all `GET` (the twelfth look
 | 2 | The check did not run, or ran incompletely: a control failed, an argument or the manifest was wrong, or a repository could not be read. |
 
 An archived repository is named and not judged. A departure is a question for the project owner, not a failure of the repository's own gate, so the checker is not a job in a repository's local CI.
+
+## Applying the standard to a new add-on
+
+A new Statamic add-on is created from the `statamic-addon-template` repository, and the steps that live outside its tree were done by hand (`UAMS-Web/uams-claude-skills#460`). One of them was missed once: `aether-search` sat in neither organization default-branch ruleset until 2026-11-02, so its `main` accepted a direct push. From the root of the new repository's checkout:
+
+```bash
+node .claude/skills/repository-settings/scripts/apply-addon-settings.mjs UAMS-Web/<repo>            # plan only, writes nothing
+node .claude/skills/repository-settings/scripts/apply-addon-settings.mjs UAMS-Web/<repo> --apply    # asks "Apply N changes? [y/N]" first
+```
+
+It covers three things, then prints what is left for a person:
+
+1. **The settings the baseline fixes** that one `PATCH` of the repository can set: squash only, `PR_TITLE` and `PR_BODY`, auto-merge off, update-branch on, sign-off, and the feature toggles. A departure it cannot set (the code security configuration, secrets, `RUN_REMOTE_CI`) is listed, not changed.
+2. **The organization default-branch rules.** When the organization defines the `ruleset_family` property it sets the value `addon` on the repository, and the rulesets that target the property do the rest. Where the property is not defined, or a repository already carrying the value is not reached because the rulesets still list ids, it names the repository id and rulesets `24525022` and `24525074` for the owner: adding an id to an organization ruleset needs `admin:org`, which the command never uses.
+3. **The repository ruleset** `main: required checks`, requiring each job `name:` in the repository's own workflows plus `Attribution footer` and `Closing keywords`. The names come from `scripts/check-required-checks.mjs` in the checkout (the template's own check), so the ruleset requires exactly what that check compares. It creates the ruleset, or updates it in place when the names differ.
+
+The default run reads and prints the plan. `--apply` asks for the owner's yes before the first write, and exits 2 with nothing written when there is no terminal to ask on or the answer is not yes; `--yes` answers for a run the owner has already approved. Writes are limited by an allow-list to `PATCH` of the one named repository and of its property values, and `POST` and `PUT` of its rulesets. After writing it reads every setting, the ruleset and the effective rules back from the API (not from what it sent), and compares the required checks with the job names the way `check-required-checks.mjs --strict` does, reporting a required name no job reports and a job nothing requires. A second run finds nothing to change and says so.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | A plan printed, nothing to change, or everything applied and read back clean. |
+| 1 | Applied, but the read-back still shows a departure (an organization rule the owner has not yet added, a setting that did not take, a name drift). |
+| 2 | A control failed, an argument was wrong, a read or write failed, or the run was not confirmed. |
+
+What stays with a person: the `shared/manifest.json` entry in `UAMS-Web/uams-claude-skills` and the approval of the sync dispatch, the wiki's first page, tags, releases and Packagist.
 
 ## Changing the baseline
 
