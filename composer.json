@@ -95,7 +95,8 @@
         "test:refactor": "rector --dry-run",
         "test:refactor:sweep": "rector --dry-run --clear-cache --config=rector-sweep.php",
         "pint": "pint",
-        "test:pint": "pint --test"
+        "test:pint": "pint --test",
+        "test:mutation-instrument": "@php .claude/skills/pcov-setup/scripts/check-mutation-instrument.php --arg=--testsuite=Unit,Integration"
     },
     "minimum-stability": "dev",
     "prefer-stable": true
