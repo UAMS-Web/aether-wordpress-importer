@@ -366,7 +366,7 @@ it('records empty context when called with only the required arguments', functio
         ->and(ProcessingContext::getWordPressPageLink())->toBe('')
         ->and(ProcessingContext::getWordPressPostId())->toBe('')
         ->and(ProcessingContext::getCollectionHandle())->toBe('')
-        ->and($fakes['links']->calls)->toBe([['html' => '<p>A</p>', 'site' => 'default', 'entry' => null, 'collection' => '', 'xml' => '/exports/site.xml']]);
+        ->and($fakes['links']->calls)->toBe([['html' => "<p>A</p>\n", 'site' => 'default', 'entry' => null, 'collection' => '', 'xml' => '/exports/site.xml']]);
 });
 
 it('converts Classic Editor content to Bard with WpAutoP, passing the page\'s context along', function (): void {
