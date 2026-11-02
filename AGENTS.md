@@ -58,7 +58,7 @@ The practical consequence: anything that assumes a bootable app — Herd and `.t
 
 ## Stack
 
-PHP `^8.4`, `statamic/cms` **pinned exactly** to `6.35.0`, Pest `^5.0` on PHPUnit `^13.0`, Orchestra Testbench `^11.1`, Pint `^1.29`, PHPStan `^2.2` at **level max** with `phpstan-strict-rules` and `pest-plugin-phpstan`.
+PHP `^8.4`, `statamic/cms` **pinned exactly** (the version is the one in `composer.json`), Pest `^5.0` on PHPUnit `^13.0`, Orchestra Testbench `^11.1`, Pint `^1.29`, PHPStan `^2.2` at **level max** with `phpstan-strict-rules` and `pest-plugin-phpstan`.
 
 **Read the versions from [`composer.json`](composer.json) rather than from memory or from the host app.** The **test harness** drifts independently — this package and `uams-statamic` have bumped Pest, PHPUnit, Pint and PHPStan on different schedules more than once, and copying the app's assumptions has produced false statements before.
 
