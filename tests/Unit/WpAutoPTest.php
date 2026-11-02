@@ -10,9 +10,8 @@ declare(strict_types=1);
  *
  * The expected strings are what the class returns today, pinned as characterization.
  * Compared with WordPress 7.1.2's `wpautop()`, most rows agree; those that do not are
- * named in #145 (a bare block tag after text stays inside an open paragraph) and #146
- * (a single block returned early, an image split out of its paragraph, list and table
- * newlines, and the spaces around a script newline).
+ * named in #146 (a single block returned early, an image split out of its paragraph,
+ * list newlines, and the spaces around a script newline).
  *
  * @command  php vendor/bin/pest tests/Unit/WpAutoPTest.php
  */
@@ -47,13 +46,13 @@ it('wraps text in paragraphs and breaks as the port does today', function (strin
     'a script between paragraphs' => ["Text\n\n<script>a\nb</script>\n\nMore", true, "<p>Text</p>\n<p><script>a\nb</script></p>\n<p>More</p>\n"],
     'a script with line breaks off' => ["Text\n\n<script>a\nb</script>\n\nMore", false, "<p>Text</p>\n<p><script>a\nb</script></p>\n<p>More</p>\n"],
     'text closing a div' => ["Lead\n\nText</div>", true, "<p>Lead</p>\n<p>Text</p></div>\n"],
-    'a list on its own' => ["<ul>\n<li>One</li>\n<li>Two</li>\n</ul>", true, "<ul>\n<li>One</li>\n\n<li>Two</li>\n\n</ul>"],
-    'a list after text' => ["Lead\n\n<ul><li>One</li></ul>", true, "<p>Lead</p>\n<ul><li>One</li>\n</ul>\n"],
+    'a list on its own' => ["<ul>\n<li>One</li>\n<li>Two</li>\n</ul>", true, "<ul>\n\n<li>One</li>\n\n<li>Two</li>\n\n</ul>"],
+    'a list after text' => ["Lead\n\n<ul><li>One</li></ul>", true, "<p>Lead</p>\n<ul>\n<li>One</li>\n</ul>\n"],
     'a blockquote after text' => ["Lead\n\n<blockquote>Quote</blockquote>", true, "<p>Lead</p>\n<blockquote><p>Quote</p></blockquote>\n"],
     'a blockquote with an attribute' => ["Lead\n\n<blockquote class=\"q\">Quote\nmore</blockquote>\n\nEnd", true, "<p>Lead</p>\n<blockquote class=\"q\"><p>Quote<br />\nmore</p></blockquote>\n<p>End</p>\n"],
     'a line break before a closing tag' => ["<div>One\n</div>\n\nAfter", true, "<div>One\n</div>\n<p>After</p>\n"],
     'inline markup' => ["A <strong>bold</strong>\nline", true, "<p>A <strong>bold</strong><br />\nline</p>\n"],
-    'a table cell' => ["<table><tr><td>One\nTwo</td></tr></table>\n\nAfter", true, "<table><tr><td>One<br />\nTwo</td>\n</tr>\n</table>\n<p>After</p>\n"],
+    'a table cell' => ["<table><tr><td>One\nTwo</td></tr></table>\n\nAfter", true, "<table>\n<tr>\n<td>One<br />\nTwo</td>\n</tr>\n</table>\n<p>After</p>\n"],
     'an attributed block after text' => ['Lead<div class="a">x</div>', true, "<p>Lead</p>\n<div class=\"a\">x</div>\n"],
     'an attributed hr after text' => ['Lead<hr class="x">Tail', true, "<p>Lead</p>\n<hr class=\"x\">Tail</p>\n"],
 ]);
@@ -98,11 +97,16 @@ it('restores a placeholder name already in the text as the pre it names', functi
     expect((new WpAutoP)->process("<pre wp-pre-tag-1></pre>\n\n<pre>B</pre>"))->toBe("<pre>B</pre>\n\n<pre>B</pre>");
 });
 
-it('leaves a bare block tag after text inside the paragraph', function (string $text, bool $br, string $html): void {
-    // Characterization: the opening-tag pattern needs a character before `>`, so a
-    // tag without attributes is not split from the text before it (#145)
-    expect((new WpAutoP)->process($text, $br))->toBe($html);
+it('starts a new block at a bare block tag after text, as WordPress does', function (string $text, string $html): void {
+    // A tag without attributes ends the paragraph before it, as an attributed one
+    // does (#145). Each expected string is what WordPress 7.0.7's wpautop() returns.
+    expect((new WpAutoP)->process($text))->toBe($html);
 })->with([
-    'a bare block after text (#145)' => ['Lead<div>x</div>', true, "<p>Lead<div>x</div>\n"],
-    'a bare hr after text (#145)' => ['Lead<hr>Tail', true, "<p>Lead<hr>\n<p>Tail</p>\n"],
+    'a bare div' => ['Lead<div>x</div>', "<p>Lead</p>\n<div>x</div>\n"],
+    'a bare heading' => ['Lead<h2>T</h2>', "<p>Lead</p>\n<h2>T</h2>\n"],
+    'a bare hr' => ['Lead<hr>Tail', "<p>Lead</p>\n<hr>\n<p>Tail</p>\n"],
+    'a bare blockquote' => ['Lead<blockquote>Q</blockquote>Tail', "<p>Lead</p>\n<blockquote><p>Q</p></blockquote>\n<p>Tail</p>\n"],
+    'a bare details' => ['Lead<details><summary>S</summary>B</details>', "<p>Lead</p>\n<details>\n<summary>S</summary>\n<p>B</details>\n"],
+    'a self-closing hr' => ['Lead<hr />Tail', "<p>Lead</p>\n<hr />\n<p>Tail</p>\n"],
+    'a tag whose name begins with a block name' => ['Lead<progress>x</progress>', "<p>Lead<progress>x</progress>\n"],
 ]);
