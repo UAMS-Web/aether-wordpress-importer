@@ -23,6 +23,12 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogConte
 class TableProcessor implements BlockProcessorInterface
 {
     /**
+     * The most columns a table is laid out to. It is the widest a single `colspan`
+     * can be in HTML, and it keeps hostile spans from growing a grid out of memory.
+     */
+    private const int MAX_COLUMNS = 1000;
+
+    /**
      * Determines if the processor can handle the given DOM node.
      *
      * @param  DOMNode  $node  The DOM node to check
@@ -154,71 +160,14 @@ class TableProcessor implements BlockProcessorInterface
             return null;
         }
 
-        $tableData = [];
-        $firstRowHeaders = false;
-        $lastRowFooters = false;
-        $firstColumnHeaders = false;
-        $fixedWidthTableCells = false;
+        // Render the table as a set; a table with no rows renders as nothing
+        $html = $this->renderSet(
+            $tableNode,
+            $figureNode,
+            $attributes
+        );
 
-        // Check for has-fixed-layout class on table element
-        if (
-            $tableNode->hasAttribute('class')
-            && \preg_match(
-                '/\bhas-fixed-layout\b/',
-                $tableNode->getAttribute('class')
-            ) === 1
-        ) {
-            $fixedWidthTableCells = true;
-        }
-
-        // Process table sections
-        $thead = $tableNode->getElementsByTagName('thead')->item(0);
-        $tbody = $tableNode->getElementsByTagName('tbody')->item(0);
-        $tfoot = $tableNode->getElementsByTagName('tfoot')->item(0);
-
-        if ($thead !== null) {
-            $firstRowHeaders = true;
-            foreach ($thead->getElementsByTagName('tr') as $tr) {
-                $row = [];
-                foreach ($tr->getElementsByTagName('th') as $th) {
-                    $row[] = $this->getInnerHTML($th, $doc);
-                }
-
-                if ($row !== []) {
-                    $tableData[] = ['cells' => $row];
-                }
-            }
-        }
-
-        if ($tbody !== null) {
-            foreach ($tbody->getElementsByTagName('tr') as $tr) {
-                $row = [];
-                $cells = $tr->getElementsByTagName('td');
-                foreach ($cells as $td) {
-                    $row[] = $this->getInnerHTML($td, $doc);
-                }
-
-                if ($row !== []) {
-                    $tableData[] = ['cells' => $row];
-                }
-            }
-        }
-
-        if ($tfoot !== null) {
-            $lastRowFooters = true;
-            foreach ($tfoot->getElementsByTagName('tr') as $tr) {
-                $row = [];
-                foreach ($tr->getElementsByTagName('td') as $td) {
-                    $row[] = $this->getInnerHTML($td, $doc);
-                }
-
-                if ($row !== []) {
-                    $tableData[] = ['cells' => $row];
-                }
-            }
-        }
-
-        if ($tableData === []) {
+        if ($html === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -244,8 +193,77 @@ class TableProcessor implements BlockProcessorInterface
             return null;
         }
 
+        // ---
+        // The skip covers the whole block, so anything else in it is not imported.
+        // WordPress writes a table block as its figure alone, so this records a
+        // block that was written some other way rather than losing it silently.
+        // ---
+        if ($extent['others'] !== []) {
+            // Enhance log context with entry information. saveHTML() returns false
+            // only for a node of another document, and these are the block's own
+            // siblings, so the cast phpstan needs changes no result.
+            // @pest-mutate-ignore: RemoveStringCast
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'pageSlug' => $pageSlug ?? 'none',
+                    'dropped_html' => \substr(
+                        \implode('', \array_map(
+                            static fn (DOMNode $other): string => (string) $doc->saveHTML($other),
+                            $extent['others']
+                        )),
+                        0,
+                        100
+                    ),
+                ]
+            );
+
+            // Log warning about the content dropped with the block
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    'TableProcessor::process: Dropped content in a wp:table block outside its figure',
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+        }
+
+        return [
+            'html' => $html,
+            'processedNode' => $figureNode,
+            'skipCount' => $extent['skipCount'],
+        ];
+    }
+
+    /**
+     * Renders a table element as the markup of a `table` set.
+     *
+     * A wp:table block and a plain `<table>` in content arrive here alike, so both
+     * import the same way. A nested table stays in its cell's HTML: only the
+     * outermost table is a set.
+     *
+     * @param  DOMElement  $table  The table element
+     * @param  ?DOMElement  $figure  The figure holding the table, when there is one
+     * @param  array<int|string, mixed>  $attributes  Block attributes from a wp:table comment
+     * @return ?string The set's markup, or null for a table with no rows
+     */
+    public function renderSet(
+        DOMElement $table,
+        ?DOMElement $figure = null,
+        array $attributes = []
+    ): ?string {
+        // Read the rows; a table without any has nothing to import
+        $rows = $this->readRows($table);
+
+        if ($rows['tableData'] === []) {
+            return null;
+        }
+
+        // Read the classes the figure carries, when there is one
+        $figureClass = $figure?->getAttribute('class') ?? '';
+
         // Alignment
-        $alignInput = $attributes['align'] ?? $figureNode->getAttribute('class');
+        $alignInput = $attributes['align'] ?? $figureClass;
         if (! \is_string($alignInput)) {
             // Any string without an align class translates to the center default,
             // so this value cannot be told apart from another such string.
@@ -261,22 +279,27 @@ class TableProcessor implements BlockProcessorInterface
         // Striped style
         $striped = \preg_match(
             '/\bis-style-stripes\b/',
-            $figureNode->getAttribute('class')
+            $figureClass
         ) === 1;
 
         // Caption
-        $captionNode = $figureNode->getElementsByTagName('figcaption')->item(0);
+        $captionNode = $figure?->getElementsByTagName('figcaption')->item(0)
+            ?? self::childElements($table, ['caption'])[0]
+            ?? null;
         $caption = $captionNode !== null ? \trim($captionNode->textContent) : '';
 
         $values = [
             'type' => 'table',
             'align' => $align,
             'striped' => $striped,
-            'first_row_headers' => $firstRowHeaders,
-            'first_column_headers' => $firstColumnHeaders,
-            'last_row_footers' => $lastRowFooters,
-            'fixed_width_table_cells' => $fixedWidthTableCells,
-            'table_data' => $tableData,
+            'first_row_headers' => $rows['firstRowHeaders'],
+            'first_column_headers' => false,
+            'last_row_footers' => $rows['lastRowFooters'],
+            'fixed_width_table_cells' => \preg_match(
+                '/\bhas-fixed-layout\b/',
+                $table->getAttribute('class')
+            ) === 1,
+            'table_data' => $rows['tableData'],
         ];
 
         if ($caption !== '') {
@@ -327,52 +350,230 @@ class TableProcessor implements BlockProcessorInterface
             )
         );
 
-        $html = \sprintf(
+        return \sprintf(
             '<div data-set-type="table"%s%s></div>',
             SetMarkupNonce::attribute(),
             $attrs
         );
+    }
 
-        // ---
-        // The skip covers the whole block, so anything else in it is not imported.
-        // WordPress writes a table block as its figure alone, so this records a
-        // block that was written some other way rather than losing it silently.
-        // ---
-        if ($extent['others'] !== []) {
-            // Enhance log context with entry information. saveHTML() returns false
-            // only for a node of another document, and these are the block's own
-            // siblings, so the cast phpstan needs changes no result.
-            // @pest-mutate-ignore: RemoveStringCast
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'site' => $site,
-                    'pageSlug' => $pageSlug ?? 'none',
-                    'dropped_html' => \substr(
-                        \implode('', \array_map(
-                            static fn (DOMNode $other): string => (string) $doc->saveHTML($other),
-                            $extent['others']
-                        )),
-                        0,
-                        100
-                    ),
-                ]
-            );
-
-            // Log warning about the content dropped with the block
-            Log::warning(
-                LogContextHelper::formatMessageWithEntry(
-                    'TableProcessor::process: Dropped content in a wp:table block outside its figure',
-                    $logData['page_url']
-                ),
-                $logData['context']
-            );
+    /**
+     * Whether a table holds data, so that it belongs in a `table` set.
+     *
+     * A table that holds another table is page layout, a set in a cell could not stay
+     * a set in the cell's HTML, and a table with no text is spacing around images. Each
+     * of those is read as content instead.
+     *
+     * @param  DOMElement  $table  The table element
+     * @return bool True when the table belongs in a set
+     */
+    public function isDataTable(
+        DOMElement $table
+    ): bool {
+        // A nested table makes this one layout
+        if ($table->getElementsByTagName('table')->length > 0) {
+            return false;
         }
 
+        // A converted shortcode in a cell is a set of its own
+        foreach ($table->getElementsByTagName('*') as $element) {
+            if ($element->hasAttribute('data-set-type')) {
+                return false;
+            }
+        }
+
+        // A non-breaking space is what a blank cell holds
+        return \trim(\str_replace("\u{A0}", ' ', $table->textContent)) !== '';
+    }
+
+    /**
+     * Reads a table's rows, in the order the table displays them.
+     *
+     * Only the table's own rows are read, so a nested table stays in its cell. Each
+     * row group gets its own grid, since a rowspan ends with its group.
+     *
+     * @param  DOMElement  $table  The table element
+     * @return array{tableData: list<array{cells: list<string>}>, firstRowHeaders: bool, lastRowFooters: bool} The rows, and what the first and last of them are
+     */
+    private function readRows(
+        DOMElement $table
+    ): array {
+        // Sort the table's row groups by where they display; rows with no section
+        // in between are one group
+        $groups = ['thead' => [], 'tbody' => [], 'tfoot' => []];
+        $loose = null;
+
+        foreach (self::childElements($table, ['thead', 'tbody', 'tfoot', 'tr']) as $section) {
+            if ($section->tagName === 'tr') {
+                $loose ??= \count($groups['tbody']);
+                $groups['tbody'][$loose][] = $section;
+
+                continue;
+            }
+
+            $loose = null;
+            $groups[$section->tagName][] = self::childElements($section, ['tr']);
+        }
+
+        // Lay out each kind of row
+        $head = $this->groupsGrid($groups['thead']);
+        $foot = $this->groupsGrid($groups['tfoot']);
+        $grid = \array_merge($head, $this->groupsGrid($groups['tbody']), $foot);
+
+        // A first row of nothing but header cells is a header row without a thead
+        $firstRowHeaders = $head !== [];
+        $displayed = \array_merge($groups['thead'], $groups['tbody'], $groups['tfoot']);
+
+        foreach (\array_merge(...$displayed) as $row) {
+            $cells = self::childElements($row, ['td', 'th']);
+
+            if ($cells !== []) {
+                $firstRowHeaders = $firstRowHeaders || self::childElements($row, ['th']) === $cells;
+
+                break;
+            }
+        }
+
+        // Bring every row to the width of the widest
+        $width = $grid === [] ? 0 : \max(\array_map(\count(...), $grid));
+
         return [
-            'html' => $html,
-            'processedNode' => $figureNode,
-            'skipCount' => $extent['skipCount'],
+            'tableData' => \array_map(
+                static fn (array $cells): array => ['cells' => \array_pad($cells, $width, '')],
+                $grid
+            ),
+            'firstRowHeaders' => $firstRowHeaders,
+            'lastRowFooters' => $foot !== [],
         ];
+    }
+
+    /**
+     * Lays out each row group, joining their rows.
+     *
+     * @param  array<int, list<DOMElement>>  $groups  The row groups
+     * @return list<list<string>> Each row's cells
+     */
+    private function groupsGrid(
+        array $groups
+    ): array {
+        return \array_merge(
+            ...\array_map($this->cellGrid(...), \array_values($groups))
+        );
+    }
+
+    /**
+     * Lays one row group out on a grid, so each cell stays in its own column.
+     *
+     * The `table` set has no merged cells, so a cell that spans keeps its content in
+     * its first position and leaves the others blank. Without them, every cell after
+     * a span would move into the wrong column. A row with no cells is left out, though
+     * a rowspan still counts it. A cell past MAX_COLUMNS is dropped.
+     *
+     * @param  list<DOMElement>  $rows  The group's `tr` elements
+     * @return list<list<string>> Each row's cells
+     */
+    private function cellGrid(
+        array $rows
+    ): array {
+        // Columns still held by a rowspan from above, each with the rows it has left
+        $held = [];
+        $grid = [];
+
+        foreach ($rows as $row) {
+            $cells = self::childElements($row, ['td', 'th']);
+            $line = [];
+            $column = 0;
+
+            foreach ($cells as $cell) {
+                // Step past the columns held from above
+                while (isset($held[$column])) {
+                    $line[] = '';
+                    $column++;
+                }
+
+                // A row is full at the limit
+                if ($column >= self::MAX_COLUMNS) {
+                    break;
+                }
+
+                $line[] = $this->getInnerHTML($cell);
+
+                // Hold the rest of the cell's span
+                $rowspan = self::rowspanOf($cell);
+                $colspan = \min(self::colspanOf($cell), self::MAX_COLUMNS - $column);
+
+                for ($offset = 0; $offset < $colspan; $offset++) {
+                    $held[$column + $offset] = $rowspan;
+                }
+
+                $line = \array_pad($line, \count($line) + $colspan - 1, '');
+                $column += $colspan;
+            }
+
+            // Count down the rows each hold has left, this one included
+            foreach ($held as $heldColumn => $left) {
+                if ($left <= 1) {
+                    unset($held[$heldColumn]);
+                } else {
+                    $held[$heldColumn] = $left - 1;
+                }
+            }
+
+            if ($cells !== []) {
+                $grid[] = $line;
+            }
+        }
+
+        return $grid;
+    }
+
+    /**
+     * Reads a cell's colspan, as at least one and no more than the grid holds.
+     *
+     * @param  DOMElement  $cell  The `td` or `th` element
+     * @return int The span
+     */
+    private static function colspanOf(
+        DOMElement $cell
+    ): int {
+        return \max(1, \min(self::MAX_COLUMNS, (int) $cell->getAttribute('colspan')));
+    }
+
+    /**
+     * Reads a cell's rowspan, as at least one, where zero means the rest of the group.
+     *
+     * @param  DOMElement  $cell  The `td` or `th` element
+     * @return int The span
+     */
+    private static function rowspanOf(
+        DOMElement $cell
+    ): int {
+        $rowspan = $cell->getAttribute('rowspan');
+
+        return $rowspan === '0' ? PHP_INT_MAX : \max(1, (int) $rowspan);
+    }
+
+    /**
+     * Returns an element's direct child elements with the given names.
+     *
+     * @param  DOMElement  $element  The parent element
+     * @param  list<string>  $names  The tag names to keep
+     * @return list<DOMElement> The child elements, in order
+     */
+    private static function childElements(
+        DOMElement $element,
+        array $names
+    ): array {
+        // Keep only the elements named
+        $children = [];
+
+        foreach ($element->childNodes as $child) {
+            if ($child instanceof DOMElement && \in_array($child->tagName, $names, true)) {
+                $children[] = $child;
+            }
+        }
+
+        return $children;
     }
 
     /**
@@ -445,17 +646,15 @@ class TableProcessor implements BlockProcessorInterface
      * Get the inner HTML of a DOM element as a string.
      *
      * @param  DOMNode  $element  The DOM element to extract inner HTML from
-     * @param  DOMDocument  $doc  The document the element belongs to
      * @return string The inner HTML string
      */
     private function getInnerHTML(
-        DOMNode $element,
-        DOMDocument $doc
+        DOMNode $element
     ): string {
         // Build the inner HTML by rendering each child node.
         $innerHTML = '';
         foreach ($element->childNodes as $child) {
-            $childHtml = $doc->saveHTML($child);
+            $childHtml = $element->ownerDocument?->saveHTML($child);
             if (! \is_string($childHtml)) {
                 continue;
             }

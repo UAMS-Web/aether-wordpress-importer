@@ -12,6 +12,10 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Stache;
 use Statamic\Facades\Term;
+use Statamic\Fields\Blueprint;
+use Statamic\Fields\Field;
+use Statamic\Fieldtypes\Bard;
+use Statamic\View\View;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
@@ -617,6 +621,99 @@ it('handles category and tag lookups in streaming XML parser mode', function ():
 
     // Clean up variables to free up memory
     unset($xmlPath);
+});
+
+it('imports a plain table as a table set the post blueprint saves and renders', function (): void {
+    // Build the ticket's table, with a cell that names the shape it sits in
+    $table = static fn (string $shape): string => '<table><tbody><tr><th>Weight<br />(kg)</th><th>Dose</th></tr>'
+        ."<tr><td>{$shape}</td><td>2</td></tr></tbody></table>";
+
+    // Each shape the importer used to flatten: alone, in a div, in an accordion section
+    $contentEncoded = \implode("\n\n", [
+        '<p>Before the tables.</p>',
+        $table('On its own'),
+        '<div class="wrapper">'.$table('In a div').'</div>',
+        '[accordion][section title="Section"]'.$table('In a section').'[/section][/accordion]',
+    ]);
+
+    // The third key only keeps this import out of the slug test's cache entry
+    $xmlParameters = [
+        'postType' => 'post',
+        'entryVariantType' => 'standard_v01',
+        'plainTables' => true,
+    ];
+
+    // Build the post around that content
+    $xmlGeneratorCallback = function (array $params) use ($contentEncoded): string {
+        $xmlPath = $this->createTempFile('test_post_plain_tables_');
+        file_put_contents(
+            $xmlPath,
+            postCreateTestXmlContent(
+                $this->getXmlHeader(),
+                $this->getXmlFooter(),
+                $this->getUniqueSlugForEntryVariant('post', 'standard_v01'),
+                'standard_v01',
+                $contentEncoded
+            )
+        );
+
+        return $xmlPath;
+    };
+
+    // Import it through the production creator, then read back the saved entry
+    $imported = $this->generateAndImportFromXmlCallback(
+        $xmlParameters,
+        $xmlGeneratorCallback
+    );
+    $entry = EntryFacade::find($imported->id());
+    if (! $entry instanceof Entry) {
+        throw new RuntimeException('Expected the imported post to be saved.');
+    }
+
+    // The blueprint this post saves against has to define the set
+    $blueprint = $entry->blueprint();
+    $field = $blueprint instanceof Blueprint ? $blueprint->field('content') : null;
+    $fieldtype = $field instanceof Field ? $field->fieldtype() : null;
+    if (! $fieldtype instanceof Bard) {
+        throw new RuntimeException('Expected the post blueprint to give `content` a Bard field.');
+    }
+
+    expect(data_get($fieldtype->flattenedSetsConfig(), 'table'))->not->toBeNull();
+
+    // Nothing of a table may be left loose at the top level of the Bard content
+    $bard = $entry->get('content');
+    if (! is_array($bard)) {
+        throw new RuntimeException('Expected the saved content to be Bard nodes.');
+    }
+
+    $nodes = collect($bard);
+    expect($nodes->pluck('type')->intersect(['text', 'hardBreak'])->all())->toBe([]);
+
+    // Each shape arrived as its own set, with its rows and cells apart
+    $sets = $nodes->where('attrs.values.type', 'table')->values();
+    expect($sets->map(fn (mixed $set): mixed => data_get($set, 'attrs.values.table_data.1.cells.0'))->all())
+        ->toBe(['On its own', 'In a div', 'In a section']);
+
+    // The host's own template renders the set as a table of real cells
+    $values = data_get($sets->first(), 'attrs.values');
+    if (! is_array($values)) {
+        throw new RuntimeException('Expected the first table set to carry values.');
+    }
+
+    $view = View::make('sets/_table', $values);
+    if (! $view instanceof View) {
+        throw new RuntimeException('Expected a Statamic view of the table set.');
+    }
+
+    $html = $view->render();
+    expect($html)
+        ->toContain('<table')
+        ->toContain('<th scope="col">Weight<br')
+        ->toContain('<th scope="col">Dose</th>')
+        ->toContain('<td>2</td>');
+
+    // Clean up variables to free up memory
+    unset($xmlParameters, $xmlGeneratorCallback, $imported, $entry, $blueprint, $field, $fieldtype, $bard, $nodes, $sets, $values, $view, $html);
 });
 
 it('stores the news release entry ID in the imported PDF asset metadata', function (): void {
