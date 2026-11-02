@@ -27,7 +27,7 @@ Use APIs that exist in these exact versions (always confirm against `composer.js
 - **php** — `^8.4` (local runtime 8.4.21).
 - **laravel/framework** — v13
 - **laravel/prompts** — v0
-- **statamic/cms** — v6 (this package pins `6.35.0` exactly, the same build the host app pins — see [`docs/DECISIONS.md`](../../../docs/DECISIONS.md))
+- **statamic/cms**: v6, pinned exactly to the build the host app pins; the version is in `composer.json`, and the reasoning in [`docs/DECISIONS.md`](../../../docs/DECISIONS.md)
 - **statamic/eloquent-driver** — v5 (pinned `5.9.0`)
 - **statamic/ssg** — v4
 - **laravel/boost** — v2 (provides the Boost MCP server; pulls in `laravel/mcp`)

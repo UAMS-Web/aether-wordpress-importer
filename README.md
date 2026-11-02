@@ -14,7 +14,7 @@ This addon is designed for real migration work: it parses WordPress exports, let
 ## Requirements
 
 - PHP `^8.4`
-- Statamic `statamic/cms` **`6.35.0`, pinned exactly** — not a caret range. The exact pin makes this package resolve the same Statamic build the host app runs, which keeps both on one `ueberdosis/tiptap-php`; moving it is a coupled change made here first and then in the host. See [`CLAUDE.md`](CLAUDE.md).
+- Statamic `statamic/cms` **pinned exactly** to the version in [`composer.json`](composer.json), not a caret range. The exact pin makes this package resolve the same Statamic build the host app runs, which keeps both on one `ueberdosis/tiptap-php`; moving it is a coupled change made here first and then in the host. See [`CLAUDE.md`](CLAUDE.md).
 
 ## Installation
 
