@@ -34,6 +34,35 @@ export const OPEN = 'open question'
 /** The status checks a public repository's `main` requires (the `code-quality` skill's ruleset). */
 export const REQUIRED_CONTEXTS = ['Attribution footer', 'CI', 'Closing keywords']
 
+/** The organization custom property that names which organization rulesets a repository receives (UAMS-Web/uams-claude-skills#415). */
+export const RULESET_PROPERTY = 'ruleset_family'
+
+const DEFAULT_BRANCH_RULES = ['deletion', 'non_fast_forward', 'pull_request']
+
+/** The contexts organization ruleset 25097852 requires (the add-on set from before the sync adopted the aggregate `CI` check). */
+export const BEFORE_SYNC_CONTEXTS = [
+    'Composer validate (composer.lock freshness)', 'Guard-script tests (vitest)', 'Built assets (resources/dist matches source)',
+    'Mutation annotations (none inert)', 'Parallel-safe tests (no shared state)', 'Pint', 'Rector (gating profile)', 'Larastan (PHPStan)',
+    'Pest (Unit and Integration)', 'Compatibility (lowest statamic/cms)', 'Compatibility (PHP 8.5)', 'Attribution footer', 'Closing keywords',
+    'Required checks (ruleset matches jobs)', 'Repository guards (emoji, decision log)',
+]
+
+/**
+ * The values of the `ruleset_family` property, each with the organization rules a repository holding it receives:
+ * the rule types among deletion, non_fast_forward and pull_request, and the required status check contexts.
+ */
+export const FAMILIES = {
+    none: { rules: [], checks: [] },
+    base: { rules: DEFAULT_BRANCH_RULES, checks: [] },
+    'addon-legacy': { rules: DEFAULT_BRANCH_RULES, checks: ['Attribution footer', 'CI', 'Closing keywords'] },
+    addon: { rules: DEFAULT_BRANCH_RULES, checks: BEFORE_SYNC_CONTEXTS },
+}
+
+/** The add-on family's required contexts, sorted, as the required-checks row writes them. */
+export const ADDON_CONTEXTS = [...FAMILIES.addon.checks].sort()
+
+const signature = (rules, checks) => `${[...new Set(rules)].sort().join(',')}|${[...new Set(checks)].sort().join(',')}`
+
 /** Secrets a pull-request workflow reads, so a Dependabot pull request needs them in the Dependabot store too. */
 export const PULL_REQUEST_SECRETS = ['COMPOSER_AUTH_TOKEN']
 
@@ -54,7 +83,35 @@ function requiredChecks(s) {
         if (rule?.type !== 'required_status_checks') continue
         for (const check of rule.parameters?.required_status_checks ?? []) contexts.push(check?.context)
     }
-    return contexts.length === 0 ? 'none' : [...new Set(contexts)].sort().join(', ')
+    if (contexts.length === 0) return 'none'
+    const found = new Set(contexts)
+    // an add-on carries the organization's add-on checks and may add its own: the extra names are its own jobs
+    if (declaredFamily(s) === 'addon' && FAMILIES.addon.checks.every((context) => found.has(context))) return ADDON_CONTEXTS.join(', ')
+    return [...found].sort().join(', ')
+}
+
+/** The family the organization-sourced rules in effect add up to, or a description when they match none. */
+function observedFamily(s) {
+    const organization = (s.rules ?? []).filter((rule) => rule?.ruleset_source_type === 'Organization')
+    const types = organization.map((rule) => rule.type).filter((type) => DEFAULT_BRANCH_RULES.includes(type))
+    const contexts = organization.filter((rule) => rule.type === 'required_status_checks').flatMap((rule) => (rule.parameters?.required_status_checks ?? []).map((check) => check?.context))
+    const observed = signature(types, contexts)
+    const match = Object.entries(FAMILIES).find(([, family]) => signature(family.rules, family.checks) === observed)
+    return match ? match[0] : `no family (rules: ${types.join(', ') || 'none'}; checks: ${[...new Set(contexts)].sort().join(', ') || 'none'})`
+}
+
+/** The family the repository's custom property names: an unset property is `none`. */
+function declaredFamily(s) {
+    const entry = (s.properties ?? []).find((item) => item?.property_name === RULESET_PROPERTY)
+    const value = entry?.value ?? 'none'
+    return value in FAMILIES ? value : `unknown value ${String(value)}`
+}
+
+/** `agrees` when the property value and the organization rules in effect describe the same family. */
+function rulesetFamily(s) {
+    const declared = declaredFamily(s)
+    const observed = observedFamily(s)
+    return declared === observed ? 'agrees' : `property ${declared}, rules ${observed}`
 }
 
 function pullRequestSecrets(s) {
@@ -101,7 +158,8 @@ export const BASELINE = [
     { id: 'rule_deletion', read: (s) => hasRule(s, 'deletion'), expect: { public: 'present', private: 'present' } },
     { id: 'rule_non_fast_forward', read: (s) => hasRule(s, 'non_fast_forward'), expect: { public: 'present', private: 'present' } },
     { id: 'rule_pull_request', read: (s) => hasRule(s, 'pull_request'), expect: { public: 'present', private: 'present' } },
-    { id: 'rule_required_status_checks', read: requiredChecks, expect: { public: REQUIRED_CONTEXTS.join(', '), private: 'none' } },
+    { id: 'rule_required_status_checks', read: requiredChecks, expect: { public: [REQUIRED_CONTEXTS.join(', '), ADDON_CONTEXTS.join(', ')], private: 'none' } },
+    { id: 'ruleset_family', read: rulesetFamily, expect: { public: 'agrees', private: 'agrees' } },
 ]
 
 /** How an expected value is written, in the output and in the SKILL.md table. */
@@ -132,6 +190,7 @@ export function matchingSnapshot(visibility) {
     const scanning = { status: isPublic ? 'enabled' : 'disabled' }
     const rules = [{ type: 'deletion' }, { type: 'non_fast_forward' }, { type: 'pull_request' }]
     if (isPublic) rules.push({ type: 'required_status_checks', parameters: { required_status_checks: [{ context: 'CI' }, { context: 'Attribution footer' }, { context: 'Closing keywords' }] } })
+    for (const rule of rules) rule.ruleset_source_type = 'Organization'
     return {
         repo: {
             name: `control-${visibility}`, visibility, archived: false,
@@ -153,6 +212,7 @@ export function matchingSnapshot(visibility) {
         dependabot_secrets: { secrets: [] },
         organization_variables: { variables: isPublic ? [] : [{ name: 'RUN_REMOTE_CI' }] },
         rules,
+        properties: [{ property_name: RULESET_PROPERTY, value: isPublic ? 'addon-legacy' : 'base' }],
         dependabot_yml_status: 200,
     }
 }
@@ -180,6 +240,18 @@ export function controlFailures(baseline = BASELINE) {
     const leak = structuredClone(matchingSnapshot('public'))
     leak.actions_secrets.secrets.push({ name: 'COMPOSER_AUTH_TOKEN' })
     if (!departures(leak, baseline).some((item) => item.id === 'pull_request_secrets')) failed.push('an Actions-only pull-request secret was not reported')
+    for (const visibility of ['public', 'private']) {
+        const good = matchingSnapshot(visibility)
+        const wrongValue = structuredClone(good)
+        wrongValue.properties = [{ property_name: RULESET_PROPERTY, value: visibility === 'public' ? 'base' : 'addon-legacy' }]
+        if (!departures(wrongValue, baseline).some((item) => item.id === 'ruleset_family')) failed.push(`a ${visibility} property value that disagrees with the rules in effect was not reported`)
+        const unset = structuredClone(good)
+        unset.properties = []
+        if (!departures(unset, baseline).some((item) => item.id === 'ruleset_family')) failed.push(`an unset property on a ${visibility} repository holding rules was not reported`)
+        const repositoryRule = structuredClone(good)
+        repositoryRule.rules.push({ type: 'required_status_checks', ruleset_source_type: 'Repository', parameters: { required_status_checks: [{ context: 'Only a repository ruleset requires this' }] } })
+        if (departures(repositoryRule, baseline).some((item) => item.id === 'ruleset_family')) failed.push(`a repository-sourced rule changed the ruleset family on a ${visibility} snapshot`)
+    }
     return failed
 }
 
@@ -208,6 +280,12 @@ export function readSnapshot(gh, fullName) {
         const value = json(path)
         const held = Array.isArray(value?.[key]) ? value[key].length : -1
         if (held < 0 || value.total_count !== held) throw new Error(`GET ${path}: read ${held} of ${value?.total_count} ${key}, so the list is incomplete`)
+        return value
+    }
+    // the property values come back as a bare array, so anything else is a failed read
+    const array = (path) => {
+        const value = json(path)
+        if (!Array.isArray(value)) throw new Error(`GET ${path}: expected a list of property values`)
         return value
     }
     const code = (path) => {
@@ -239,6 +317,7 @@ export function readSnapshot(gh, fullName) {
                 dependabot_secrets: list(`${base}/dependabot/secrets?per_page=100`, 'secrets'),
                 organization_variables: list(`${base}/actions/organization-variables?per_page=30`, 'variables'),
                 rules: json(`${base}/rules/branches/${branch}`),
+                properties: array(`${base}/properties/values`),
                 dependabot_yml_status: dependabotFile(),
             },
         }
