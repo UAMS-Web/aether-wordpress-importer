@@ -795,6 +795,13 @@ class AssetImporter
      * URL is used in different contexts. Applies same-site policy and handles
      * failed downloads gracefully.
      *
+     * The cache is read before the same-site policy is applied. A URL already
+     * imported into the container, by any earlier call under any policy, returns
+     * its cached asset path under every policy: `ALWAYS_IMPORT` and
+     * `SKIP_DIFFERENT_SITE` return the path rather than importing or skipping,
+     * and `LINK_DIFFERENT_SITE` returns the path rather than the original URL.
+     * The policy decides only for a URL not yet in the cache.
+     *
      * @param  string  $url  The URL of the file to import
      * @param  string  $site  The Statamic site handle, for asset paths where the container has site folders and for what is reported
      * @param  OutputInterface  $output  Console output for logging
@@ -850,6 +857,27 @@ class AssetImporter
             return null;
         }
 
+        // ---
+        // Generate container-aware cache key (normalization happens inside
+        // generateFileCacheKey). The cache is read before the same-site policy,
+        // as importImage() and importThumbnail() read theirs: a cached file is
+        // already in the container, so its path is returned under every policy.
+        // ---
+        $cacheKey = self::generateFileCacheKey(
+            $url,
+            $container
+        );
+
+        // Check cache for existing import
+        if (isset(self::$fileCache[$cacheKey])) {
+            // Display cached file path message to console
+            $cachedPath = self::$fileCache[$cacheKey];
+            $output->writeln("  - <comment>Using cached file path for '$url' in container '$container': {$cachedPath}</comment>");
+
+            // Return the cached file path
+            return $cachedPath;
+        }
+
         // Apply same-site policy
         $decision = $this->decideSameSite(
             $url,
@@ -867,30 +895,11 @@ class AssetImporter
         }
 
         // ---
-        // Normalize WordPress image URLs to remove size suffixes for cache
-        // checking. This ensures that different sized versions of the same image
-        // (e.g., -630x418.jpg) share the same cache entry.
+        // Normalize WordPress image URLs to remove size suffixes for the failed
+        // cache check. This ensures that a failure of one sized version of an
+        // image (e.g., -630x418.jpg) is found for the others.
         // ---
         $normalizedUrl = AssetUtils::normalizeWordPressImageUrl($url);
-
-        // ---
-        // Generate container-aware cache key (normalization happens inside
-        // generateFileCacheKey, but we need normalizedUrl for failed cache check)
-        // ---
-        $cacheKey = self::generateFileCacheKey(
-            $url,
-            $container
-        );
-
-        // Check cache for existing import
-        if (isset(self::$fileCache[$cacheKey])) {
-            // Display cached file path message to console
-            $cachedPath = self::$fileCache[$cacheKey];
-            $output->writeln("  - <comment>Using cached file path for '$url' in container '$container': {$cachedPath}</comment>");
-
-            // Return the cached file path
-            return $cachedPath;
-        }
 
         // ---
         // Check if this URL (or its normalized version) has already failed to
