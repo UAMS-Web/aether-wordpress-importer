@@ -1597,7 +1597,7 @@ class LinkProcessor
             $contentUpdated = true;
         } elseif (\is_string($content)) { // Otherwise, for string content
             // Use simple string replacement
-            $content = \str_replace(
+            $content = self::replaceUrlInString(
                 $wordPressUrl,
                 $statamicUrl,
                 $content
@@ -1742,7 +1742,7 @@ class LinkProcessor
                 }
             } elseif (\is_string($value)) { // Check if the value is a string
                 // Replace URLs in string values
-                $content[$key] = \str_replace(
+                $content[$key] = self::replaceUrlInString(
                     $oldUrl,
                     $newUrl,
                     $value
@@ -1856,7 +1856,7 @@ class LinkProcessor
             } elseif (\is_string($value)) { // Check if the value is a string (string field like button_url, text field, etc.)
                 // Replace URLs in string values (handles URL fields like button_url,
                 // more_button_url, text fields, textarea fields, etc.)
-                $content[$key] = \str_replace(
+                $content[$key] = self::replaceUrlInString(
                     $oldUrl,
                     $newUrl,
                     $value
@@ -3657,6 +3657,91 @@ class LinkProcessor
 
         // Return the found entry or null if not found after all retries
         return $statamicEntry;
+    }
+
+    /**
+     * Replaces a URL in a string, in its HTML-escaped form as well as its raw one.
+     *
+     * A string can hold markup: each cell of a `table` set's `table_data` is
+     * the cell's HTML. A URL in an attribute there is escaped, so a query of
+     * `?a=1&b=2` is stored as `?a=1&amp;b=2`, and a search for the raw URL
+     * misses it (aether-wordpress-importer#395). The escaped form is replaced
+     * with the new URL escaped the same way, so the markup stays well formed.
+     * A URL that escaping leaves unchanged is replaced only in its raw form,
+     * and the new URL goes in unescaped.
+     *
+     * An occurrence is replaced only where the URL ends: one followed by a
+     * character that continues a path, such as a link to a child page, is a
+     * different URL, and replacing its start would leave the rest of the path
+     * behind the reference. A query or fragment after the URL still follows
+     * the reference.
+     *
+     * @param  string  $oldUrl  The URL to replace
+     * @param  string  $newUrl  The URL to replace it with
+     * @param  string  $value  The string to search
+     * @return string The string with every occurrence replaced
+     */
+    private static function replaceUrlInString(
+        string $oldUrl,
+        string $newUrl,
+        string $value
+    ): string {
+        // Escape the old URL as an HTML attribute value holds it
+        $escapedOldUrl = \htmlspecialchars(
+            $oldUrl,
+            ENT_NOQUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+
+        // Replace the escaped form, where escaping changed the URL
+        if ($escapedOldUrl !== $oldUrl) {
+            $value = self::replaceWholeUrl(
+                $escapedOldUrl,
+                \htmlspecialchars(
+                    $newUrl,
+                    ENT_NOQUOTES | ENT_HTML5,
+                    'UTF-8'
+                ),
+                $value
+            );
+        }
+
+        // Replace the raw form
+        return self::replaceWholeUrl(
+            $oldUrl,
+            $newUrl,
+            $value
+        );
+    }
+
+    /**
+     * Replaces each occurrence of a URL that is not followed by a character
+     * continuing its path: a letter, a digit, or one of `-._~%/`.
+     *
+     * @param  string  $oldUrl  The URL to replace
+     * @param  string  $newUrl  The URL to replace it with
+     * @param  string  $value  The string to search
+     * @return string The string with every whole occurrence replaced
+     */
+    private static function replaceWholeUrl(
+        string $oldUrl,
+        string $newUrl,
+        string $value
+    ): string {
+        // An empty URL matches nowhere in particular, so it replaces nothing
+        if ($oldUrl === '') {
+            return $value;
+        }
+
+        // Match the URL literally, unless a path character follows it
+        $replaced = \preg_replace_callback(
+            '/'.\preg_quote($oldUrl, '/').'(?![A-Za-z0-9\-._~%\/])/',
+            static fn (): string => $newUrl,
+            $value
+        );
+
+        // A regex error, which a literal pattern cannot raise, leaves the string as it was
+        return $replaced ?? $value;
     }
 
     /**
