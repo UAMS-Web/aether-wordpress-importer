@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
+use DOMElement;
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
 use Statamic\Entries\Entry;
@@ -1597,7 +1598,7 @@ class LinkProcessor
             $contentUpdated = true;
         } elseif (\is_string($content)) { // Otherwise, for string content
             // Use simple string replacement
-            $content = \str_replace(
+            $content = self::replaceUrlInString(
                 $wordPressUrl,
                 $statamicUrl,
                 $content
@@ -1742,7 +1743,7 @@ class LinkProcessor
                 }
             } elseif (\is_string($value)) { // Check if the value is a string
                 // Replace URLs in string values
-                $content[$key] = \str_replace(
+                $content[$key] = self::replaceUrlInString(
                     $oldUrl,
                     $newUrl,
                     $value
@@ -1856,7 +1857,7 @@ class LinkProcessor
             } elseif (\is_string($value)) { // Check if the value is a string (string field like button_url, text field, etc.)
                 // Replace URLs in string values (handles URL fields like button_url,
                 // more_button_url, text fields, textarea fields, etc.)
-                $content[$key] = \str_replace(
+                $content[$key] = self::replaceUrlInString(
                     $oldUrl,
                     $newUrl,
                     $value
@@ -3657,6 +3658,128 @@ class LinkProcessor
 
         // Return the found entry or null if not found after all retries
         return $statamicEntry;
+    }
+
+    /**
+     * Replaces a URL in a string, in the form an `href` attribute holds it as
+     * well as its raw one.
+     *
+     * A string can hold markup: each cell of a `table` set's `table_data` is
+     * the cell's HTML as libxml wrote it. libxml writes an `href` escaped and
+     * percent-encoded, so a query of `?a=1&b=2` is stored as `?a=1&amp;b=2`
+     * and a space as `%20`, and a search for the URL as the DOM read it misses
+     * it (aether-wordpress-importer#395). That attribute form is replaced with
+     * the new URL in its own attribute form, so the markup stays well formed.
+     * A URL whose attribute form is the URL itself is replaced only in its raw
+     * form, and the new URL goes in as it is.
+     *
+     * An occurrence is replaced only where the URL ends: one followed by a
+     * character that continues a path, such as a link to a child page, is a
+     * different URL, and replacing its start would leave the rest of the path
+     * behind the reference. A query or fragment after the URL still follows
+     * the reference.
+     *
+     * @param  string  $oldUrl  The URL to replace
+     * @param  string  $newUrl  The URL to replace it with
+     * @param  string  $value  The string to search
+     * @return string The string with every occurrence replaced
+     */
+    private static function replaceUrlInString(
+        string $oldUrl,
+        string $newUrl,
+        string $value
+    ): string {
+        // Write the old URL as libxml writes it in an href attribute
+        $attributeOldUrl = self::hrefAttributeForm($oldUrl);
+
+        // Replace that form, where it differs from the URL
+        if ($attributeOldUrl !== $oldUrl) {
+            $value = self::replaceWholeUrl(
+                $attributeOldUrl,
+                self::hrefAttributeForm($newUrl),
+                $value
+            );
+        }
+
+        // Replace the raw form
+        return self::replaceWholeUrl(
+            $oldUrl,
+            $newUrl,
+            $value
+        );
+    }
+
+    /**
+     * Returns a URL as libxml writes it in an `href` attribute, the form a
+     * table cell's HTML holds it in.
+     *
+     * A link to the URL is loaded with {@see TextProcessor::loadHtml()}, the
+     * loader a page's tables are read through, and serialized, so the result
+     * is byte for byte what `TableProcessor` stores in a cell. How libxml
+     * writes a non-ASCII character depends on the document's encoding and on
+     * the libxml build, so a document of any other kind can disagree with the
+     * cell. So can the quoting: a URL holding `"` is written `&quot;` inside
+     * double quotes by some builds and raw inside single quotes by others
+     * (measured on Windows CI), so either quote is read. Where the
+     * serialization is not the expected `<a href="...">` or `<a href='...'>`,
+     * the URL is returned unchanged, and only its raw form is searched for.
+     *
+     * @param  string  $url  The URL as the DOM reads it
+     * @return string The URL as an href attribute value
+     */
+    private static function hrefAttributeForm(
+        string $url
+    ): string {
+        // Load a link to the URL as a page is loaded
+        $document = TextProcessor::loadHtml(
+            '<a href="'.\htmlspecialchars($url, ENT_QUOTES | ENT_HTML5, 'UTF-8').'"></a>'
+        );
+
+        $link = $document->getElementsByTagName('a')->item(0);
+
+        // Serialize the link as a cell's HTML is serialized
+        $html = $link instanceof DOMElement ? $document->saveHTML($link) : false;
+
+        // Take the attribute value out of the markup, in whichever quotes it is in
+        if (
+            ! \is_string($html)
+            || \preg_match('/\A<a href=(["\'])(.*)\1><\/a>\z/s', $html, $matches) !== 1
+        ) {
+            return $url;
+        }
+
+        return $matches[2];
+    }
+
+    /**
+     * Replaces each occurrence of a URL that is not followed by a character
+     * continuing its path: a letter, a digit, a byte of a non-ASCII
+     * character, or one of `-._~%/`.
+     *
+     * @param  string  $oldUrl  The URL to replace
+     * @param  string  $newUrl  The URL to replace it with
+     * @param  string  $value  The string to search
+     * @return string The string with every whole occurrence replaced
+     */
+    private static function replaceWholeUrl(
+        string $oldUrl,
+        string $newUrl,
+        string $value
+    ): string {
+        // An empty URL matches nowhere in particular, so it replaces nothing
+        if ($oldUrl === '') {
+            return $value;
+        }
+
+        // Match the URL literally, unless a path character follows it
+        $replaced = \preg_replace_callback(
+            '/'.\preg_quote($oldUrl, '/').'(?![A-Za-z0-9\x80-\xFF\-._~%\/])/',
+            static fn (): string => $newUrl,
+            $value
+        );
+
+        // A regex error, which a literal pattern cannot raise, leaves the string as it was
+        return $replaced ?? $value;
     }
 
     /**
