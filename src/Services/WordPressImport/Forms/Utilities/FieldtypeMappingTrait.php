@@ -8420,11 +8420,17 @@ trait FieldtypeMappingTrait
             }
 
             foreach ($patternArray as $key => $value) {
-                $attrKey = $caseSensitiveKey ? $key : \strtolower($key);
+                // Cast keys as the other matchers do, so an item that is a
+                // plain list (integer keys) fails to match instead of throwing
+                $attrKey = $caseSensitiveKey
+                    ? (string) $key
+                    : \strtolower((string) $key);
                 $found = false;
 
                 foreach ($attrValue[$index] as $itemKey => $itemValue) {
-                    $itemKeyNormalized = $caseSensitiveKey ? $itemKey : \strtolower($itemKey);
+                    $itemKeyNormalized = $caseSensitiveKey
+                        ? (string) $itemKey
+                        : \strtolower((string) $itemKey);
                     if ($itemKeyNormalized === $attrKey) {
                         if (
                             self::valuesMatch(
