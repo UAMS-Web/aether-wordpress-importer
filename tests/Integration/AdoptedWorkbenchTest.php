@@ -3,10 +3,14 @@
 declare(strict_types=1);
 
 use Statamic\Contracts\Forms\Form;
+use Statamic\Entries\Entry as StatamicEntry;
+use Statamic\Facades\Collection as CollectionFacade;
+use Statamic\Facades\Entry;
 use Statamic\Facades\Form as FormFacade;
+use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use UAMSWeb\Aether\WordPressImporter\Tests\Support\AdoptedWorkbenchCase;
 
-uses(AdoptedWorkbenchCase::class);
+uses(AdoptedWorkbenchCase::class, PreventsSavingStacheItemsToDisk::class);
 
 /**
  * Pins that an adopted per-process workbench is emptied (issue wordpress-importer-archive#827).
@@ -44,4 +48,32 @@ it('does not resolve a form the killed run left behind', function (): void {
     }
 
     expect($handles)->not->toContain('left_by_a_killed_run');
+});
+
+it('empties a search index left behind by a killed run', function (): void {
+    expect(AdoptedWorkbenchCase::$plantsLanded)->toBeTrue();
+
+    // ---
+    // An undecodable `cp.json` adopted here would fail every save in the process with
+    // a `JsonException` (#111), so the file is gone and a save succeeds.
+    // ---
+    expect(\file_exists(AdoptedWorkbenchCase::$plantedSearchIndex))->toBeFalse();
+
+    $collection = CollectionFacade::make('adopted_search_probe');
+    $collection->save();
+
+    $entry = Entry::make();
+
+    if (! $entry instanceof StatamicEntry) {
+        throw new RuntimeException('Entry::make() did not return a Statamic entry.');
+    }
+
+    $entry->collection('adopted_search_probe');
+    $entry->slug('saved_after_adoption');
+    $entry->data(['title' => 'Saved After Adoption']);
+    $entry->save();
+
+    expect(\json_decode((string) \file_get_contents(AdoptedWorkbenchCase::$plantedSearchIndex), true, 512, JSON_THROW_ON_ERROR))
+        ->toBeArray()
+        ->not->toBeEmpty();
 });

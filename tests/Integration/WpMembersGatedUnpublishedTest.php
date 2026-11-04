@@ -46,7 +46,7 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  * @command  php vendor/bin/pest tests/Integration/WpMembersGatedUnpublishedTest.php
  */
 beforeEach(function (): void {
-    // No search indexes, so a save never touches the workbench's shared index files
+    // No configured search indexes, for the reason `AdvertImportTest` gives
     config(['statamic.search.indexes' => []]);
 
     Site::setSites([
