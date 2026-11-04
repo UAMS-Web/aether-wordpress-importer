@@ -7,8 +7,8 @@ namespace UAMSWeb\Aether\WordPressImporter\Tests\Support;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
- * A case that plants form and blueprint YAML in this process's workbench before the
- * `setUp()` chain runs (issue wordpress-importer-archive#827).
+ * A case that plants form and blueprint YAML, and an undecodable search index, in this
+ * process's workbench before the `setUp()` chain runs (issue wordpress-importer-archive#827, #111).
  *
  * `isolateWorkbench()` empties an adopted workbench for the reason wordpress-importer-archive#832 records — a
  * run killed mid-test at a pid the operating system later reissues leaves its form
@@ -33,18 +33,23 @@ abstract class AdoptedWorkbenchCase extends StatamicTestCase
     public static string $plantedBlueprint = '';
 
     /**
-     * @var bool Whether both plants were verified on disk before `setUp()` ran
+     * @var string The undecodable search index planted before setUp, or '' if none was
+     */
+    public static string $plantedSearchIndex = '';
+
+    /**
+     * @var bool Whether every plant was verified on disk before `setUp()` ran
      */
     public static bool $plantsLanded = false;
 
     /**
-     * Plant a stale form and blueprint, then boot as normal.
+     * Plant a stale form, blueprint and search index, then boot as normal.
      */
     protected function setUp(): void
     {
         $workbench = \dirname(__DIR__).'/__fixtures__/workbench-'.\getmypid();
 
-        foreach (['forms', 'blueprints/forms'] as $directory) {
+        foreach (['forms', 'blueprints/forms', 'search'] as $directory) {
             if (! \is_dir($workbench.'/'.$directory)) {
                 \mkdir($workbench.'/'.$directory, 0755, true);
             }
@@ -56,13 +61,18 @@ abstract class AdoptedWorkbenchCase extends StatamicTestCase
         \file_put_contents(self::$plantedForm, "title: Stale\n");
         \file_put_contents(self::$plantedBlueprint, "tabs:\n  main:\n    display: Stale\n");
 
+        // A torn write, as a parallel run that was killed or interleaved leaves it
+        self::$plantedSearchIndex = $workbench.'/search/cp.json';
+        \file_put_contents(self::$plantedSearchIndex, '{"entry::torn":{"title":"Tor');
+
         // ---
         // Every assertion in the test file is an absence, which is also what a plant
         // that silently failed produces. Recording this makes a defused fixture fail
         // rather than read as green.
         // ---
         self::$plantsLanded = \is_file(self::$plantedForm)
-            && \is_file(self::$plantedBlueprint);
+            && \is_file(self::$plantedBlueprint)
+            && \is_file(self::$plantedSearchIndex);
 
         parent::setUp();
     }

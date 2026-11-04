@@ -75,11 +75,10 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  */
 beforeEach(function (): void {
     // ---
-    // No search indexes, set before anything is saved. These saves reach disk, and on
-    // disk every save updates the Testbench workbench's search index files, which
-    // every other test shares. An index left unreadable by an interrupted run then
-    // fails this file's saves with a JsonException that has nothing to do with the
-    // import.
+    // No configured search indexes, set before anything is saved, so the saves do not
+    // rebuild the `default` index. Statamic still adds and updates the `cp` index
+    // whatever this lists; its file is in the per-process workbench that
+    // `StatamicTestCase` prepares, not the shared Testbench path (#111).
     // ---
     config(['statamic.search.indexes' => []]);
 

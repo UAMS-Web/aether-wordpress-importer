@@ -218,7 +218,7 @@ abstract class StatamicTestCase extends AddonTestCase
     }
 
     /**
-     * Point form and blueprint writes at a per-process directory (wordpress-importer-archive#827).
+     * Point form, blueprint and search index writes at a per-process directory (wordpress-importer-archive#827, #111).
      *
      * Statamic writes form and blueprint YAML to the Testbench application path —
      * `vendor/orchestra/testbench-core/laravel/resources/{forms,blueprints}` — one
@@ -255,7 +255,7 @@ abstract class StatamicTestCase extends AddonTestCase
         // ---
         $this->perProcessWorkbench = $workbench;
 
-        foreach (['forms', 'blueprints'] as $directory) {
+        foreach (['forms', 'blueprints', 'search'] as $directory) {
             if (! \is_dir($workbench.'/'.$directory)) {
                 \mkdir($workbench.'/'.$directory, 0755, true);
             }
@@ -264,9 +264,21 @@ abstract class StatamicTestCase extends AddonTestCase
         // An adopted workbench is emptied for the reason wordpress-importer-archive#832 records
         self::removeContents($workbench.'/forms');
         self::removeContents($workbench.'/blueprints');
+        self::removeContents($workbench.'/search');
 
         // Read at call time by `FormRepository::all()` and `Form::path()`
         config(['statamic.forms.forms' => $workbench.'/forms']);
+
+        // ---
+        // The search index files move with the rest (#111). Every save updates the
+        // `cp` index, which `IndexManager` adds whether or not `statamic.search.indexes`
+        // lists it, so emptying that config does not stop the write. On the shared
+        // Testbench path, `storage/statamic/search/cp.json`, one process's broken write
+        // failed every later run in the tree with a `JsonException` from the save. The
+        // driver default is read when an index is first resolved, which no boot step
+        // does, so setting it here reaches every index a test uses.
+        // ---
+        config(['statamic.search.drivers.local.path' => $workbench.'/search']);
 
         // ---
         // The repository is a singleton built from `statamic.system.blueprints_path`
