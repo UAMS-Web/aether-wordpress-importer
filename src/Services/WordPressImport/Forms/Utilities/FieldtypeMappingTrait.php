@@ -385,7 +385,7 @@ trait FieldtypeMappingTrait
                 $data
             )
         ) {
-            return false; // Not set means not empty
+            return false; // Not set counts as empty
         }
 
         $value = $data[$normalizedAttrName];
@@ -449,7 +449,7 @@ trait FieldtypeMappingTrait
             ! isset($fieldData['field_options'])
             || ! \is_string($fieldData['field_options'])
         ) {
-            return false; // If no field_options, consider it not empty
+            return false; // If no field_options, count it as empty
         }
 
         // Parse the field_options JSON
@@ -458,7 +458,7 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
-            return false; // If parsing fails, consider it not empty
+            return false; // If parsing fails, count it as empty
         }
 
         // Check if the attribute exists in the parsed field_options
@@ -468,7 +468,7 @@ trait FieldtypeMappingTrait
                 $fieldOptions
             )
         ) {
-            return false; // Not set means not empty
+            return false; // Not set counts as empty
         }
 
         $value = $fieldOptions[$normalizedAttrName];
@@ -8262,7 +8262,11 @@ trait FieldtypeMappingTrait
     }
 
     /**
-     * Check if an array is associative (has string keys).
+     * Check if an array is associative (its keys are not 0, 1, 2 ... in order).
+     *
+     * An empty array is a list, not an associative array, so an empty
+     * `nested_attribute` pattern cannot take the key/value branch of
+     * matchesNestedAttributePattern() and match every array vacuously.
      *
      * @param  array<int|string, mixed>  $array  The array to check
      * @return bool True if the array is associative
@@ -8270,10 +8274,7 @@ trait FieldtypeMappingTrait
     protected static function isAssociativeArray(
         array $array
     ): bool {
-        return \array_keys($array) !== range(
-            0,
-            \count($array) - 1
-        );
+        return ! \array_is_list($array);
     }
 
     /**
