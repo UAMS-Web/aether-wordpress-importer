@@ -62,6 +62,18 @@ name: CI
 # hardcoded `framework/testing` path) stay with the application that owns them; the pest-testing
 # skill says why.
 #
+# Operating systems (UAMS-Web/uams-claude-skills#438, #454): a job whose result cannot depend on the
+# platform runs on `ubuntu-latest` only, and a job whose result can runs as a matrix over
+# `ubuntu-latest`, `windows-latest` and `macos-latest` with `fail-fast: false`, so one leg's failure
+# does not hide the others. Each job below carries a `# Legs:` line saying which, with the reason; the
+# code-quality skill's "Which jobs run on which operating system" section holds the evidence, and
+# scripts/check-templates.mjs fails the template when a job is unclassified or runs on the wrong legs.
+# A job with no recorded evidence runs on all three. A matrix job reports one result, success only when
+# every leg succeeded, so `CI` needs the job once and still fails when any leg fails.
+#
+# This file is copied once and then owned by the repository (the sync never writes `.github/`), so a
+# repository keeps a Linux-only job on all three legs, or narrows one, by editing its own copy.
+#
 # Jobs are chained with `needs:`, cheapest first, so a pull request that fails a cheap check
 # does not spend minutes on the dear ones.
 #
@@ -105,9 +117,15 @@ on:
   # Lets the workflow be run on demand against a branch.
   workflow_dispatch:
 
-# A new push to a pull request cancels that pull request's stale run.
+# A new push to a pull request cancels that pull request's stale run, so a pull request keeps
+# one group. Every other run (a push to the default branch, a manual run) gets a group of its
+# own, keyed on the commit, so a later push never cancels it. A shared push group would: GitHub
+# keeps one running and one pending run per group and cancels the pending one when another is
+# queued, whatever `cancel-in-progress` says, so a merge landing during a long run would cancel
+# the previous merge's run before it started a job. Its commit would show a short, settled run
+# and the chain would never have run on it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -116,6 +134,7 @@ permissions:
 jobs:
   composer-validate:
     name: Composer validate (composer.lock freshness)
+    # Legs: Linux only. It compares composer.json and composer.lock, which read the same on any platform.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -132,6 +151,7 @@ jobs:
 
   synced-files:
     name: Synced files (no hand-edited rules or skills)
+    # Legs: Linux only. It hashes tracked files against the sync manifest; the repository pins line endings, so the bytes match on every platform.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -146,6 +166,7 @@ jobs:
 
   no-emoji:
     name: No emoji in durable records
+    # Legs: Linux only. It sweeps tracked prose for banned code points with Node alone; no platform branch in the script.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -160,6 +181,7 @@ jobs:
 
   aggregate-needs:
     name: Aggregate needs
+    # Legs: Linux only. It parses the workflow files and the allow-list with Node alone; no platform branch in the script.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -176,6 +198,7 @@ jobs:
   pint:
     name: Pint
     needs: [composer-validate, synced-files]
+    # Legs: Linux only. Pint formats PHP source and reads the same rules on any platform.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -186,6 +209,7 @@ jobs:
   rector:
     name: Rector
     needs: [pint]
+    # Legs: Linux only. Rector reads PHP source and its own config; the result does not depend on the platform.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -196,6 +220,7 @@ jobs:
   phpstan:
     name: PHPStan
     needs: [pint]
+    # Legs: Linux only. PHPStan analyses PHP source; the result does not depend on the platform.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -204,9 +229,14 @@ jobs:
       - run: composer stan
 
   mutate-ignore:
-    name: Mutation annotations (none inert)
+    name: Mutation annotations (none inert) (${{ matrix.os }})
     needs: [pint]
-    runs-on: ubuntu-latest
+    # Legs: all three. The check has a branch for a CRLF runtime, and a Windows checkout can be CRLF.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -218,9 +248,14 @@ jobs:
       - run: php .claude/skills/pest-testing/scripts/check-mutate-ignore.php
 
   mutate:
-    name: Mutation score (changed files, with PCOV)
+    name: Mutation score (changed files, with PCOV) (${{ matrix.os }})
     needs: [rector, phpstan]
-    runs-on: ubuntu-latest
+    # Legs: all three. Mutation tooling has needed Windows-only patches, and the PCOV driver is installed per platform.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     timeout-minutes: 45
     # An explicit `bash` runs each step with `-eo pipefail`; the default, `bash -e`, does not,
     # and the run step's `| tee` would then report tee's status in place of Pest's.
@@ -317,9 +352,14 @@ jobs:
           php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log
 
   pest:
-    name: Pest
+    name: Pest (${{ matrix.os }})
     needs: [rector, phpstan]
-    runs-on: ubuntu-latest
+    # Legs: all three. The suite is what runs on the platforms the code ships to: paths, command-line length, BSD tools, case-insensitive file systems.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7

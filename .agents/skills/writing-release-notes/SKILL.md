@@ -40,7 +40,7 @@ follows ordinary semver. What a tag *is* differs by repository, and that decides
 change means there.
 
 This repo is a Composer **package** with a **real external consumer**: `uams-statamic` pins it by
-a tagged caret range (`"uams-web/wordpress-importer": "^0.x"`), not `dev-main`. So a tag here is
+a tagged caret range (`"uams-web/aether-wordpress-importer": "^0.x"`), not `dev-main`. So a tag here is
 not a commemorative milestone marker: it is the **delivery mechanism**, and merged work is
 unreachable by the app until one exists. `1.0.0` is the eventual Launch, not any pre-launch
 point, and every release is a pre-release until then. *When* to cut is the
@@ -260,7 +260,7 @@ and it is run from the repository root. It reads first-parent git history for a 
 each PR's title, body and labels **live from the GitHub API** (`gh`, REST by default), reads the
 paths each change touched from git, and applies every rule above: prefix/`[skip ci]`/merge-hint
 stripping, acronym casing (leaving backticked spans and joined names such as
-`uams-web/wordpress-importer` or `ci:local` byte-identical), the routing cascade, `&`→and with the
+`uams-web/aether-wordpress-importer` or `ci:local` byte-identical), the routing cascade, `&`→and with the
 Oxford comma, `[#N]` PR links, and backticked-short-SHA links for direct commits. It depends only
 on `git`, `gh`, and Python 3: no other setup.
 

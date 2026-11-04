@@ -1,6 +1,6 @@
 ---
 name: marketplace-review
-description: Review a Statamic starter kit or add-on before marketplace submission against eleven numbered submission standards. Report evidence, uncertainty, impact, and required changes without granting approval.
+description: Review a Statamic starter kit or add-on before marketplace submission against twelve numbered submission standards. Report evidence, uncertainty, impact, and required changes without granting approval.
 ---
 <!--
   Synced from UAMS-Web/uams-claude-skills: shared/.claude/skills/marketplace-review/SKILL.md
@@ -11,7 +11,7 @@ description: Review a Statamic starter kit or add-on before marketplace submissi
 
 # Statamic marketplace review
 
-Policy revision: 2026-09-14.
+Policy revision: 2026-10-28.
 Canonical public policy: https://statamic.com/marketplace/submission-guidelines
 
 Review the product in the current repository against the applicable rules below. These are requirements for free and paid products; small, focused products are welcome. AI tools are allowed. The creator remains responsible for personally reviewing code, refining design, testing the release, and maintaining the product. Evaluate the finished work, not the tools used to create it.
@@ -92,11 +92,11 @@ Interfaces must work with realistic content, small screens, and keyboard navigat
 Applies to: All products.
 Reference: https://statamic.com/marketplace/submission-guidelines#rule-06
 
-Review the release customers receive, using the installation instructions and compatibility claims supplied with it.
+All new add-ons and starter kits must install and work on the latest stable version of Statamic at the time of submission. Supporting older versions as well is welcome; supporting only older versions is not sufficient. Test the release customers will receive in a fresh installation.
 
 - Acceptable: A tagged release installs into a fresh site with the required blueprints, configuration, dependencies, and production assets. Any required build steps are documented and reproducible.
-- Not acceptable: A demo works only in the author’s checkout; missing globals or assets; references to local paths; undeclared dependencies; advertised version support that fails installation.
-- Exception or boundary: Add-on updates must preserve existing customer content and configuration. Supporting only older Statamic versions is acceptable when those versions are clearly identified and the product works as documented. Beta and experimental releases must be clearly labeled, disclose limitations and breaking changes, and provide reproducible installation instructions, including any development-version constraints. Age or beta status alone is not a rejection reason; neither excuses broken installation, unsafe behavior, or failure to meet other applicable requirements.
+- Not acceptable: A demo works only in the author’s checkout; missing globals or assets; references to local paths; undeclared dependencies; advertised version support that fails installation; a new product that only supports an older Statamic version; widening Composer constraints without testing installation and functionality.
+- Exception or boundary: Add-on updates must preserve existing customer content and configuration. Existing listings may continue supporting older Statamic versions when those versions are clearly identified and the product works as documented. Prerelease versions of Statamic are not required. Beta and experimental releases must be clearly labeled, disclose limitations and breaking changes, and provide reproducible installation instructions, including any development-version constraints. Age or beta status alone is not a rejection reason; neither excuses broken installation, unsafe behavior, or failure to meet other applicable requirements.
 
 ## Rule 07: Protect customer sites and data
 
@@ -125,7 +125,7 @@ Bundled code, fonts, imagery, icons, and demo content must have documented redis
 Applies to: All products.
 Reference: https://statamic.com/marketplace/submission-guidelines#rule-09
 
-Customers must be able to install, configure, use, and maintain the product without guessing.
+Customers must be able to install, configure, use, and maintain the product without guessing. Submit only products you can reasonably maintain and support alongside your existing catalog.
 
 - Acceptable: Accurate installation instructions, a working example, configuration guidance, dependency disclosures, a changelog, and a functioning support channel. Community support is acceptable when clearly stated.
 - Not acceptable: Generic boilerplate documentation; instructions for another product; undocumented paid dependencies; dead support links; advertised support that is not provided.
@@ -153,15 +153,28 @@ Add-ons whose purpose is to bypass or circumvent Statamic’s Core and Pro featu
 - Not acceptable: Unlocking additional users or forms in Core by disabling or working around edition checks. Giving multiple people separate passwords or identities behind a shared Core user to evade the user limit. Disguising multiple forms as one to evade the form limit. Disabling Pro license checks.
 - Exception or boundary: This rule concerns products designed to circumvent edition restrictions. An add-on is not in violation merely because it extends Core or has functionality that overlaps with Pro. Reviewers must identify the restriction being bypassed and the mechanism used; using a supported API does not make deliberate circumvention acceptable.
 
+## Rule 12: Every product needs a user
+
+Applies to: All products.
+Reference: https://statamic.com/marketplace/submission-guidelines#rule-12
+
+Your product must solve a real problem for someone. You should be using it yourself, or building it for someone who has expressed a concrete need and intends to use it. Creating a product and hoping someone eventually finds a use for it isn’t enough.
+
+- Acceptable: An integration you use on client projects. A utility built to solve a recurring problem on your own site. A starter kit developed around an actual site or a specific customer’s brief.
+- Not acceptable: A catalog of speculative integrations you’ve never used and nobody has asked for. A starter kit whose only intended use is its own sales demo.
+- Exception or boundary: One user is enough, and that user can be you. Existing sales and a large audience are not required. The submission answer explains who is using the product or has specifically asked for it, and what problem it solves. This answer stays private to the creator and review team; public client names and proof of sales are not required.
+
 ## Practical checks
 
 - Rules 02–03: Trace primary/footer/mobile menus, logos, content images, site settings, collection routes and mounting, blueprints, fieldsets, and shared partials. Confirm editors can manage the promised content without editing templates or HTML fields. Do not force decorative assets into fields or require an unrelated native feature or universal page builder.
 - Rules 04–05: Inspect rendered pages and visible add-on interfaces, including inner pages, keyboard navigation, focus, small screens, forms, long text, missing images, and empty/error states. Source inspection alone cannot verify visual polish or interaction behavior. Give specific observations; do not demand fashionable styling.
-- Rule 06: Inspect the tagged artifact and starter-kit export manifest, dependency constraints, production build, configuration, and installation hooks. Follow the documented installation in an isolated site when authorized; verify supported versions actually tested and state untested claims. For add-ons, inspect update paths for content/configuration loss. Assess older-version and experimental releases against their declared support and limitations; do not invent a latest-major requirement or a blanket beta ban.
+- Rule 06: Inspect the tagged artifact and starter-kit export manifest, dependency constraints, production build, configuration, and installation hooks. Follow the documented installation in an isolated site when authorized; verify supported versions actually tested and state untested claims. For add-ons, inspect update paths for content/configuration loss. For new submissions, verify the latest stable Statamic version at the time of submission against official release information and inspect compatibility with that version. Wider Composer constraints alone do not establish working support. Existing listings may support older versions as documented; clarify whether this is a new submission if unknown. Assess experimental releases against their declared limitations without a blanket beta ban.
 - Rule 07: Trace server-side authorization, validation, escaping, credentials, external data flows, and migrations. Inspect failure behavior and protect customer data. A clean scanner result is not a complete security review.
 - Rules 08–10: Check redistribution evidence, notices, installation/configuration instructions, a working usage example, changelog, support route, price/dependency disclosures, screenshots, and demo against the shipped release. Starter-kit demos must work; nonvisual add-ons can provide a concrete usage example. Flag inaccessible resources as unverified rather than inventing their contents.
 
 - Rule 11: Inspect edition/license checks, authentication, user identities, and form handling when the add-on’s purpose or implementation suggests circumvention. Cite the specific Core/Pro restriction and the code or documented behavior that bypasses it. Do not infer a violation from overlapping features alone, and do not disable licensing or edition checks to test it. Identify a product built around circumvention as an eligibility concern for human review, not an automatic rejection.
+
+- Rule 12: Read the creator’s submission answer when available. Source code cannot establish real use or demand. If the answer is unavailable or unclear, ask who uses the product or has specifically requested it and what problem it solves. Missing public usage evidence, few downloads, submission volume, or suspected AI use do not prove a violation. For Rule 09, assess maintenance against concrete support history rather than catalog size alone.
 
 ## Findings and review outcomes
 
