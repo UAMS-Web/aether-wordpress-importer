@@ -38,7 +38,7 @@ node .claude/skills/synced-files/scripts/check-synced-files.mjs
 
 Where the repository runs the shared `local-ci` runner, its `local-ci.json` should carry a `synced-files` job that runs this command on every run. The template the `local-ci` skill ships includes it. A `local-ci.json` copied before the job was added does not get it from a sync, because the sync never writes that file: copy the job in from the template.
 
-A repository that runs GitHub Actions carries the same check as a `synced-files` job in `.github/workflows/ci.yml`, beside the quality jobs; the `code-quality` skill's `templates/ci.yml` has it. The two are the same command, so a repository on the runner and Actions together keeps both.
+A repository that runs GitHub Actions carries the same check as a `synced-files` job in `.github/workflows/ci.yml`, beside the quality jobs; the `code-quality` skill's `templates/ci-reusable.yml`, which `templates/ci.yml` calls, has it. The two are the same command, so a repository on the runner and Actions together keeps both.
 
 | Exit | Meaning |
 |------|---------|

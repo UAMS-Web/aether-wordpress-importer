@@ -26,6 +26,12 @@ declare(strict_types=1);
  * every share where it was. The backstop catches that, and it is set far enough above
  * contended readings that load alone does not reach it.
  *
+ * WHY A FLOOR. A suite that sums to a fraction of a second has no parallel run worth
+ * balancing, and with one booting class it takes most of the summed time however it is
+ * split, so a share ceiling fails it with nothing to fix.
+ * Below `--share-floor` seconds of summed class time the share check is skipped and says
+ * so; the backstop is still checked.
+ *
  * KNOWN LIMIT. A share cancels inflation spread across the run, not a load spike
  * confined to the window in which the costliest class runs. In a serial run that window
  * holds one class, so the share is less stable there and wants a looser ceiling.
@@ -39,12 +45,15 @@ declare(strict_types=1);
  * USAGE
  *     php check-slowest-class.php --report=<junit.xml> [--band=<name>]
  *                                 [--share-ceiling=<percent>] [--ceiling=<seconds>]
+ *                                 [--share-floor=<seconds>]
  *
  *     --report         JUnit report written by `pest --log-junit=<path>`
  *     --band           A label for the output only. Defaults to `suite`.
  *     --share-ceiling  The largest share of summed class time one class may take, in
  *                      percent. Defaults to 25.
  *     --ceiling        The largest time one class may take, in seconds. Defaults to 900.
+ *     --share-floor    The summed class time, in seconds, below which the share check is
+ *                      skipped. Defaults to 0, which never skips it.
  *
  * THRESHOLDS
  *     The defaults are deliberately loose starting points, not measurements of any
@@ -59,13 +68,15 @@ declare(strict_types=1);
  *     usually better than moving the number.
  *
  * EXIT
- *     0  the costliest class is within both its share ceiling and the backstop
+ *     0  the costliest class is within both its share ceiling and the backstop, or the
+ *        summed class time is under the share floor and the class is within the backstop
  *     1  it is over either one, or the report is missing, cannot be parsed, or carries no
  *        durations. A run that produced no usable report has not been verified, and
  *        passing it would reinstate the silence this guard exists to remove.
  */
 const DEFAULT_SHARE_CEILING_PERCENT = 25.0;
 const DEFAULT_BACKSTOP_SECONDS = 900.0;
+const DEFAULT_SHARE_FLOOR_SECONDS = 0.0;
 
 /**
  * Sum each test class's `time` across every `<testcase>` in a JUnit report.
@@ -135,19 +146,23 @@ function slowestClassTotals(string $xml): array
  * @param  array<string, float>  $totals  Total seconds per class, highest first
  * @param  float  $shareCeiling  The share ceiling, in percent of summed class time
  * @param  float  $backstop  The absolute per-class backstop in seconds
- * @return array{ok: bool, class: string, seconds: float, summed: float, share: float, shareCeiling: float, shareOk: bool, backstop: float, backstopOk: bool}
+ * @param  float  $shareFloor  The summed class time in seconds below which the share check is skipped
+ * @return array{ok: bool, class: string, seconds: float, summed: float, share: float, shareCeiling: float, shareOk: bool, shareSkipped: bool, shareFloor: float, backstop: float, backstopOk: bool}
  */
-function evaluateSlowestClass(array $totals, float $shareCeiling, float $backstop): array
+function evaluateSlowestClass(array $totals, float $shareCeiling, float $backstop, float $shareFloor = DEFAULT_SHARE_FLOOR_SECONDS): array
 {
     $class = (string) array_key_first($totals);
     $seconds = $totals[$class];
     $summed = array_sum($totals);
     $share = 100.0 * $seconds / $summed;
 
+    // A suite under the floor has no parallel run worth balancing, so its share is not judged.
+    $shareSkipped = $summed < $shareFloor;
+
     // Compared without dividing: `100 * x / x` can round above 100 (x = 0.007), which would
     // fail a one-class suite at --share-ceiling=100. Multiplied out, a class that is the
     // whole suite compares identical products.
-    $shareOk = 100.0 * $seconds <= $shareCeiling * $summed;
+    $shareOk = $shareSkipped || 100.0 * $seconds <= $shareCeiling * $summed;
     $backstopOk = $seconds <= $backstop;
 
     return [
@@ -158,17 +173,19 @@ function evaluateSlowestClass(array $totals, float $shareCeiling, float $backsto
         'share' => $share,
         'shareCeiling' => $shareCeiling,
         'shareOk' => $shareOk,
+        'shareSkipped' => $shareSkipped,
+        'shareFloor' => $shareFloor,
         'backstop' => $backstop,
         'backstopOk' => $backstopOk,
     ];
 }
 
-$options = getopt('', ['report:', 'band::', 'share-ceiling::', 'ceiling::']);
+$options = getopt('', ['report:', 'band::', 'share-ceiling::', 'ceiling::', 'share-floor::']);
 $report = $options['report'] ?? null;
 $band = is_string($options['band'] ?? null) ? $options['band'] : 'suite';
 
 if (! is_string($report)) {
-    fwrite(STDERR, "Usage: php check-slowest-class.php --report=<junit.xml> [--band=<name>] [--share-ceiling=<percent>] [--ceiling=<seconds>]\n");
+    fwrite(STDERR, "Usage: php check-slowest-class.php --report=<junit.xml> [--band=<name>] [--share-ceiling=<percent>] [--ceiling=<seconds>] [--share-floor=<seconds>]\n");
     exit(1);
 }
 
@@ -185,6 +202,16 @@ foreach (array_slice($argv, 1) as $argument) {
             exit(1);
         }
     }
+
+    // The floor may be 0, which turns the skip off.
+    if (preg_match('/^--share-floor(?:=(.*))?$/', (string) $argument, $flag) === 1) {
+        $value = $flag[1] ?? '';
+
+        if (! is_numeric($value) || ! is_finite((float) $value) || (float) $value < 0.0) {
+            fwrite(STDERR, "Slowest class: --share-floor needs a number of seconds, 0 or more, written as --share-floor=<value>.\n");
+            exit(1);
+        }
+    }
 }
 
 $shareCeiling = is_string($options['share-ceiling'] ?? null)
@@ -194,6 +221,10 @@ $shareCeiling = is_string($options['share-ceiling'] ?? null)
 $backstop = is_string($options['ceiling'] ?? null)
     ? (float) $options['ceiling']
     : DEFAULT_BACKSTOP_SECONDS;
+
+// Printed as given, so a floor never reads the same as a summed time it is above.
+$shareFloorText = is_string($options['share-floor'] ?? null) ? trim($options['share-floor']) : '0';
+$shareFloor = (float) $shareFloorText;
 
 if (! is_file($report)) {
     fwrite(STDERR, "Slowest class: no JUnit report at {$report}, so the {$band} band cannot be verified.\n");
@@ -208,7 +239,28 @@ try {
     exit(1);
 }
 
-$result = evaluateSlowestClass($totals, $shareCeiling, $backstop);
+$result = evaluateSlowestClass($totals, $shareCeiling, $backstop, $shareFloor);
+
+$skipped = sprintf(
+    "share check skipped: %s band's summed class time %.3fs is under the share floor %ss. Its costliest class is %s at %.3fs, %.2f%% of the summed time (share ceiling %.2f%%, not applied; backstop %.1fs, applied).\n",
+    $band,
+    $result['summed'],
+    $shareFloorText,
+    $result['class'],
+    $result['seconds'],
+    $result['share'],
+    $result['shareCeiling'],
+    $result['backstop'],
+);
+
+if ($result['ok'] && $result['shareSkipped']) {
+    echo 'Slowest class OK, '.$skipped;
+    exit(0);
+}
+
+if ($result['shareSkipped']) {
+    fwrite(STDERR, 'Slowest class: '.$skipped);
+}
 
 if ($result['ok']) {
     printf(
