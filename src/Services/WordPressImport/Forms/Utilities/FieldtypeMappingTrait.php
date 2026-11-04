@@ -1782,6 +1782,7 @@ trait FieldtypeMappingTrait
             // Explode string (must be applied before value_translation). Only
             // string and array values are eligible; other types pass through
             // unchanged just as the helper would return them.
+            $explodedFromString = \is_string($mappedValue);
             if (
                 \is_string($mappedValue)
                 || \is_array($mappedValue)
@@ -1809,6 +1810,21 @@ trait FieldtypeMappingTrait
                 $mappedValue = static::trimCharacters(
                     $mappedValue,
                     $config
+                );
+            }
+
+            // Drop the empty pieces a stray separator leaves in an exploded
+            // string (a trailing comma, or two in a row), so an extension
+            // list never yields an empty MIME type
+            if (
+                $explodedFromString
+                && \is_array($mappedValue)
+            ) {
+                $mappedValue = \array_values(
+                    \array_filter(
+                        $mappedValue,
+                        fn (mixed $piece): bool => $piece !== ''
+                    )
                 );
             }
 
