@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
-use DOMDocument;
+use DOMElement;
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
 use Statamic\Entries\Entry;
@@ -3713,10 +3713,13 @@ class LinkProcessor
      * Returns a URL as libxml writes it in an `href` attribute, the form a
      * table cell's HTML holds it in.
      *
-     * The URL is set on an element and the element serialized, so the result
-     * is byte for byte what `TableProcessor` stores in a cell. Where the
-     * serialization is not the expected `<a href="...">`, the URL is returned
-     * unchanged, and only its raw form is searched for.
+     * A link to the URL is loaded with {@see TextProcessor::loadHtml()}, the
+     * loader a page's tables are read through, and serialized, so the result
+     * is byte for byte what `TableProcessor` stores in a cell. How libxml
+     * writes a non-ASCII character depends on the document's encoding and on
+     * the libxml build, so a document of any other kind can disagree with the
+     * cell. Where the serialization is not the expected `<a href="...">`, the
+     * URL is returned unchanged, and only its raw form is searched for.
      *
      * @param  string  $url  The URL as the DOM reads it
      * @return string The URL as an href attribute value
@@ -3724,13 +3727,15 @@ class LinkProcessor
     private static function hrefAttributeForm(
         string $url
     ): string {
-        // Set the URL on an element of its own and serialize it
-        $document = new DOMDocument;
-        $element = $document->createElement('a');
-        $element->setAttribute('href', $url);
-        $document->appendChild($element);
+        // Load a link to the URL as a page is loaded
+        $document = TextProcessor::loadHtml(
+            '<a href="'.\htmlspecialchars($url, ENT_QUOTES | ENT_HTML5, 'UTF-8').'"></a>'
+        );
 
-        $html = $document->saveHTML($element);
+        $link = $document->getElementsByTagName('a')->item(0);
+
+        // Serialize the link as a cell's HTML is serialized
+        $html = $link instanceof DOMElement ? $document->saveHTML($link) : false;
 
         // Take the attribute value out of the markup
         $prefix = '<a href="';
