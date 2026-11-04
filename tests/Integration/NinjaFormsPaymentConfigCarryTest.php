@@ -160,6 +160,22 @@ it('carries the gateway and amount source from an active payment action', functi
         ->and($carried['status'] ?? null)->toContain('Not configured in Statamic');
 });
 
+it('records a missing or non-scalar gateway and amount source as null', function (): void {
+    // An export can carry these settings as arrays or leave them out; neither is a value to record.
+    $action = ninjaPaymentAction();
+    $action['payment_gateways'] = ['elavon'];
+    $action['payment_total'] = ['calc' => 'Total'];
+    unset($action['payment_total_type']);
+
+    $carried = importNinjaPaymentConfig($action, $this::createStub(AssetImporter::class));
+
+    expect($carried)->toBeArray()
+        ->and($carried)->toHaveKeys(['gateway', 'amount_source', 'amount_source_type'])
+        ->and(\is_array($carried) ? $carried['gateway'] : 'unread')->toBeNull()
+        ->and(\is_array($carried) ? $carried['amount_source'] : 'unread')->toBeNull()
+        ->and(\is_array($carried) ? $carried['amount_source_type'] : 'unread')->toBeNull();
+});
+
 it('carries the per-option price table, which the choice-list mapper drops', function (): void {
     $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this::createStub(AssetImporter::class));
 
