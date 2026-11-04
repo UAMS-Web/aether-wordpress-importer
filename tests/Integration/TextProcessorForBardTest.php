@@ -1248,6 +1248,115 @@ it('keeps the content around a plain table in its place', function (): void {
         ->toBe(['paragraph:A', 'paragraph:B', 'set:table', 'paragraph:C', 'paragraph:D', 'set:table', 'paragraph:E']);
 });
 
+/**
+ * The text of each item in a list node, in order.
+ *
+ * @return list<mixed>
+ */
+function textProcessorForBardListItems(mixed $list): array
+{
+    $items = textProcessorForBardPath($list, ['content']);
+
+    return array_values(array_map(
+        fn (mixed $item): mixed => textProcessorForBardPath($item, ['content', 0, 'content', 0, 'text']),
+        is_array($items) ? $items : []
+    ));
+}
+
+it('lifts a plain table out of a list item, ending the list ahead of it and resuming it after', function (string $html, string $listType): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    // #394: the table lost its rows and cells to the item's text ("BTUC")
+    $content = textProcessorForBard($html);
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe([$listType, 'set:table', $listType])
+        ->and(data_get($content, '1.attrs.values.table_data'))->toBe([['cells' => ['T', 'U']]])
+        ->and(textProcessorForBardListItems($content[0]))->toBe(['A', 'B'])
+        ->and(textProcessorForBardListItems($content[2]))->toBe(['C', 'D']);
+})->with(function (): array {
+    $table = '<table><tbody><tr><td>T</td><td>U</td></tr></tbody></table>';
+
+    return [
+        'in a bulleted list' => ["<ul><li>A</li><li>B{$table}C</li><li>D</li></ul>", 'bulletList'],
+        'in a numbered list' => ["<ol><li>A</li><li>B{$table}C</li><li>D</li></ol>", 'orderedList'],
+        'in a list block' => ["<!-- wp:list -->\n<ul><li>A</li><li>B{$table}C</li><li>D</li></ul>\n<!-- /wp:list -->", 'bulletList'],
+        'in a figure in a list item' => ["<ul><li>A</li><li>B<figure>{$table}</figure>C</li><li>D</li></ul>", 'bulletList'],
+    ];
+});
+
+it('numbers a resumed ordered list on from the items before the table', function (string $html, array $starts): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $content = textProcessorForBard($html);
+
+    // The rest of the table's own item keeps that item's number; the next item takes the one after
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['orderedList', 'set:table', 'orderedList'])
+        ->and([data_get($content, '0.attrs.start'), data_get($content, '2.attrs.start')])->toBe($starts);
+})->with(function (): array {
+    $table = '<table><tbody><tr><td>T</td></tr></tbody></table>';
+
+    return [
+        'the rest of the item after the table' => ["<ol><li>A</li><li>B{$table}C</li><li>D</li></ol>", [null, 2]],
+        'nothing after the table in its item' => ["<ol><li>A</li><li>{$table}</li><li>D</li></ol>", [null, 3]],
+        'a list that starts at 5' => ["<ol start=\"5\"><li>A</li><li>{$table}</li><li>D</li></ol>", [5, 7]],
+        'whitespace between the items' => ["<ol>\n<li>A</li>\n<li>{$table}</li>\n<li>D</li>\n</ol>", [null, 3]],
+        'a malformed start' => ["<ol start=\"x\"><li>A</li><li>{$table}</li><li>D</li></ol>", [null, 3]],
+    ];
+});
+
+it('keeps the content around a list that holds a table in its place', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $table = '<table><tbody><tr><td>T</td></tr></tbody></table>';
+
+    // A table that is the whole of the only item leaves no empty list on either side
+    expect(array_map(textProcessorForBardSummary(...), textProcessorForBard("<p>A</p><ul>\n<li>\n{$table}\n</li>\n</ul><p>B</p>")))
+        ->toBe(['paragraph:A', 'set:table', 'paragraph:B']);
+});
+
+it('lifts a plain table out of a list nested in a list item', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $content = textProcessorForBard('<ul><li>A<ul><li>N<table><tbody><tr><td>T</td></tr></tbody></table></li></ul></li><li>D</li></ul>');
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['bulletList', 'bulletList', 'set:table', 'bulletList'])
+        ->and(textProcessorForBardListItems($content[0]))->toBe(['A'])
+        ->and(textProcessorForBardListItems($content[1]))->toBe(['N'])
+        ->and(textProcessorForBardListItems($content[3]))->toBe(['D']);
+});
+
+it('leaves a list without a table of data as one list', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $content = textProcessorForBard('<ol><li>A</li><li>B</li></ol>');
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['orderedList'])
+        ->and(textProcessorForBardListItems($content[0]))->toBe(['A', 'B']);
+});
+
+it('lifts a plain table out of a details element', function (string $html, string $summary): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    // #394: the table lost its rows and cells to a paragraph of its text ("TU")
+    $content = textProcessorForBard($html);
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe([$summary, 'paragraph:X', 'set:table', 'paragraph:Y'])
+        ->and(data_get($content, '2.attrs.values.table_data'))->toBe([['cells' => ['T', 'U']]]);
+})->with(function (): array {
+    $details = '<details class="wp-block-details"><summary>S</summary><p>X</p><table><tbody><tr><td>T</td><td>U</td></tr></tbody></table><p>Y</p></details>';
+
+    return [
+        'on its own' => [$details, 'paragraph:S'],
+        'in a details block' => ["<!-- wp:details -->\n{$details}\n<!-- /wp:details -->", 'heading:S'],
+    ];
+});
+
 it('imports two identical plain tables twice', function (): void {
     textProcessorForBardFakes();
     textProcessorForBardWarnings();
@@ -1296,7 +1405,7 @@ it('reads a table figure that no block claims, with its caption and classes', fu
         ->and(data_get($content, '0.attrs.values.fixed_width_table_cells'))->toBeTrue();
 });
 
-it('leaves a table with no rows, and a table in a list, as ordinary content', function (string $html, array $summary): void {
+it('leaves a table with no rows as ordinary content, and lifts a table out of a list', function (string $html, array $summary): void {
     textProcessorForBardFakes();
     textProcessorForBardWarnings();
 
@@ -1307,8 +1416,9 @@ it('leaves a table with no rows, and a table in a list, as ordinary content', fu
     'a caption around a layout table' => ['<figure><table><tbody><tr><td>&nbsp;</td></tr></tbody></table><figcaption>C</figcaption></figure>', ['paragraph:C']],
     'a caption around a wrapped table' => ['<figure><div><table><tbody><tr><td>T</td></tr></tbody></table></div><figcaption>C</figcaption></figure>', ['set:table', 'paragraph:C']],
     'wrappers with no table in them' => ['<span>A</span><span>B</span>', ['paragraph:AB']],
-    'in a list' => ['<ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul>', ['bulletList']],
-    'a list in a div' => ['<div><ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul></div>', ['bulletList']],
+    'in a list' => ['<ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul>', ['bulletList', 'set:table']],
+    'a list in a div' => ['<div><ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul></div>', ['bulletList', 'set:table']],
+    'blank cells in a list' => ['<ul><li>a<table><tbody><tr><td>&nbsp;</td></tr></tbody></table></li></ul>', ['bulletList']],
 ]);
 
 it('reads nothing past a shortcode block that ends the content', function (): void {
