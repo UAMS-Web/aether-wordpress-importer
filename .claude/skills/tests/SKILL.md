@@ -394,7 +394,7 @@ The per-test conversion process is the [`phpunit-to-pest`](../phpunit-to-pest/SK
 
 ## Running the suite before a pull request
 
-The GitHub Actions form of the suite job is the `pest` job in the `code-quality` skill's `templates/ci.yml`, chained after the lint jobs and sharing its composite setup action; a repository that runs Pest in Actions copies that template rather than writing the job again.
+The GitHub Actions form of the suite job is the `pest` job in the `code-quality` skill's `templates/ci-reusable.yml` (the shared workflow that `templates/ci.yml` calls), chained after the lint jobs and sharing its composite setup action; a repository that runs Pest in Actions copies that template rather than writing the job again.
 
 **In a public repository whose `ci.yml` runs the suite, run nothing locally before opening the pull request**: open it as a draft, and its remote run is the pre-PR check. Flip it to ready once every remote check on its head is green, and fix a red one by pushing to the same branch. Run a test locally while writing it, and keep a local run of the suite for the cases remote CI cannot cover: a change whose criteria name Windows or another platform it does not run, the full mutation run a coverage ticket records, and a run that needs a loaded WordPress install or the importer's host application. The [`writing-pull-requests`](../writing-pull-requests/SKILL.md) skill's *Draft state and merge order* owns this, and the pre-merge validation of a ready pull request is unchanged. The rest of this section applies where the suite has no remote run: a private repository, or a public one with no `ci.yml`.
 

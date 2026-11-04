@@ -144,13 +144,22 @@ class VerificationWorkspace
     /**
      * Copy what an import writes and point this process at the copy.
      *
+     * The temporary directory is normalized before the workspace is named inside it: PHP's own
+     * fallback ends in a separator on macOS (`/var/tmp/`), and a root with a doubled one is never
+     * the prefix of a tidied path, so every copy would read as outside the workspace (#404).
+     *
+     * @param  ?string  $temporaryDirectory  The directory to create the workspace in, or null for the system temporary directory
      * @return self The entered workspace, to be left when the run ends
      *
      * @throws RuntimeException When the run cannot be fully contained
      */
-    public static function enter(): self
+    public static function enter(?string $temporaryDirectory = null): self
     {
-        $workspace = new self(Path::tidy(\sys_get_temp_dir()).'/'.\uniqid('wordpress-import-verify-', true));
+        $parent = self::normalize($temporaryDirectory ?? \sys_get_temp_dir());
+
+        // The extra entropy only lowers the odds of two runs started in one microsecond sharing a name
+        // @pest-mutate-ignore: TrueToFalse
+        $workspace = new self($parent.'/'.\uniqid('wordpress-import-verify-', true));
 
         try {
             $workspace->prepare();

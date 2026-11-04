@@ -700,6 +700,22 @@ describe('importing a file', function (): void {
         'import' => [SameSitePolicy::ALWAYS_IMPORT, 'news/a.pdf'],
     ]);
 
+    it('returns the cached path of a file on another site whichever policy asks for it again', function (SameSitePolicy $policy): void {
+        $handler = new AssetImporterTestHandler(['news/a.pdf']);
+        $importer = new AssetImporterTestImporter($handler, 'https://example.org');
+
+        $importer->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput, sameSitePolicy: SameSitePolicy::ALWAYS_IMPORT);
+        $output = new BufferedOutput;
+
+        expect($importer->importFile('https://uams.edu/a.pdf', 'news', $output, sameSitePolicy: $policy))->toBe('news/a.pdf')
+            ->and($output->fetch())->toBe("  - Using cached file path for 'https://uams.edu/a.pdf' in container 'files': news/a.pdf".PHP_EOL)
+            ->and($handler->files)->toHaveCount(1)
+            ->and(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([]);
+    })->with([
+        'skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE],
+        'link' => [SameSitePolicy::LINK_DIFFERENT_SITE],
+    ]);
+
     it('imports a same-site asset of every kind under the skip policy', function (): void {
         $handler = new AssetImporterTestHandler(['news/a.jpg', 'news/b.jpg', 'news/a.pdf']);
         $importer = new AssetImporterTestImporter($handler, 'https://uams.edu');

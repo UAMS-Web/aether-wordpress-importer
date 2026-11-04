@@ -143,7 +143,7 @@
 //              on `0 Mutations for 0 Files created`), when the score line is
 //              absent, or when the score is below `minScore` (default 100).
 //              Not combinable with `each`.
-//     parallel `{"serialGroup": "serial", "memoryLimit": "4G"}`: runs the job as
+//     parallel `{"serialGroup": "serial", "memoryLimit": "4G", "processes": 4}`: runs the job as
 //              two parts, for a Pest suite with tests that cannot run in
 //              parallel. `run` must start with `vendor/bin/pest`. Part one is
 //              `run --parallel --exclude-group=<serialGroup>`; part two, the
@@ -153,7 +153,10 @@
 //              PHP size such as `4G`, or `-1`) is set as `-d memory_limit` on
 //              both parts and forwarded to the parallel workers with
 //              `--passthru-php`, because workers are their own PHP processes
-//              and otherwise run at the system CLI limit. Not combinable with
+//              and otherwise run at the system CLI limit. `processes` (a
+//              positive integer) caps the worker count with `--processes=<n>`
+//              on the parallel part only; absent, Pest starts one worker per
+//              logical core. Not combinable with
 //              `each` or `mutation`.
 //     php      "8.2": this job runs on that PHP instead of the run's, for a
 //              `php -l` over the shipped files under the supported floor while
@@ -374,7 +377,7 @@ const TOP_LEVEL_KEYS = ['base', 'php', 'chain', 'guard', 'jobs', 'prepare', 'sta
 const JOB_KEYS = ['name', 'run', 'always', 'each', 'paths', 'requires', 'mutation', 'parallel', 'database', 'php', 'installs']
 const GUARD_KEYS = ['deny']
 const MUTATION_KEYS = ['minScore']
-const PARALLEL_KEYS = ['serialGroup', 'memoryLimit']
+const PARALLEL_KEYS = ['serialGroup', 'memoryLimit', 'processes']
 
 // A key the config does not define is refused rather than ignored: a misspelled
 // `database` would otherwise parse as "no database" and run the job against the
@@ -524,7 +527,7 @@ function parseParallel(value, run, where) {
         return null
     }
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        throw new Error(`${where} must be an object such as {"serialGroup": "serial", "memoryLimit": "4G"}.`)
+        throw new Error(`${where} must be an object such as {"serialGroup": "serial", "memoryLimit": "4G", "processes": 4}.`)
     }
     refuseUnknownKeys(value, PARALLEL_KEYS, where)
     if (!PEST_RUN.test(run.trim())) {
@@ -538,7 +541,11 @@ function parseParallel(value, run, where) {
     if (memoryLimit !== null && !PHP_SIZE.test(memoryLimit)) {
         throw new Error(`${where}.memoryLimit must be a PHP size such as "4G", "512M" or "-1".`)
     }
-    return { serialGroup, memoryLimit }
+    const processes = value.processes === undefined ? null : value.processes
+    if (value.processes !== undefined && (!Number.isInteger(processes) || processes < 1)) {
+        throw new Error(`${where}.processes must be a positive integer such as 4.`)
+    }
+    return { serialGroup, memoryLimit, processes }
 }
 
 // The two commands a `parallel` job runs. The memory limit goes on the parent as
@@ -547,8 +554,10 @@ function parseParallel(value, run, where) {
 export function parallelParts(run, parallel, php, platform = process.platform) {
     const base = parallel.memoryLimit === null ? run.trim() : `php -d memory_limit=${parallel.memoryLimit} ${run.trim()}`
     const passthru = parallel.memoryLimit === null ? '' : ` ${shellQuote(`--passthru-php=-d memory_limit=${parallel.memoryLimit}`, platform)}`
+    // The worker count goes on the parallel part only: the serial tail runs one process.
+    const processes = parallel.processes == null ? '' : ` --processes=${parallel.processes}`
     return [
-        { part: 'parallel', command: commandFor(`${base} --parallel --exclude-group=${parallel.serialGroup}${passthru}`, php, platform) },
+        { part: 'parallel', command: commandFor(`${base} --parallel${processes} --exclude-group=${parallel.serialGroup}${passthru}`, php, platform) },
         { part: 'serial', command: commandFor(`${base} --group=${parallel.serialGroup}`, php, platform) },
     ]
 }

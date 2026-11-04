@@ -38,9 +38,13 @@ on:
   # Lets the workflow be run on demand against a branch.
   workflow_dispatch:
 
-# A new push to a pull request cancels that pull request's stale run.
+# A new push to a pull request cancels that pull request's stale run. A push to the default
+# branch gets a group of its own, keyed on the commit, so a later push never cancels it. A shared
+# push group would: GitHub keeps one running and one pending run per group and cancels the
+# pending one when another is queued, whatever `cancel-in-progress` says, so a merge landing
+# during a long run would cancel the previous merge's run before it started a job.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

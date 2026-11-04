@@ -21564,42 +21564,6 @@ class FieldtypeMapping
     ];
 
     /**
-     * Add warnings for unmapped subfields and subfield attributes in a Gravity Forms
-     * field.
-     *
-     * @param  array<int|string, mixed>  $field  The Gravity Forms field data (must include 'inputs' if subfields exist)
-     * @param  ?string  $formTitle  The form title for warning context
-     * @param  ?string  $fieldLabel  The field label for warning context
-     * @param  ?string  $formId  The form ID for warning context
-     */
-    public static function addUnmappedSubfieldWarnings(
-        array $field,
-        ?string $formTitle = null,
-        ?string $fieldLabel = null,
-        ?string $formId = null
-    ): void {
-        // Define fieldtypes to exclude from unmapped subfield warnings
-        $excludeFieldtypes = [
-            'checkbox',
-            'consent',
-            'image_choice',
-            'multi_choice',
-            'poll',
-            'survey',
-        ];
-
-        // Call the trait method to add warnings, passing the exclusion list
-        static::addUnmappedSubfieldWarningsToField(
-            $field,
-            static::$subfieldMapping,
-            $excludeFieldtypes,
-            $formTitle,
-            $fieldLabel,
-            $formId
-        );
-    }
-
-    /**
      * Add a warning for a Gravity Forms product mode Statamic cannot express.
      *
      * `GF_Field_Product` has six input-type variants. `singleproduct` maps to the

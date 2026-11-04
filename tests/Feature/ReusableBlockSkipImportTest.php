@@ -20,7 +20,7 @@ uses(WordPressImportTestCase::class);
  * `WpBlockRegistry`. Only the command runs that whole chain: `wp_block` is not a
  * content type it offers, so a block is only ever imported for a page's sake.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/ReusableBlockSkipImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/ReusableBlockSkipImportTest.php
  */
 
 /**
