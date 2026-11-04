@@ -8655,21 +8655,13 @@ trait FieldtypeMappingTrait
                     }
                 }
             } else { // Otherwise
-                // Fallback to manual transformation
-                $transformedOption = [];
-
-                if (
-                    $separateValue
-                    && isset($option['value'])
-                ) {
-                    // Use value as key, label as value
-                    $transformedOption['key'] = $option['value'];
-                    $transformedOption['value'] = $option['label'];
-                } else { // Otherwise
-                    // Use label as key, value as null
-                    $transformedOption['key'] = $option['label'];
-                    $transformedOption['value'] = null;
-                }
+                // Fallback to manual transformation, in the label-key,
+                // value-value shape a key translation produces, so the
+                // separate_value swap below orients both alike
+                $transformedOption = [
+                    'key' => $option['label'],
+                    'value' => $option['value'] ?? null,
+                ];
             }
 
             // Handle separate_value logic after key translation
