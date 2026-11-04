@@ -31,6 +31,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRe
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 // Start each case from an empty registry and empty conversion caches, and seed
 // the kb slug the immediate path resolves.
@@ -185,6 +186,38 @@ it('leaves a URL that a path character continues, and replaces one anything else
     return $cases;
 });
 
+it('points a deferred cell link at its entry whatever libxml escapes or encodes in its href', function (string $href): void {
+    // The cell as the import stores it, and the URL as the deferred pass holds it
+    $cellHtml = '<table><tbody><tr><td><a href="'.\htmlspecialchars($href, ENT_QUOTES | ENT_HTML5, 'UTF-8').'">Article</a></td></tr></tbody></table>';
+    $deferredUrl = tableCellLinkHref($cellHtml);
+    $reference = 'statamic://entry::abc'.\strstr($deferredUrl, '?');
+
+    $replaced = LinkProcessor::replaceUrlInBardContent(
+        [tableCellLinkSet([['cells' => tableCellLinkCells($cellHtml)]])],
+        $deferredUrl,
+        $reference,
+    );
+
+    // Expect the cell libxml writes for a link to the reference
+    $expectedHtml = '<table><tbody><tr><td><a href="'.\htmlspecialchars($reference, ENT_QUOTES | ENT_HTML5, 'UTF-8').'">Article</a></td></tr></tbody></table>';
+
+    expect($replaced)->toBe([tableCellLinkSet([['cells' => tableCellLinkCells($expectedHtml)]])])
+        ->and(tableCellLinkCells($expectedHtml)[0])->toStartWith('<a href="statamic://entry::abc?');
+})->with([
+    'an ampersand' => ['https://cells.uams.test/page/?a=1&b=2#s'],
+    'an ampersand and angle brackets' => ['https://cells.uams.test/page/?a=1&b=<x>#s'],
+    'an ampersand and double quotes' => ['https://cells.uams.test/page/?a=1&b="x"#s'],
+    'an ampersand and single quotes' => ["https://cells.uams.test/page/?a=1&b='x'#s"],
+    'a space' => ['https://cells.uams.test/page/?q=a b'],
+    'a non-ASCII character in the path' => ["https://cells.uams.test/caf\u{e9}/?a=1&b=2"],
+    'a non-ASCII character in the query' => ["https://cells.uams.test/page/?q=caf\u{e9}&b=2"],
+]);
+
+it('leaves a URL that a non-ASCII character continues', function (): void {
+    expect(LinkProcessor::replaceUrlInReplicatorContent([['id' => 's', 'text' => "https://cells.uams.test/caf\u{e9}/"]], 'https://cells.uams.test/caf', 'statamic://entry::abc'))
+        ->toBe([['id' => 's', 'text' => "https://cells.uams.test/caf\u{e9}/"]]);
+});
+
 it('replaces nothing for an empty URL', function (): void {
     expect(LinkProcessor::replaceUrlInReplicatorContent([['id' => 's', 'text' => 'ab']], '', 'statamic://entry::abc'))
         ->toBe([['id' => 's', 'text' => 'ab']]);
@@ -210,13 +243,8 @@ function tableCellLinkSet(array $rows): array
  */
 function tableCellLinkCells(string $html): array
 {
-    $document = new DOMDocument;
-    $previous = libxml_use_internal_errors(true);
-    $document->loadHTML('<div>'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-    libxml_clear_errors();
-    libxml_use_internal_errors($previous);
-
-    $table = $document->getElementsByTagName('table')->item(0);
+    // Load the HTML as the import does, so the cells hold what libxml writes
+    $table = TextProcessor::loadHtml($html)->getElementsByTagName('table')->item(0);
     if (! $table instanceof DOMElement) {
         throw new RuntimeException('The HTML holds no table');
     }
@@ -232,6 +260,23 @@ function tableCellLinkCells(string $html): array
     }
 
     return \array_values(\array_map(static fn (mixed $cell): string => \is_string($cell) ? $cell : '', $rows[0]['cells']));
+}
+
+/**
+ * Return the href of the first link in the HTML, as the DOM reads it when the
+ * import loads the page.
+ *
+ * @param  string  $html  The HTML holding the link
+ * @return string The link's href
+ */
+function tableCellLinkHref(string $html): string
+{
+    $link = TextProcessor::loadHtml($html)->getElementsByTagName('a')->item(0);
+    if (! $link instanceof DOMElement) {
+        throw new RuntimeException('The HTML holds no link');
+    }
+
+    return $link->getAttribute('href');
 }
 
 /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
+use DOMDocument;
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
 use Statamic\Entries\Entry;
@@ -3660,15 +3661,17 @@ class LinkProcessor
     }
 
     /**
-     * Replaces a URL in a string, in its HTML-escaped form as well as its raw one.
+     * Replaces a URL in a string, in the form an `href` attribute holds it as
+     * well as its raw one.
      *
      * A string can hold markup: each cell of a `table` set's `table_data` is
-     * the cell's HTML. A URL in an attribute there is escaped, so a query of
-     * `?a=1&b=2` is stored as `?a=1&amp;b=2`, and a search for the raw URL
-     * misses it (aether-wordpress-importer#395). The escaped form is replaced
-     * with the new URL escaped the same way, so the markup stays well formed.
-     * A URL that escaping leaves unchanged is replaced only in its raw form,
-     * and the new URL goes in unescaped.
+     * the cell's HTML as libxml wrote it. libxml writes an `href` escaped and
+     * percent-encoded, so a query of `?a=1&b=2` is stored as `?a=1&amp;b=2`
+     * and a space as `%20`, and a search for the URL as the DOM read it misses
+     * it (aether-wordpress-importer#395). That attribute form is replaced with
+     * the new URL in its own attribute form, so the markup stays well formed.
+     * A URL whose attribute form is the URL itself is replaced only in its raw
+     * form, and the new URL goes in as it is.
      *
      * An occurrence is replaced only where the URL ends: one followed by a
      * character that continues a path, such as a link to a child page, is a
@@ -3686,22 +3689,14 @@ class LinkProcessor
         string $newUrl,
         string $value
     ): string {
-        // Escape the old URL as an HTML attribute value holds it
-        $escapedOldUrl = \htmlspecialchars(
-            $oldUrl,
-            ENT_NOQUOTES | ENT_HTML5,
-            'UTF-8'
-        );
+        // Write the old URL as libxml writes it in an href attribute
+        $attributeOldUrl = self::hrefAttributeForm($oldUrl);
 
-        // Replace the escaped form, where escaping changed the URL
-        if ($escapedOldUrl !== $oldUrl) {
+        // Replace that form, where it differs from the URL
+        if ($attributeOldUrl !== $oldUrl) {
             $value = self::replaceWholeUrl(
-                $escapedOldUrl,
-                \htmlspecialchars(
-                    $newUrl,
-                    ENT_NOQUOTES | ENT_HTML5,
-                    'UTF-8'
-                ),
+                $attributeOldUrl,
+                self::hrefAttributeForm($newUrl),
                 $value
             );
         }
@@ -3715,8 +3710,50 @@ class LinkProcessor
     }
 
     /**
+     * Returns a URL as libxml writes it in an `href` attribute, the form a
+     * table cell's HTML holds it in.
+     *
+     * The URL is set on an element and the element serialized, so the result
+     * is byte for byte what `TableProcessor` stores in a cell. Where the
+     * serialization is not the expected `<a href="...">`, the URL is returned
+     * unchanged, and only its raw form is searched for.
+     *
+     * @param  string  $url  The URL as the DOM reads it
+     * @return string The URL as an href attribute value
+     */
+    private static function hrefAttributeForm(
+        string $url
+    ): string {
+        // Set the URL on an element of its own and serialize it
+        $document = new DOMDocument;
+        $element = $document->createElement('a');
+        $element->setAttribute('href', $url);
+        $document->appendChild($element);
+
+        $html = $document->saveHTML($element);
+
+        // Take the attribute value out of the markup
+        $prefix = '<a href="';
+        $suffix = '"></a>';
+        if (
+            ! \is_string($html)
+            || ! str_starts_with($html, $prefix)
+            || ! str_ends_with($html, $suffix)
+        ) {
+            return $url;
+        }
+
+        return \substr(
+            $html,
+            \strlen($prefix),
+            -\strlen($suffix)
+        );
+    }
+
+    /**
      * Replaces each occurrence of a URL that is not followed by a character
-     * continuing its path: a letter, a digit, or one of `-._~%/`.
+     * continuing its path: a letter, a digit, a byte of a non-ASCII
+     * character, or one of `-._~%/`.
      *
      * @param  string  $oldUrl  The URL to replace
      * @param  string  $newUrl  The URL to replace it with
@@ -3735,7 +3772,7 @@ class LinkProcessor
 
         // Match the URL literally, unless a path character follows it
         $replaced = \preg_replace_callback(
-            '/'.\preg_quote($oldUrl, '/').'(?![A-Za-z0-9\-._~%\/])/',
+            '/'.\preg_quote($oldUrl, '/').'(?![A-Za-z0-9\x80-\xFF\-._~%\/])/',
             static fn (): string => $newUrl,
             $value
         );
