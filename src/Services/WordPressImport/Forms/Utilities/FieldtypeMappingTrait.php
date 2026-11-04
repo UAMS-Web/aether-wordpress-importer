@@ -5990,8 +5990,9 @@ trait FieldtypeMappingTrait
      * Transform a value to ISO 8601 date format.
      *
      * This method handles both string and array values, converting date strings
-     * in various formats (MM/DD/YYYY, DD/MM/YYYY, YYYY/MM/DD, MM-DD-YYYY, etc.)
-     * to ISO 8601 format (YYYY-MM-DD).
+     * in the formats convertDateStringToIso8601() reads (MM/DD/YYYY, YYYY/MM/DD,
+     * MM-DD-YYYY, etc.) to ISO 8601 format (YYYY-MM-DD). An array item that is
+     * not a string, int, float or bool becomes an empty string.
      *
      * @param  mixed  $value  The value to transform (string or array of strings)
      * @return mixed The transformed value in ISO 8601 format
@@ -6028,10 +6029,15 @@ trait FieldtypeMappingTrait
     /**
      * Convert a single date string to ISO 8601 format.
      *
-     * Supports various date formats including:
-     *   - MM/DD/YYYY, DD/MM/YYYY, YYYY/MM/DD
-     *   - MM-DD-YYYY, DD-MM-YYYY, YYYY-MM-DD
-     *   - MM\/DD\/YYYY, DD\/MM\/YYYY, YYYY\/MM\/DD (with escaped slashes)
+     * Supports these date formats:
+     *   - MM/DD/YYYY, YYYY/MM/DD
+     *   - MM-DD-YYYY, YYYY-MM-DD
+     *   - MM\/DD\/YYYY, YYYY\/MM\/DD (with escaped slashes)
+     *
+     * A date with the year last is always read month first, as Gravity Forms
+     * stores it, so a day-first date such as 25/12/2024 comes back as
+     * 2024-25-12. The numbers are not checked against the calendar. A string
+     * in any other format is returned trimmed but otherwise unchanged.
      *
      * @param  string  $dateString  The date string to convert
      * @return string The date in ISO 8601 format (YYYY-MM-DD)
@@ -6049,15 +6055,15 @@ trait FieldtypeMappingTrait
 
         // Define patterns to match various date formats
         $patterns = [
-            // MM/DD/YYYY or DD/MM/YYYY patterns
+            // MM/DD/YYYY pattern
             '/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/' => 'month_day_year',
             // YYYY/MM/DD pattern
             '/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/' => 'year_month_day',
-            // MM-DD-YYYY or DD-MM-YYYY patterns
+            // MM-DD-YYYY pattern
             '/^(\d{1,2})-(\d{1,2})-(\d{4})$/' => 'month_day_year',
             // YYYY-MM-DD pattern
             '/^(\d{4})-(\d{1,2})-(\d{1,2})$/' => 'year_month_day',
-            // MM\/DD\/YYYY or DD\/MM\/YYYY patterns (escaped slashes)
+            // MM\/DD\/YYYY pattern (escaped slashes)
             '/^(\d{1,2})\\\\\/(\d{1,2})\\\\\/(\d{4})$/' => 'month_day_year',
             // YYYY\/MM\/DD pattern (escaped slashes)
             '/^(\d{4})\\\\\/(\d{1,2})\\\\\/(\d{1,2})$/' => 'year_month_day',
@@ -6109,7 +6115,7 @@ trait FieldtypeMappingTrait
             }
         }
 
-        // If no pattern matches, return the original string
+        // If no pattern matches, return the trimmed string
         return $dateString;
     }
 
