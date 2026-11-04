@@ -4731,6 +4731,10 @@ trait FieldtypeMappingTrait
             // This is an array of objects, transform each object
             // Iterate through each object in the array and apply key translation
             foreach ($array as $index => $object) {
+                // Count this object by its own index, so a value generated for
+                // a missing key never takes the count of an earlier object
+                $indexCount = self::numericChoiceCount($index);
+
                 // Initialize a new mapped object for the translated keys/values
                 $mappedObject = [];
                 $objectArray = self::asArray($object);
@@ -4769,7 +4773,6 @@ trait FieldtypeMappingTrait
                                 $fieldtype
                             );
                             if ($transformationConfig !== null && $transformationConfig !== []) {
-                                $indexCount = self::numericChoiceCount($index);
                                 $transformedValue = static::applyValueTransformation(
                                     $value,
                                     $transformationConfig,
@@ -4797,7 +4800,6 @@ trait FieldtypeMappingTrait
                                 $fieldtype
                             );
                             if ($transformationConfig !== null && $transformationConfig !== []) {
-                                $indexCount = self::numericChoiceCount($index);
                                 $transformedValue = static::applyValueTransformation(
                                     $value,
                                     $transformationConfig,
