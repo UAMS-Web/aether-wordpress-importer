@@ -5778,11 +5778,15 @@ trait FieldtypeMappingTrait
             return $complexArray;
         }
 
-        // If value is a string, treat as single value and return single complex array
+        // If value is an array, process each element and return array of complex arrays
         if (\is_array($value)) {
-            // If value is an array, process each element and return array of complex arrays
             $result = [];
-            foreach ($value as $index => $stringValue) {
+            $position = 0;
+            foreach ($value as $stringValue) {
+                // Count by position, so a string-keyed array numbers its
+                // items the way a list does instead of adding to a key
+                $position++;
+
                 // Create a copy of the complex array config for this iteration
                 $complexArray = $complexArrayConfig;
 
@@ -5791,7 +5795,7 @@ trait FieldtypeMappingTrait
                     $complexArray,
                     self::normalizeMixedToString($stringValue),
                     $data,
-                    $index + 1
+                    $position
                 );
 
                 $result[] = $complexArray;
