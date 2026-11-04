@@ -104,7 +104,7 @@ class VerifyRow extends Model
  */
 function verifyDiskRoot(): string
 {
-    return Path::tidy(\sys_get_temp_dir()).'/wordpress-importer-verify-disk-'.\getmypid();
+    return \rtrim(Path::tidy(\sys_get_temp_dir()), '/').'/wordpress-importer-verify-disk-'.\getmypid();
 }
 
 /**
@@ -509,3 +509,28 @@ it('removes a nested disk with the disk that holds it, sharing one copy', functi
     expect($removed)->toBeTrue()
         ->and(\is_dir($root))->toBeFalse();
 });
+
+it('names the workspace with one separator when the temporary directory ends in one', function (string $trailing): void {
+    // PHP's fallback temporary directory on macOS is `/var/tmp/`, and a doubled separator in the
+    // root made every copied directory read as outside the workspace (#404)
+    $parent = verifyDiskRoot().'-parent';
+    File::ensureDirectoryExists($parent);
+
+    try {
+        $workspace = VerificationWorkspace::enter($parent.$trailing);
+        $root = $workspace->root();
+        $assets = config()->string('filesystems.disks.verify_assets.root');
+        $removed = $workspace->leave();
+
+        expect($root)->toStartWith($parent.'/wordpress-import-verify-')
+            ->and(\substr_count($root, '//'))->toBe(0)
+            ->and($assets)->toStartWith($root.'/')
+            ->and($removed)->toBeTrue();
+    } finally {
+        File::deleteDirectory($parent);
+    }
+})->with([
+    'no trailing separator' => [''],
+    'a trailing separator' => ['/'],
+    'two trailing separators' => ['//'],
+]);
