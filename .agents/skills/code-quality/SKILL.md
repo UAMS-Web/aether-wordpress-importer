@@ -193,10 +193,63 @@ What the template sets, and what to keep when adapting it:
 
 - `composer-validate` and `synced-files` run first and cheapest; `pint` follows them, `rector` and `phpstan` follow `pint`, and `pest` follows both, so a pull request that fails a cheap check does not spend minutes on the dear ones. The `synced-files` job runs the `synced-files` skill's check, and is the workflow form of the `synced-files` job in `local-ci.json`. The `no-emoji` job stands outside that chain on purpose: it runs the `writing-comments` skill's `check-no-emoji.mjs` with Node alone, so it can be dropped or moved without touching another job.
 - `timeout-minutes` on every job, so a hung step is cut off rather than billed until the platform limit.
-- `concurrency` keyed on the workflow and ref, cancelling in-progress runs for pull requests only, so a push replaces a stale run and `main` runs are never cancelled.
+- `concurrency` keyed on the workflow and ref for a pull request and on the workflow and commit for every other run, cancelling in-progress runs for pull requests only, so a push replaces a stale pull request run and no `main` run is cancelled, not even by the next merge (a shared push group would cancel the pending run, #473).
 - PHP, the Composer cache and the locked install live in the composite action, which `dependabot.yml` also covers (see the `update-dependencies-ticket` skill's `templates/dependabot.yml`).
 
 - The `mutate` job runs the mutation score for a repository that meets the Full coverage bar. It is the one job that installs a coverage driver: it passes `coverage: pcov` to the composite action, whose `coverage` input defaults to `none` so every other job keeps the faster, driver-free PHP. See *Adopting the `mutate` job* below.
+
+#### Which jobs run on which operating system
+
+The template runs a job as a matrix over `ubuntu-latest`, `windows-latest` and `macos-latest` only when its result can depend on the platform, and on `ubuntu-latest` alone otherwise (UAMS-Web/uams-claude-skills#438, #454). The legs exist to catch what one operating system shows: path handling, command-line length limits, BSD tools, case-insensitive file systems, line endings. A job that reads the same files the same way everywhere gains nothing from running three times, and on the `uams-statamic` pilot (run 41440485266, pull request 514) the platform-independent job types cost about 1,065 seconds of Windows and macOS runner time per run.
+
+**The rule: a job with no recorded evidence runs on all three.** Narrowing needs a reason on the record, and `scripts/check-templates.mjs` in the source repository fails the template when a job is unclassified, runs on the wrong legs, or is a matrix job without `fail-fast: false`. A matrix job reports one result that is `success` only when every leg succeeded, so `CI` needs it once and a failed leg still fails the aggregate. Each job in the template carries a `# Legs:` line with its reason.
+
+| Job type | Legs | Reason or evidence |
+| --- | --- | --- |
+| `composer-validate` (`composer validate`) | Linux only | Compares `composer.json` and `composer.lock`; no platform input. |
+| `synced-files` | Linux only | Hashes tracked files against the sync manifest; the repository pins line endings (`* text=auto eol=lf`), so the bytes match on every platform. |
+| `no-emoji` | Linux only | Sweeps tracked prose for banned code points with Node alone. `check-no-emoji.mjs` has no platform branch. |
+| `aggregate-needs` | Linux only | Parses the workflow files and the allow-list. `check-aggregate-needs.mjs` has no platform branch. |
+| `pint`, `rector`, `phpstan` | Linux only | They read PHP source and their own configuration. |
+| Spell check, submodule pointer guard, test isolation guard (pilot job types) | Linux only | Decided 2026-11-02: they read the same files the same way on any platform. |
+| Browser smoke (`CP browser smoke (Pest + Playwright)`, pilot job type) | Linux only | Decided 2026-11-02: no test under `tests/Browser` branches on the operating system. |
+| `pest` (the suite, and the pilot's parallel band shards and serial group) | All three | The suite is what runs on the platforms the code ships to. |
+| `mutate-ignore` | All three | `check-mutate-ignore.php` has a branch for a CRLF runtime (its docblock names a trailing marker on one), and a Windows checkout can be CRLF. |
+| `mutate` | All three | Mutation tooling has needed Windows-only patches in `uams-statamic`, and the PCOV driver is installed per platform. |
+
+The four pilot job types that needed a closer look were each checked with a seeded fault in `UAMS-Web/uams-statamic` (UAMS-Web/uams-statamic#551, recorded on UAMS-Web/uams-claude-skills#478): one fault per job on a throwaway branch, one control on a branch with the same tree as `main`, each run read in full (62 of 62 jobs per run). Every faulted job failed on its fault on all three platforms and passed in the control. That is the ticket's test for platform independence, and it decides them as follows:
+
+| Job type | Legs | Evidence |
+| --- | --- | --- |
+| Encoding guard (Windows-1252 double-encoding) | Linux only | Failed on its seeded sample on all three platforms, passed in the control. Only the first of its six steps was faulted; the other five were not exercised. |
+| Vite build | Linux only | An unresolvable import failed the build on all three platforms. |
+| JS unit tests (Vitest) | All three | The verdict matched, but the suite is platform-gated: Windows ran `1277 passed, 10 skipped`, Linux and macOS `1282 passed, 5 skipped`. A defect in a Windows-only branch fails only on Windows. |
+| Mutation tooling smoke | All three | The verdict matched and a mutant child launched and was scored on Windows too (`8 Mutations for 1 Files created`, `87.50%` on all three). The tool's past defects were Windows-only, so one seeded fault does not cover it. |
+
+Per-leg wall-clock time of those jobs in the control run (`uams-statamic`, run 41666638111, one run per cell, seconds):
+
+| Job type | `ubuntu-latest` | `windows-latest` | `macos-latest` |
+| --- | --- | --- | --- |
+| Encoding guard | 319 | 485 | 341 |
+| Vite build | 36 | 160 | 77 |
+| JS unit tests (Vitest) | 48 | 132 | 82 |
+| Mutation tooling smoke | 34 | 120 | 53 |
+
+Narrowing the encoding guard and the Vite build to Linux removes 826 and 237 seconds of Windows and macOS runner time per run (485 + 341, and 160 + 77), 1,063 seconds in all. The mutation smoke and Vitest keep their three legs. The 1,065-second figure above is a different measurement, from the pilot run named there.
+
+**Keeping or narrowing a job in a repository.** `ci.yml` is copied once and then owned by the repository, so a repository keeps a Linux-only job on all three legs, or narrows one, by editing its own copy. The sync does not write `.github/workflows/ci.yml`, so there is no manifest key for it and nothing to leave alone.
+
+**Using the reusable workflow.** `templates/ci-reusable.yml` is the same job chain as a `workflow_call` workflow (UAMS-Web/uams-claude-skills#485), published in `UAMS-Web/uams-ci-workflows` as `.github/workflows/ci.yml` so that a public repository can call it. A caller job named `checks` calls it, and a second caller job named `CI` needs `checks` with `if: always()`, so the required context stays `CI`. The inputs `linux-only` (all jobs on Linux) and `all-platform-jobs` (space-separated ids kept on all three) set the legs, and `encoding-guard`, `vitest`, `vite-build` and `mutation-smoke` switch the four optional jobs on, each with a command input. A called job reports as `<caller job id> / <job name> (<os>)`. The caller must carry `.github/actions/setup`, the synced `.claude/skills` scripts and the Composer scripts the jobs run, because every job checks out the caller's repository. The template here is the canonical source and the published file is a byte copy.
+
+**Keeping the published copy identical (UAMS-Web/uams-claude-skills#490).** The published copy is `.github/workflows/ci.yml` in `UAMS-Web/uams-ci-workflows`, and a caller runs it at the release tag or commit its `uses:` line pins. Edit in this order: change `templates/ci-reusable.yml` here and merge it, copy the merged file byte for byte to the published repository, merge that, tag it, then move the pin in the callers. `scripts/check-published-workflow.mjs` compares the two. Run it from a checkout that carries the skill:
+
+```bash
+node .claude/skills/code-quality/scripts/check-published-workflow.mjs
+```
+
+It compares bytes, so a byte order mark or a changed line ending is a difference. It takes the ref from `--ref <tag-or-commit>`, or from the pin in `templates/ci.yml` when that is a release tag or a full commit hash (a caller pinned to a branch is refused). It fetches the published file from `raw.githubusercontent.com` (no token, because the repository is public) and exits 0 when the two are identical, 1 when they differ, naming both files and the first differing line, and 2 when it cannot run: a control failed, the ref, repository or path could not be used in the address, the pin or the published file cannot be read, or the answer is empty. Run it twice in the order of the edits. After the published copy merges and before tagging, pass `--ref <merge-commit>` (the pin still names the old tag, whose file differs from the new template). After the pin moves, run it with no arguments, so it checks the file the callers now run. A branch ref is served from a cache for a few minutes, so a run right after a merge may read the old file; use the commit. `--published-file <path>` compares against a local clone of the published repository instead.
+
+**Probe run.** A throwaway caller in `UAMS-Web/statamic-addon-template` (branch `485-probe-reusable-ci`, run 41675483937, 36 of 36 jobs read) called the workflow once with default inputs and once with `linux-only: true`. With defaults, the jobs classified for all three ran on `ubuntu-latest`, `windows-latest` and `macos-latest` (`default / Pest (windows-latest)`, `default / Mutation annotations (none inert) (macos-latest)`) and the Linux-class jobs ran on `ubuntu-latest` only. With `linux-only: true`, every job ran on `ubuntu-latest` only. The four optional jobs reported `skipped` in both, and a skipped optional job shows its name unresolved as `(${{ matrix.os }})`. Some jobs failed in that repository for reasons of its own (no `CI` job for `Aggregate needs`, a test-symbol check in Pest, a lock file Composer rejected on Windows), and `Chain result` failed with them, as it must. The wall-clock figures from that run are therefore not leg timings for a full suite; the control-run table above is.
 
 #### Requiring the checks
 
@@ -234,7 +287,7 @@ The job is for a repository that has Pest, the patched `pest-plugin-mutate` and 
 5. Fix a failure the way the `pest-testing` skill's mutation section describes: a survivor is killed with a test, deleted as dead code, or annotated with `@pest-mutate-ignore:<Mutator>` and a reason on the line above. An annotation that suppresses nothing, or everything, is the `mutate-ignore` job's business.
 6. A repository that gates its Actions jobs on `RUN_REMOTE_CI` adds the same `if:` to this job. It is the slowest job in the chain, hence its 45-minute timeout; raise it when a suite needs longer, and do not remove it.
 
-   **Measure it before relying on it.** Every run first runs the whole suite under PCOV for coverage, then runs tests once per mutant, so the time grows with the suite as well as with the change. On `UAMS-Web/wordpress-importer` (UAMS-Web/uams-claude-skills#406, 10,257 tests), one standard runner did not finish a pull request that changed one file:
+   **Measure it before relying on it.** Every run first runs the whole suite under PCOV for coverage, then runs tests once per mutant, so the time grows with the suite as well as with the change. On `UAMS-Web/aether-wordpress-importer` (UAMS-Web/uams-claude-skills#406, 10,257 tests), one standard runner did not finish a pull request that changed one file:
    - the coverage pass took 8.3 minutes and created 324 mutants;
    - the 45-minute limit stopped it with 302 done;
    - with a 120-minute limit, the runner lost contact at 47 minutes.

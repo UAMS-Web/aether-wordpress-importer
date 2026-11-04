@@ -35,11 +35,11 @@ The *Choosing a base class* section of the [`statamic-package-conventions`](../s
 
 This package keeps the full version of that rule in `tests/CLAUDE.md`.
 
-For this importer, the host is `uams-statamic` (`CreatesApplication`: config, container, Stache, real collections/taxonomies/blueprints, a SQLite `:memory:` DB with the `assets_meta` table) and the package is `uams-web/wordpress-importer`:
+For this importer, the host is `uams-statamic` (`CreatesApplication`: config, container, Stache, real collections/taxonomies/blueprints, a SQLite `:memory:` DB with the `assets_meta` table) and the package is `uams-web/aether-wordpress-importer`:
 
 ```
 cd /path/to/uams-statamic
-php artisan test vendor/uams-web/wordpress-importer/tests/Feature/PostImportTest.php
+php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/PostImportTest.php
 ```
 
 The classes this covers include `PostImportTest`, `UamsPeopleImportTest`, `KbImportTest`, `PageBuilderBlockImportTest`, `LogoListItemImportTest`, `ImportWordPressCommandTest` and the `*BlueprintImportTest` files. Neither `composer test` nor PHPStan nor this package's CI exercises them, so an importer change that only alters behavior reachable through a real import (asset metadata, entry creation, taxonomy/term writes, blueprint shape) is not validated until this subset runs in the host.
@@ -116,12 +116,12 @@ Do not run these in the primary host checkout. It is served, holds the main bran
    - **Alternative: reinstall as source, then checkout** (brings the whole branch, including new files):
 
      ```
-     composer reinstall uams-web/wordpress-importer --prefer-source --no-interaction
-     git -C vendor/uams-web/wordpress-importer fetch origin
-     git -C vendor/uams-web/wordpress-importer checkout <branch>
+     composer reinstall uams-web/aether-wordpress-importer --prefer-source --no-interaction
+     git -C vendor/uams-web/aether-wordpress-importer fetch origin
+     git -C vendor/uams-web/aether-wordpress-importer checkout <branch>
      ```
 
-     Confirm it actually became a git checkout (`git -C vendor/uams-web/wordpress-importer rev-parse --abbrev-ref HEAD` should print your branch, not the app's). If it is still dist, fall back to the copy method.
+     Confirm it actually became a git checkout (`git -C vendor/uams-web/aether-wordpress-importer rev-parse --abbrev-ref HEAD` should print your branch, not the app's). If it is still dist, fall back to the copy method.
 
 4. **Prepare whatever the host's own CI prepares before its suites.** A session following this skill is exactly the path that skips it, and skipping it does not fail cleanly: see *Interpreting results*. The preparation is state the host owns (a content mirror, a cache snapshot, a database), so the host's CI configuration is the specification, and **a run consumes that state**, so a value that changes between runs of unchanged code is often residue rather than a flake.
 
@@ -211,7 +211,7 @@ The suites are **slow.** Pooled across sessions in the importer slot, warm cache
 **The `Tests` column is verifiable without paying for a run.** `--list-tests` enumerates the datasets without executing them, in seconds:
 
 ```bash
-./vendor/bin/pest vendor/uams-web/wordpress-importer/tests/Feature/KbImportTest.php \
+./vendor/bin/pest vendor/uams-web/aether-wordpress-importer/tests/Feature/KbImportTest.php \
     --list-tests | grep -c '^ - '
 ```
 
@@ -297,7 +297,7 @@ For this importer:
 ```
 cd ../uams-statamic-importer
 git -C content status --porcelain      # restore before releasing if not empty
-composer reinstall uams-web/wordpress-importer --no-interaction
+composer reinstall uams-web/aether-wordpress-importer --no-interaction
 cd /path/to/uams-statamic
 node scripts/worktree-slots.mjs release importer
 ```
