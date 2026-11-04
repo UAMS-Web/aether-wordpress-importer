@@ -91,6 +91,7 @@ function embedWarnings(): ArrayObject
     $warnings = new ArrayObject;
     Log::shouldReceive('warning')->andReturnUsing(
         function (string $message, array $context = []) use ($warnings): void {
+            /** @var array<string, mixed> $context */
             $warnings->append(['message' => $message, 'context' => $context]);
         }
     );

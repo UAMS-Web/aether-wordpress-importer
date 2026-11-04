@@ -517,7 +517,7 @@ trait FormBlueprintCreatorTrait
         if ($mappedAttributes !== []) {
             if ($linkedField !== null) {
                 $existingConfig = $this->normalizeBlueprintConfigSection(
-                    $fieldConfig['config'] ?? null
+                    $fieldConfig['config']
                 );
 
                 // For linked fields, merge into config array
@@ -543,7 +543,7 @@ trait FormBlueprintCreatorTrait
         if ($setAttributes !== []) {
             if ($linkedField !== null) {
                 $existingConfig = $this->normalizeBlueprintConfigSection(
-                    $fieldConfig['config'] ?? null
+                    $fieldConfig['config']
                 );
 
                 // For linked fields, merge into config array
@@ -572,7 +572,7 @@ trait FormBlueprintCreatorTrait
         if ($subfieldConfig !== []) {
             if ($linkedField !== null) {
                 $existingConfig = $this->normalizeBlueprintConfigSection(
-                    $fieldConfig['config'] ?? null
+                    $fieldConfig['config']
                 );
 
                 // For linked fields, merge into config array
@@ -594,7 +594,7 @@ trait FormBlueprintCreatorTrait
             // A linked field holds only `field` and `config` at the top level, and every
             // attribute is merged into `config`, so only that is filtered.
             $fieldConfig['config'] = \array_filter(
-                $this->normalizeBlueprintConfigSection($fieldConfig['config'] ?? null),
+                $this->normalizeBlueprintConfigSection($fieldConfig['config']),
                 fn ($value): bool => $value !== null
             );
         } else {

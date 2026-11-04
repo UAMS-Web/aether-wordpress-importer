@@ -458,7 +458,7 @@ class FormWarningFormatter
                 $exampleCount = 0;
 
                 // Loop through warnings to display examples
-                foreach ($typeWarnings as $warning) {
+                foreach ($typeWarnings as $example) {
                     // Check if example limit reached
                     if ($exampleCount >= 3) {
                         // Break loop after showing 3 examples
@@ -472,14 +472,14 @@ class FormWarningFormatter
                     // The grouped entries always hold a string here, so the default is never used.
                     // @pest-mutate-ignore: EmptyStringToNotEmpty
                     $url = self::warningStringValue(
-                        $warning,
+                        $example,
                         'url',
                         ''
                     );
 
                     // Extract page slug from warning
                     $pageSlug = self::warningNullableStringValue(
-                        $warning,
+                        $example,
                         'page_slug'
                     );
 
@@ -487,7 +487,7 @@ class FormWarningFormatter
                     // The grouped entries always hold a string here, so the default is never used.
                     // @pest-mutate-ignore: EmptyStringToNotEmpty
                     $site = self::warningStringValue(
-                        $warning,
+                        $example,
                         'site',
                         ''
                     );
@@ -639,7 +639,7 @@ class FormWarningFormatter
             $exampleCount = 0;
 
             // Loop through warnings to display examples
-            foreach ($shortcodeWarnings as $warning) {
+            foreach ($shortcodeWarnings as $example) {
                 // Check if example limit reached
                 if ($exampleCount >= 3) {
                     // Break loop after showing 3 examples
@@ -653,14 +653,14 @@ class FormWarningFormatter
                 // The grouped entries always hold a string here, so the default is never used.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $original = self::warningStringValue(
-                    $warning,
+                    $example,
                     'original',
                     ''
                 );
 
                 // Extract page slug from warning
                 $pageSlug = self::warningNullableStringValue(
-                    $warning,
+                    $example,
                     'page_slug'
                 );
 
@@ -668,7 +668,7 @@ class FormWarningFormatter
                 // The grouped entries always hold a string here, so the default is never used.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $site = self::warningStringValue(
-                    $warning,
+                    $example,
                     'site',
                     ''
                 );
@@ -825,7 +825,7 @@ class FormWarningFormatter
             $exampleCount = 0;
 
             // Loop through warnings to display examples
-            foreach ($shortcodeWarnings as $warning) {
+            foreach ($shortcodeWarnings as $example) {
                 // Break loop after showing 3 examples
                 if ($exampleCount >= 3) {
                     // Every later example is skipped once the count is reached, so continuing
@@ -838,7 +838,7 @@ class FormWarningFormatter
                 // The grouped entries always hold a string here, so the default is never used.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $original = self::warningStringValue(
-                    $warning,
+                    $example,
                     'original',
                     ''
                 );
@@ -847,7 +847,7 @@ class FormWarningFormatter
                 // The grouped entries always hold a string here, so the default is never used.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $attribute = self::warningStringValue(
-                    $warning,
+                    $example,
                     'attribute',
                     ''
                 );
@@ -856,7 +856,7 @@ class FormWarningFormatter
                 // The grouped entries always hold a string here, so the default is never used.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $rawValue = self::warningStringValue(
-                    $warning,
+                    $example,
                     'raw_value',
                     ''
                 );
@@ -865,14 +865,14 @@ class FormWarningFormatter
                 // The grouped entries always hold a string here, so the default is never used.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $normalizedValue = self::warningStringValue(
-                    $warning,
+                    $example,
                     'normalized_value',
                     ''
                 );
 
                 // Extract the affected entry URL
                 $pageUrl = self::warningNullableStringValue(
-                    $warning,
+                    $example,
                     'page_url'
                 );
 

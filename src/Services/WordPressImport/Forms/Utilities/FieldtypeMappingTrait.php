@@ -1067,7 +1067,7 @@ trait FieldtypeMappingTrait
                             $data
                         );
                         if ($result !== null) {
-                            [$statamicAttr, $matchFound] = $result;
+                            [$statamicAttr] = $result;
                         }
                     }
                 }
@@ -1155,7 +1155,6 @@ trait FieldtypeMappingTrait
                 isset($config['extract_object_values'])
                 && $config['extract_object_values'] === true
                 && \is_array($mappedValue)
-                && \is_string($statamicAttr)
                 && $statamicAttr !== ''
             ) {
                 // Collect the object's values, dropping the (extension-group) keys.
@@ -1733,7 +1732,6 @@ trait FieldtypeMappingTrait
                         $attrValue
                     );
                     $separateValue = $modifierResult['value'];
-                    $matchFound = $modifierResult['matchFound'];
 
                     // $separateValue is NOT the field's runtime enableChoiceValue here:
                     // processModifierPatterns() resolves the config
@@ -2128,7 +2126,6 @@ trait FieldtypeMappingTrait
                     && $preserveNewlinesConfig === true
                 ) {
                     $shouldPreserveNewlines = true;
-                    $matchFound = true;
                 }
 
                 // Apply newline preservation if needed
@@ -2279,7 +2276,6 @@ trait FieldtypeMappingTrait
                     $attrValue
                 );
                 $shouldConvertToFields = $modifierResult['value'];
-                $matchFound = $modifierResult['matchFound'];
 
                 // Convert choices to fields format if needed
                 if ($shouldConvertToFields === true) {
@@ -2885,7 +2881,6 @@ trait FieldtypeMappingTrait
                     $attrValue
                 );
                 $shouldProcessSelectedChoice = $modifierResult['value'];
-                $matchFound = $modifierResult['matchFound'];
 
                 // Process the selected choice if we should
                 if ($shouldProcessSelectedChoice === true) {
@@ -3742,252 +3737,192 @@ trait FieldtypeMappingTrait
             }
 
             // Handle value translation for #not_set case
+            $translationConfig = $config['value_translation'];
+            $translationArray = null;
+
+            // Handle different value_translation structures
             if (
-                isset($config['value_translation'])
-                && \is_array($config['value_translation'])
+                self::arrayKeyExists(
+                    'default',
+                    $translationConfig
+                )
+                || self::arrayKeyExists(
+                    'specific',
+                    $translationConfig
+                )
+                || self::arrayKeyExists(
+                    'based_on_other_attribute_value',
+                    $translationConfig
+                )
             ) {
-                $translationConfig = $config['value_translation'];
-                $translationArray = null;
 
-                // Handle different value_translation structures
-                if (
-                    self::arrayKeyExists(
-                        'default',
-                        $translationConfig
-                    )
-                    || self::arrayKeyExists(
-                        'specific',
-                        $translationConfig
-                    )
-                    || self::arrayKeyExists(
-                        'based_on_other_attribute_value',
-                        $translationConfig
-                    )
-                ) {
+                // Complex structure with 'default', 'specific', 'based_on_other_attribute_value', etc.
+                $defaultTranslations = self::asArray($translationConfig['default'] ?? null);
+                $specificTranslations = self::asArray($translationConfig['specific'] ?? null);
+                $basedOnOtherAttributeValue = self::asArray($translationConfig['based_on_other_attribute_value'] ?? null);
 
-                    // Complex structure with 'default', 'specific', 'based_on_other_attribute_value', etc.
-                    $defaultTranslations = self::asArray($translationConfig['default'] ?? null);
-                    $specificTranslations = self::asArray($translationConfig['specific'] ?? null);
-                    $basedOnOtherAttributeValue = self::asArray($translationConfig['based_on_other_attribute_value'] ?? null);
+                // Check for based_on_other_attribute_value first (most specific)
+                if ($basedOnOtherAttributeValue !== []) {
+                    foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
+                        $otherAttrValue = $data[$otherAttrName] ?? null;
 
-                    // Check for based_on_other_attribute_value first (most specific)
-                    if ($basedOnOtherAttributeValue !== []) {
-                        foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                            $otherAttrValue = $data[$otherAttrName] ?? null;
+                        // Find the appropriate mapping based on the other attribute's value
+                        $currentValueMappings = null;
 
-                            // Find the appropriate mapping based on the other attribute's value
-                            $currentValueMappings = null;
-
-                            // Check for '#not_set' special case first
-                            if (
-                                self::arrayKeyExists(
-                                    '#not_set',
-                                    $valueMappings
-                                )
-                            ) {
-                                if (
-                                    self::isAttributeNotSet(
-                                        $otherAttrName,
-                                        $data
-                                    )
-                                ) {
-                                    $currentValueMappings = self::mappingValue($valueMappings, '#not_set');
-                                }
-                            } elseif (
-                                self::arrayKeyExists(
-                                    '#not_empty',
-                                    $valueMappings
-                                )
-                            ) { // Check for '#not_empty' special case
-                                if (
-                                    self::isAttributeNotEmpty(
-                                        $otherAttrName,
-                                        $data
-                                    )
-                                ) {
-                                    $currentValueMappings = self::mappingValue($valueMappings, '#not_empty');
-                                }
-                            } elseif (
-                                self::arrayKeyExists(
-                                    '#empty',
-                                    $valueMappings
-                                )
-                            ) { // Check for '#empty' special case
-                                if (
-                                    self::isAttributeEmpty(
-                                        $otherAttrName,
-                                        $data
-                                    )
-                                ) {
-                                    $currentValueMappings = self::mappingValue($valueMappings, '#empty');
-                                }
-                            } elseif (
-                                self::arrayKeyExists(
-                                    $otherAttrValue,
-                                    $valueMappings
-                                )
-                            ) { // Check for exact value match
-                                $currentValueMappings = self::mappingValue($valueMappings, $otherAttrValue);
-                            }
-
-                            // If we found mappings for the other attribute's value, apply them to this attribute
-                            if ($currentValueMappings !== null) {
-                                // Check for '#not_set' special case first
-                                if (
-                                    self::arrayKeyExists(
-                                        '#not_set',
-                                        $currentValueMappings
-                                    )
-                                ) {
-                                    if ($originalFieldData !== null) {
-                                        if (
-                                            self::isFieldOptionNotSet(
-                                                $attrName,
-                                                $originalFieldData
-                                            )
-                                        ) {
-                                            $translationArray = self::mappingValue($currentValueMappings, '#not_set');
-                                            break;
-                                        }
-                                    } else { // Otherwise
-                                        if (
-                                            self::isAttributeNotSet(
-                                                $attrName,
-                                                $data
-                                            )
-                                        ) {
-                                            $translationArray = self::mappingValue($currentValueMappings, '#not_set');
-                                            break;
-                                        }
-                                    }
-                                } elseif (
-                                    self::arrayKeyExists(
-                                        '#not_empty',
-                                        $currentValueMappings
-                                    )
-                                ) { // Check for '#not_empty' special case
-                                    if (
-                                        self::isAttributeNotEmptyWithFallback(
-                                            $attrName,
-                                            $data,
-                                            $originalFieldData
-                                        )
-                                    ) {
-                                        $translationArray = self::mappingValue($currentValueMappings, '#not_empty');
-                                        break;
-                                    }
-                                } elseif (
-                                    self::arrayKeyExists(
-                                        '#empty',
-                                        $currentValueMappings
-                                    )
-                                ) { // Check for '#empty' special case
-                                    if (
-                                        self::isAttributeEmptyWithFallback(
-                                            $attrName,
-                                            $data,
-                                            $originalFieldData
-                                        )
-                                    ) {
-                                        $translationArray = self::mappingValue($currentValueMappings, '#empty');
-                                        break;
-                                    }
-                                } elseif (
-                                    self::arrayKeyExists(
-                                        '',
-                                        $currentValueMappings
-                                    )
-                                ) { // Check for exact value match (shouldn't happen for missing attributes)
-                                    $translationArray = self::mappingValue($currentValueMappings, '');
-                                    break;
-                                }
-                            }
-                        }
-                    } elseif (
-                        $excludeFieldtype !== null
-                        && $excludeFieldtype !== ''
-                        && isset($specificTranslations[$excludeFieldtype])
-                    ) { // Check for fieldtype-specific translations
-                        $translationArray = $specificTranslations[$excludeFieldtype];
-                    } else { // Fall back to default translations
-                        $translationArray = $defaultTranslations;
-                    }
-                } else { // Otherwise
-                    // Simple array structure
-                    $translationArray = $translationConfig;
-                }
-
-                // Apply translations if we have a valid translation array
-                if ($translationArray !== null) {
-                    // Ensure $translationArray is an array before using array_key_exists
-                    if (\is_array($translationArray)) {
                         // Check for '#not_set' special case first
                         if (
                             self::arrayKeyExists(
                                 '#not_set',
-                                $translationArray
+                                $valueMappings
                             )
                         ) {
-                            if ($originalFieldData !== null) {
+                            if (
+                                self::isAttributeNotSet(
+                                    $otherAttrName,
+                                    $data
+                                )
+                            ) {
+                                $currentValueMappings = self::mappingValue($valueMappings, '#not_set');
+                            }
+                        } elseif (
+                            self::arrayKeyExists(
+                                '#not_empty',
+                                $valueMappings
+                            )
+                        ) { // Check for '#not_empty' special case
+                            if (
+                                self::isAttributeNotEmpty(
+                                    $otherAttrName,
+                                    $data
+                                )
+                            ) {
+                                $currentValueMappings = self::mappingValue($valueMappings, '#not_empty');
+                            }
+                        } elseif (
+                            self::arrayKeyExists(
+                                '#empty',
+                                $valueMappings
+                            )
+                        ) { // Check for '#empty' special case
+                            if (
+                                self::isAttributeEmpty(
+                                    $otherAttrName,
+                                    $data
+                                )
+                            ) {
+                                $currentValueMappings = self::mappingValue($valueMappings, '#empty');
+                            }
+                        } elseif (
+                            self::arrayKeyExists(
+                                $otherAttrValue,
+                                $valueMappings
+                            )
+                        ) { // Check for exact value match
+                            $currentValueMappings = self::mappingValue($valueMappings, $otherAttrValue);
+                        }
+
+                        // If we found mappings for the other attribute's value, apply them to this attribute
+                        if ($currentValueMappings !== null) {
+                            // Check for '#not_set' special case first
+                            if (
+                                self::arrayKeyExists(
+                                    '#not_set',
+                                    $currentValueMappings
+                                )
+                            ) {
+                                if ($originalFieldData !== null) {
+                                    if (
+                                        self::isFieldOptionNotSet(
+                                            $attrName,
+                                            $originalFieldData
+                                        )
+                                    ) {
+                                        $translationArray = self::mappingValue($currentValueMappings, '#not_set');
+                                        break;
+                                    }
+                                } else { // Otherwise
+                                    if (
+                                        self::isAttributeNotSet(
+                                            $attrName,
+                                            $data
+                                        )
+                                    ) {
+                                        $translationArray = self::mappingValue($currentValueMappings, '#not_set');
+                                        break;
+                                    }
+                                }
+                            } elseif (
+                                self::arrayKeyExists(
+                                    '#not_empty',
+                                    $currentValueMappings
+                                )
+                            ) { // Check for '#not_empty' special case
                                 if (
-                                    self::isFieldOptionNotSet(
+                                    self::isAttributeNotEmptyWithFallback(
                                         $attrName,
+                                        $data,
                                         $originalFieldData
                                     )
                                 ) {
-                                    // Resolve the statamic_attribute before using it as an array key
-                                    $resolvedMapping = self::processAttributeMapping(
-                                        (string) $attrName,
-                                        null,
-                                        $config,
-                                        $data,
-                                        null,
-                                        null
-                                    );
-                                    if ($resolvedMapping !== null && $resolvedMapping !== []) {
-                                        $mappedData = \array_merge(
-                                            $mappedData,
-                                            $resolvedMapping
-                                        );
-                                    }
+                                    $translationArray = self::mappingValue($currentValueMappings, '#not_empty');
+                                    break;
                                 }
-                            } else { // Otherwise
+                            } elseif (
+                                self::arrayKeyExists(
+                                    '#empty',
+                                    $currentValueMappings
+                                )
+                            ) { // Check for '#empty' special case
                                 if (
-                                    self::isAttributeNotSet(
+                                    self::isAttributeEmptyWithFallback(
                                         $attrName,
-                                        $data
+                                        $data,
+                                        $originalFieldData
                                     )
                                 ) {
-                                    // Resolve the statamic_attribute before using it as an array key
-                                    $resolvedMapping = self::processAttributeMapping(
-                                        (string) $attrName,
-                                        null,
-                                        $config,
-                                        $data,
-                                        null,
-                                        null
-                                    );
-                                    if ($resolvedMapping !== null && $resolvedMapping !== []) {
-                                        $mappedData = \array_merge(
-                                            $mappedData,
-                                            $resolvedMapping
-                                        );
-                                    }
+                                    $translationArray = self::mappingValue($currentValueMappings, '#empty');
+                                    break;
                                 }
+                            } elseif (
+                                self::arrayKeyExists(
+                                    '',
+                                    $currentValueMappings
+                                )
+                            ) { // Check for exact value match (shouldn't happen for missing attributes)
+                                $translationArray = self::mappingValue($currentValueMappings, '');
+                                break;
                             }
                         }
+                    }
+                } elseif (
+                    $excludeFieldtype !== null
+                    && $excludeFieldtype !== ''
+                    && isset($specificTranslations[$excludeFieldtype])
+                ) { // Check for fieldtype-specific translations
+                    $translationArray = $specificTranslations[$excludeFieldtype];
+                } else { // Fall back to default translations
+                    $translationArray = $defaultTranslations;
+                }
+            } else { // Otherwise
+                // Simple array structure
+                $translationArray = $translationConfig;
+            }
 
-                        // Check for '#not_empty' special case
-                        if (
-                            self::arrayKeyExists(
-                                '#not_empty',
-                                $translationArray
-                            )
-                        ) {
+            // Apply translations if we have a valid translation array
+            if ($translationArray !== null) {
+                // Ensure $translationArray is an array before using array_key_exists
+                if (\is_array($translationArray)) {
+                    // Check for '#not_set' special case first
+                    if (
+                        self::arrayKeyExists(
+                            '#not_set',
+                            $translationArray
+                        )
+                    ) {
+                        if ($originalFieldData !== null) {
                             if (
-                                self::isAttributeNotEmptyWithFallback(
+                                self::isFieldOptionNotSet(
                                     $attrName,
-                                    $data,
                                     $originalFieldData
                                 )
                             ) {
@@ -4007,20 +3942,11 @@ trait FieldtypeMappingTrait
                                     );
                                 }
                             }
-                        }
-
-                        // Check for '#empty' special case
-                        if (
-                            self::arrayKeyExists(
-                                '#empty',
-                                $translationArray
-                            )
-                        ) {
+                        } else { // Otherwise
                             if (
-                                self::isAttributeEmptyWithFallback(
+                                self::isAttributeNotSet(
                                     $attrName,
-                                    $data,
-                                    $originalFieldData
+                                    $data
                                 )
                             ) {
                                 // Resolve the statamic_attribute before using it as an array key
@@ -4040,12 +3966,20 @@ trait FieldtypeMappingTrait
                                 }
                             }
                         }
+                    }
 
-                        // Check for null value (for missing attributes)
+                    // Check for '#not_empty' special case
+                    if (
+                        self::arrayKeyExists(
+                            '#not_empty',
+                            $translationArray
+                        )
+                    ) {
                         if (
-                            self::arrayKeyExists(
-                                'null',
-                                $translationArray
+                            self::isAttributeNotEmptyWithFallback(
+                                $attrName,
+                                $data,
+                                $originalFieldData
                             )
                         ) {
                             // Resolve the statamic_attribute before using it as an array key
@@ -4064,14 +3998,70 @@ trait FieldtypeMappingTrait
                                 );
                             }
                         }
-                    } else { // Otherwise
-                        // If $translationArray is not an array (e.g., it's a string), use it directly
-                        $statamicAttributeKey = self::normalizeArrayKey(
-                            $config['statamic_attribute']
-                        );
-                        if ($statamicAttributeKey !== null) {
-                            $mappedData[$statamicAttributeKey] = $translationArray;
+                    }
+
+                    // Check for '#empty' special case
+                    if (
+                        self::arrayKeyExists(
+                            '#empty',
+                            $translationArray
+                        )
+                    ) {
+                        if (
+                            self::isAttributeEmptyWithFallback(
+                                $attrName,
+                                $data,
+                                $originalFieldData
+                            )
+                        ) {
+                            // Resolve the statamic_attribute before using it as an array key
+                            $resolvedMapping = self::processAttributeMapping(
+                                (string) $attrName,
+                                null,
+                                $config,
+                                $data,
+                                null,
+                                null
+                            );
+                            if ($resolvedMapping !== null && $resolvedMapping !== []) {
+                                $mappedData = \array_merge(
+                                    $mappedData,
+                                    $resolvedMapping
+                                );
+                            }
                         }
+                    }
+
+                    // Check for null value (for missing attributes)
+                    if (
+                        self::arrayKeyExists(
+                            'null',
+                            $translationArray
+                        )
+                    ) {
+                        // Resolve the statamic_attribute before using it as an array key
+                        $resolvedMapping = self::processAttributeMapping(
+                            (string) $attrName,
+                            null,
+                            $config,
+                            $data,
+                            null,
+                            null
+                        );
+                        if ($resolvedMapping !== null && $resolvedMapping !== []) {
+                            $mappedData = \array_merge(
+                                $mappedData,
+                                $resolvedMapping
+                            );
+                        }
+                    }
+                } else { // Otherwise
+                    // If $translationArray is not an array (e.g., it's a string), use it directly
+                    $statamicAttributeKey = self::normalizeArrayKey(
+                        $config['statamic_attribute']
+                    );
+                    if ($statamicAttributeKey !== null) {
+                        $mappedData[$statamicAttributeKey] = $translationArray;
                     }
                 }
             }
@@ -7443,8 +7433,6 @@ trait FieldtypeMappingTrait
         array $subfieldData = [],
         ?string $preset = null
     ): ?array {
-        $matchFound = false;
-
         // Only process statamic_attribute if it's set and has a value
         if (
             $statamicAttr !== null
@@ -9737,25 +9725,11 @@ trait FieldtypeMappingTrait
                     return $matches[0]; // Return original unchanged
                 }
 
-                // Find the field ID by looking for a number (integer or decimal)
-                $fieldId = null;
-                $descriptorParts = [];
-
-                foreach ($parts as $part) {
-                    // Check if this part is a number (field ID)
-                    if (
-                        \preg_match(
-                            '/^\d+(?:\.\d+)?$/',
-                            $part
-                        ) === 1
-                    ) {
-                        $fieldId = $part;
-                        break;
-                    } else { // Otherwise
-                        // This part is part of the descriptor
-                        $descriptorParts[] = $part;
-                    }
-                }
+                // Find the field ID: the first part that is a number (integer or decimal)
+                $fieldId = array_find($parts, fn ($part): bool => \preg_match(
+                    '/^\d+(?:\.\d+)?$/',
+                    $part
+                ) === 1);
 
                 // If no field ID found, this is not a field reference
                 if ($fieldId === null) {
@@ -10621,7 +10595,7 @@ trait FieldtypeMappingTrait
     protected static function shouldExcludeFieldtype(
         mixed $config,
         $excludeFieldtype
-    ) {
+    ): bool {
         if (
             ! isset($config['exclude_fieldtypes'])
             || ! \is_array($config['exclude_fieldtypes'])
@@ -10903,7 +10877,7 @@ trait FieldtypeMappingTrait
                     $combinedData
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $matchFound] = $result;
+                    [$resolvedAttribute] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -10928,7 +10902,7 @@ trait FieldtypeMappingTrait
                     $combinedData
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $matchFound] = $result;
+                    [$resolvedAttribute] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -10958,7 +10932,7 @@ trait FieldtypeMappingTrait
                     $combinedData
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $matchFound] = $result;
+                    [$resolvedAttribute] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -11360,8 +11334,7 @@ trait FieldtypeMappingTrait
                 $value = (bool) $data[$config];
                 $matchFound = true;
             } elseif (\is_string($config)) {
-                // String field reference that doesn't exist - default to false
-                $value = false;
+                // String field reference that doesn't exist - $value stays false
                 $matchFound = true;
             } else { // Otherwise
                 // Non-string value (boolean, number, etc.)

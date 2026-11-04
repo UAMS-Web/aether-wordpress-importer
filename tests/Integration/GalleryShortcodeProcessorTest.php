@@ -46,11 +46,9 @@ afterEach(function (): void {
  */
 function galleryShortcodeExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     /** @var list<ExpectationInterface> $expectations */
     $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);

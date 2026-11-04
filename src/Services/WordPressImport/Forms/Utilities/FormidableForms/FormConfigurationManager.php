@@ -1839,6 +1839,9 @@ class FormConfigurationManager
             }
         }
 
+        // The loop variable outlives the loop; release it before it is reused
+        unset($view);
+
         // Process confirmation views
         if ($confirmationViews !== []) {
             $this->processConfirmationViews(
@@ -2034,6 +2037,9 @@ class FormConfigurationManager
                 $emailViews[] = $view;
             }
         }
+
+        // The loop variable outlives the loop; release it before it is reused
+        unset($view);
 
         // Process each email view and map it to Statamic format
         foreach ($emailViews as $view) {

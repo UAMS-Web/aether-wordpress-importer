@@ -357,20 +357,15 @@ final class TermCreationFacadeExpectationChain
  */
 function termCreationSingleExpectation(MockInterface $mock, string $method): Expectation
 {
-    $composite = $mock->shouldReceive($method);
-    expect($composite)->toBeInstanceOf(CompositeExpectation::class);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation from shouldReceive().');
-    }
-
-    return termCreationExtractSingleExpectation($composite);
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property throws if that ever changes
+    return termCreationExtractSingleExpectation($mock->shouldReceive($method));
 }
 
 /**
  * Unwrap the single Expectation held inside a CompositeExpectation.
  */
-function termCreationExtractSingleExpectation(CompositeExpectation $composite): Expectation
+function termCreationExtractSingleExpectation(ExpectationInterface $composite): Expectation
 {
     $reflection = new ReflectionClass(CompositeExpectation::class);
     $property = $reflection->getProperty('_expectations');

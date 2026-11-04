@@ -65,7 +65,6 @@ it('restores the listener when the callback throws', function (): void {
 
     $before = searchIndexTermSavedListenerCount();
 
-    $exceptionMessage = null;
     try {
         SearchIndexUpdates::withDisabled(function (): void {
             throw new RuntimeException('import blew up');

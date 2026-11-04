@@ -451,7 +451,7 @@ it('materializes the site into the named directory, pointing every loader at the
 
 it('reads the whole site, unbounded, into a new temporary directory when nothing narrows it', function (array $more): void {
     /** @var array<string, mixed> $more */
-    [$command, $buffer, $loaders] = iwasCommand(iwasUnattended($more));
+    [$command, , $loaders] = iwasCommand(iwasUnattended($more));
     $command->stdin = "secret-key\n";
 
     $parts = iwasCall($command, 'materializeFromApi');

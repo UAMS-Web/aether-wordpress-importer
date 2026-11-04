@@ -32,7 +32,6 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Tests\TestCase;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Creators\FormCreator;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\ContentDetector;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\DataManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping;
@@ -251,13 +250,6 @@ it('creates a form blueprint with fields', function (): void {
 });
 
 it('generates field handles suffixed with the field id', function (): void {
-    // Set the field data
-    $fieldData = [
-        'id' => '949',
-        'name' => 'Email Address',
-        'type' => 'email',
-    ];
-
     // Field handles are generated with the field ID for uniqueness
     $expectedHandle = 'email_949';
 
@@ -635,7 +627,6 @@ it('creates landing pages for Formidable Forms variants without an export file',
         formidableRunPageImportCommandWithoutExport(
             $this,
             $pageXmlPath,
-            $expectedSlug,
             $expectContinuePrompt
         );
 
@@ -788,8 +779,7 @@ it('creates basic pages for Formidable Forms variants without an export file', f
         // Run the import command with common expectations
         formidableRunPageImportCommandWithoutExport(
             $this,
-            $pageXmlPath,
-            $expectedSlug
+            $pageXmlPath
         );
 
         // Get the entry
@@ -1450,13 +1440,10 @@ function formidableRunPageImportCommand(
  *
  * @param  TestCase  $test  The bound test case (provides the artisan() harness)
  * @param  string  $pageXmlPath  The path to the XML file
- * @param  string  $expectedSlug  The expected slug (used to determine if "continue importing" prompt should be
- *                                expected)
  */
 function formidableRunPageImportCommandWithoutExport(
     TestCase $test,
     string $pageXmlPath,
-    string $expectedSlug,
     bool $expectContinuePrompt = false
 ): void {
     // Run the page import command
@@ -1931,22 +1918,13 @@ function formidableAssertAttributeMappingRepeaterCase(
     }
 
     // Build the coordinator graph the way the container wires it
-    [
-        'coordinator' => $coordinator,
-        'formCreationCoordinator' => $formCreationCoordinator,
-    ] = formidableMakeCoordinatorGraph($formConfigurationManager);
-
-    // Create the FormCreator
-    $formCreator = new FormCreator(
-        $blueprintCreator,
-        $coordinator
-    );
+    ['formCreationCoordinator' => $formCreationCoordinator] = formidableMakeCoordinatorGraph($formConfigurationManager);
 
     // Process each form in the source data
     $sourceForms = formidableRequireSourceForms($source);
     $siteName = formidableSiteDisplayName($site_handle);
 
-    foreach ($sourceForms as $formIndex => $formData) {
+    foreach ($sourceForms as $formData) {
         // Skip child forms as they are processed as part of the parent form's repeater
         // logic
         $parentFormId = $formData['parent_form_id'] ?? '0';
@@ -2088,7 +2066,7 @@ function formidableAssertAttributeMappingRepeaterCase(
             formidableRequireFormString($formData, 'name');
             formidableRequireFormString($formData, 'id');
 
-            foreach ($expectedBlueprintFields as $fieldIndex => $expectedFieldData) {
+            foreach ($expectedBlueprintFields as $expectedFieldData) {
                 expect($expectedFieldData)->toBeArray();
                 if (! \is_array($expectedFieldData)) {
                     throw new RuntimeException('Expected the blueprint field to be an array.');

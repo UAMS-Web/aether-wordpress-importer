@@ -1916,7 +1916,6 @@ content. -->
                 // ---
 
                 // Check if file is tracked in git and differs from git
-                $differsFromGit = false;
                 if (self::isWindows()) {
                     // Windows: check if file differs from git
                     exec(
@@ -2977,9 +2976,6 @@ content. -->
         );
 
         // Create appropriate entry creator and collection handle based on content type
-        $entryCreator = null;
-        $collectionHandle = null;
-
         switch ($contentType) {
             case 'logo-list-item':
                 $entryCreator = new LogoListItemEntryCreator(

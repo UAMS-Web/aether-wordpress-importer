@@ -63,11 +63,9 @@ afterEach(function (): void {
  */
 function audioShortcodeExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     /** @var list<ExpectationInterface> $expectations */
     $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
@@ -129,6 +127,7 @@ function audioShortcodeLogs(): ArrayObject
     foreach (['warning', 'error'] as $level) {
         Log::shouldReceive($level)->andReturnUsing(
             function (string $message, array $context = []) use ($logs, $level): void {
+                /** @var array<string, mixed> $context */
                 $logs->append(['level' => $level, 'message' => $message, 'context' => $context]);
             }
         );

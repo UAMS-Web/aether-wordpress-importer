@@ -53,10 +53,8 @@ class ImportWarningManager
                     return;
                 }
             }
-        }
-
-        // For unsupported_attributes, check for duplicates before adding
-        if ($category === 'forms' && $type === 'unsupported_attributes') {
+        } elseif ($category === 'forms' && $type === 'unsupported_attributes') {
+            // For unsupported_attributes, check for duplicates before adding
             $fieldType = $data['field_type'] ?? '';
             $attributeName = $data['attribute_name'] ?? '';
             $formId = $data['form_id'] ?? null;
@@ -72,10 +70,8 @@ class ImportWarningManager
                     return;
                 }
             }
-        }
-
-        // For unmapped_subfields, check for duplicates before adding
-        if ($category === 'forms' && $type === 'unmapped_subfields') {
+        } elseif ($category === 'forms' && $type === 'unmapped_subfields') {
+            // For unmapped_subfields, check for duplicates before adding
             $fieldType = $data['field_type'] ?? '';
             $subfieldLabel = $data['subfield_label'] ?? '';
             $attributeName = $data['attribute_name'] ?? null;
@@ -93,10 +89,8 @@ class ImportWarningManager
                     return;
                 }
             }
-        }
-
-        // For malformed_shortcodes, check for duplicates before adding
-        if ($category === 'content' && $type === 'malformed_shortcodes') {
+        } elseif ($category === 'content' && $type === 'malformed_shortcodes') {
+            // For malformed_shortcodes, check for duplicates before adding
             $shortcodeName = $data['shortcode_name'] ?? '';
             $attributeName = $data['attribute'] ?? '';
             $original = $data['original'] ?? '';
@@ -115,10 +109,8 @@ class ImportWarningManager
                     return;
                 }
             }
-        }
-
-        // For unaddressed_shortcodes, check for duplicates before adding
-        if ($category === 'content' && $type === 'unaddressed_shortcodes') {
+        } elseif ($category === 'content' && $type === 'unaddressed_shortcodes') {
+            // For unaddressed_shortcodes, check for duplicates before adding
             // Content reaches more than one processing pass, so the same shortcode on
             // the same page is reported once (#120)
             foreach ($existingWarnings as $existingWarning) {
@@ -133,10 +125,8 @@ class ImportWarningManager
                     return;
                 }
             }
-        }
-
-        // For images_beside_shortcodes, check for duplicates before adding
-        if ($category === 'content' && $type === 'images_beside_shortcodes') {
+        } elseif ($category === 'content' && $type === 'images_beside_shortcodes') {
+            // For images_beside_shortcodes, check for duplicates before adding
             // Content reaches more than one processing pass, so the same image on
             // the same page is reported once
             foreach ($existingWarnings as $existingWarning) {

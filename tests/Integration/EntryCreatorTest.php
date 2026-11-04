@@ -904,11 +904,9 @@ describe('what it hands out', function (): void {
  */
 function entryCreatorExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
 {
+    // Mockery declares an Expectation, but shouldReceive() returns a CompositeExpectation;
+    // reading its _expectations property below throws if that ever changes
     $composite = $mock->shouldReceive($method);
-
-    if (! $composite instanceof CompositeExpectation) {
-        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
-    }
 
     $expectations = (new ReflectionProperty(CompositeExpectation::class, '_expectations'))->getValue($composite);
 

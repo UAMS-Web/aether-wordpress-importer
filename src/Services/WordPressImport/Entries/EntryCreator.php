@@ -556,7 +556,7 @@ class EntryCreator
             // ---
 
             // Loop through tables grouped by export ID
-            foreach ($tablesByExportId as $exportId => $matchingTables) {
+            foreach ($tablesByExportId as $matchingTables) {
                 // ---
                 // Track the most recent table and its date
                 // ---
@@ -704,7 +704,7 @@ class EntryCreator
                 $retryCount = 5;
                 $retryDelay = 300000; // 300ms
                 $fileExists = false;
-                foreach (\range(1, $retryCount) as $attempt) {
+                for ($i = 0; $i < $retryCount; $i++) {
                     // ---
                     // Check if entry file exists with retry mechanism. A file found
                     // stays found, and the loop waits only after a miss.
@@ -1071,7 +1071,7 @@ class EntryCreator
         $unaddressedNodes = $this->contentProcessor->getUnaddressedNodes();
         if ($unaddressedNodes !== []) {
             $collection = Collection::findByHandle($collectionHandle);
-            $collectionTitle = $collection !== null ? $collection->title() : null;
+            $collectionTitle = $collection?->title();
             $collectionName = is_string($collectionTitle) && $collectionTitle !== ''
                 ? $collectionTitle
                 : $collectionHandle;

@@ -173,9 +173,8 @@ it('refuses a streamed source without a total', function (): void {
 it('writes plain text with no control sequences, even to a decorated output', function (): void {
     $output = new BufferedOutput(decorated: true);
 
-    foreach (ImportProgress::track($output, '<info>redirect_rule</info>', [1, 2], null, static fn (): float => 0.0) as $item) {
-        // Consume the loop
-    }
+    // Consume every item
+    expect(\iterator_count(ImportProgress::track($output, '<info>redirect_rule</info>', [1, 2], null, static fn (): float => 0.0)))->toBe(2);
 
     // Only the line ending may carry a carriage return, and only where PHP_EOL does
     $text = \str_replace(\PHP_EOL, "\n", $output->fetch());
@@ -195,9 +194,8 @@ it('counts a streamed source once, through its closure, when the lines will prin
 
     $output = new BufferedOutput;
 
-    foreach (ImportProgress::track($output, 'page', (static fn (): Generator => yield from ['a', 'b', 'c'])(), $count, static fn (): float => 0.0) as $item) {
-        // Consume the loop
-    }
+    // Consume every item
+    expect(\iterator_count(ImportProgress::track($output, 'page', (static fn (): Generator => yield from ['a', 'b', 'c'])(), $count, static fn (): float => 0.0)))->toBe(3);
 
     expect($calls)->toBe(1)
         ->and($output->fetch())->toEndWith('Progress: page 3 of 3 (100%)'.\PHP_EOL);
@@ -227,9 +225,8 @@ it('neither counts nor reports when the output will not print a line (#182)', fu
 ]);
 
 it('still refuses a streamed source without a total when the output is quiet', function (): void {
-    foreach (ImportProgress::track(new NullOutput, 'page', (static fn (): Generator => yield 1)()) as $item) {
-        // Consume the loop
-    }
+    // Consume every item
+    expect(\iterator_count(ImportProgress::track(new NullOutput, 'page', (static fn (): Generator => yield 1)())))->toBe(1);
 })->throws(InvalidArgumentException::class, 'A total is required');
 
 it('reports after a quiet stretch of ten seconds, and not of less', function (float $stretch, bool $reported): void {
@@ -259,9 +256,8 @@ it('reports after a quiet stretch of ten seconds, and not of less', function (fl
 it('reads seconds from the system clock when given none', function (): void {
     $output = new BufferedOutput;
 
-    foreach (ImportProgress::track($output, 'page', \range(1, 20)) as $item) {
-        // Each item takes no time to speak of
-    }
+    // Each item takes no time to speak of
+    expect(\iterator_count(ImportProgress::track($output, 'page', \range(1, 20))))->toBe(20);
 
     // Only the start and the ten tenths; a clock a billion times too fast would
     // report every item

@@ -2814,8 +2814,6 @@ function gravityGetBaseFieldDefinitions(): array
  */
 function gravityFieldtypeMappingProvider(): array
 {
-    $siteHandle = 'supply_chain';
-    $siteTitle = 'Supply Chain';
 
     return [
         // Standard Fields - Mapped
@@ -3173,15 +3171,12 @@ function gravityAttributeMappingProvider(): array
 
     // Extract individual field definitions for easier access
     $siteHandle = gravityFormDefinitionString($fieldDefinitions, 'siteHandle');
-    $siteTitle = gravityFormDefinitionString($fieldDefinitions, 'siteTitle');
-    $baseFieldComponent = gravityFormBaseField($fieldDefinitions, 'baseFieldComponent');
     $baseField_address = gravityFormBaseField($fieldDefinitions, 'baseField_address');
     $baseField_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_checkbox');
     $baseField_consent = gravityFormBaseField($fieldDefinitions, 'baseField_consent');
     $baseField_date = gravityFormBaseField($fieldDefinitions, 'baseField_date');
     $baseField_email = gravityFormBaseField($fieldDefinitions, 'baseField_email');
     $baseField_fileupload = gravityFormBaseField($fieldDefinitions, 'baseField_fileupload');
-    $baseField_form = gravityFormBaseField($fieldDefinitions, 'baseField_form');
     $baseField_hidden = gravityFormBaseField($fieldDefinitions, 'baseField_hidden');
     $baseField_html = gravityFormBaseField($fieldDefinitions, 'baseField_html');
     $baseField_list = gravityFormBaseField($fieldDefinitions, 'baseField_list');
@@ -3217,7 +3212,6 @@ function gravityAttributeMappingProvider(): array
     $baseField_post_custom_field_fileupload = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_fileupload');
     $baseField_post_custom_field_list = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_list');
     $baseField_post_custom_field_phone = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_phone');
-    $baseField_post_excerpt = gravityFormBaseField($fieldDefinitions, 'baseField_post_excerpt');
     $baseField_post_image = gravityFormBaseField($fieldDefinitions, 'baseField_post_image');
     $baseField_post_tags_empty = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_empty');
     $baseField_post_tags_not_set = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_not_set');
@@ -3226,7 +3220,6 @@ function gravityAttributeMappingProvider(): array
     $baseField_post_tags_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_checkbox');
     $baseField_post_tags_radio = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_radio');
     $baseField_post_tags_multiselect = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_multiselect');
-    $baseField_post_title = gravityFormBaseField($fieldDefinitions, 'baseField_post_title');
     $baseField_product = gravityFormBaseField($fieldDefinitions, 'baseField_product');
     $baseField_quiz = gravityFormBaseField($fieldDefinitions, 'baseField_quiz');
     $baseField_radio = gravityFormBaseField($fieldDefinitions, 'baseField_radio');
@@ -14683,73 +14676,9 @@ function gravityAttributeMappingRepeaterProvider(): array
     // Extract individual field definitions for easier access
     $siteHandle = gravityFormDefinitionString($fieldDefinitions, 'siteHandle');
     $siteTitle = gravityFormDefinitionString($fieldDefinitions, 'siteTitle');
-    $baseFieldComponent = gravityFormBaseField($fieldDefinitions, 'baseFieldComponent');
-    $baseField_address = gravityFormBaseField($fieldDefinitions, 'baseField_address');
-    $baseField_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_checkbox');
-    $baseField_consent = gravityFormBaseField($fieldDefinitions, 'baseField_consent');
-    $baseField_date = gravityFormBaseField($fieldDefinitions, 'baseField_date');
     $baseField_email = gravityFormBaseField($fieldDefinitions, 'baseField_email');
-    $baseField_fileupload = gravityFormBaseField($fieldDefinitions, 'baseField_fileupload');
     $baseField_form = gravityFormBaseField($fieldDefinitions, 'baseField_form');
-    $baseField_hidden = gravityFormBaseField($fieldDefinitions, 'baseField_hidden');
-    $baseField_html = gravityFormBaseField($fieldDefinitions, 'baseField_html');
-    $baseField_list = gravityFormBaseField($fieldDefinitions, 'baseField_list');
-    $baseField_multi_choice_checkbox_exactly = gravityFormBaseField($fieldDefinitions, 'baseField_multi_choice_checkbox_exactly');
-    $baseField_multi_choice_checkbox_range = gravityFormBaseField($fieldDefinitions, 'baseField_multi_choice_checkbox_range');
-    $baseField_multi_choice_checkbox_unlimited = gravityFormBaseField($fieldDefinitions, 'baseField_multi_choice_checkbox_unlimited');
-    $baseField_multi_choice_radio = gravityFormBaseField($fieldDefinitions, 'baseField_multi_choice_radio');
-    $baseField_multiselect = gravityFormBaseField($fieldDefinitions, 'baseField_multiselect');
-    $baseField_name = gravityFormBaseField($fieldDefinitions, 'baseField_name');
-    $baseField_number = gravityFormBaseField($fieldDefinitions, 'baseField_number');
-    $baseField_password = gravityFormBaseField($fieldDefinitions, 'baseField_password');
-    $baseField_phone = gravityFormBaseField($fieldDefinitions, 'baseField_phone');
-    $baseField_poll_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_poll_checkbox');
-    $baseField_poll_radio = gravityFormBaseField($fieldDefinitions, 'baseField_poll_radio');
-    $baseField_poll_select = gravityFormBaseField($fieldDefinitions, 'baseField_poll_select');
-    $baseField_post_category_radio = gravityFormBaseField($fieldDefinitions, 'baseField_post_category_radio');
-    $baseField_post_category_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_post_category_checkbox');
-    $baseField_post_category_multiselect = gravityFormBaseField($fieldDefinitions, 'baseField_post_category_multiselect');
-    $baseField_post_category_select = gravityFormBaseField($fieldDefinitions, 'baseField_post_category_select');
-    $baseField_post_content = gravityFormBaseField($fieldDefinitions, 'baseField_post_content');
-    $baseField_post_custom_field_text = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_text');
-    $baseField_post_custom_field_textarea = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_textarea');
-    $baseField_post_custom_field_select = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_select');
-    $baseField_post_custom_field_multiselect = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_multiselect');
-    $baseField_post_custom_field_number = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_number');
-    $baseField_post_custom_field_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_checkbox');
-    $baseField_post_custom_field_radio = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_radio');
-    $baseField_post_custom_field_hidden = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_hidden');
-    $baseField_post_custom_field_date = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_date');
-    $baseField_post_custom_field_time = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_time');
-    $baseField_post_custom_field_website = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_website');
-    $baseField_post_custom_field_email = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_email');
-    $baseField_post_custom_field_fileupload = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_fileupload');
-    $baseField_post_custom_field_list = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_list');
-    $baseField_post_custom_field_phone = gravityFormBaseField($fieldDefinitions, 'baseField_post_custom_field_phone');
-    $baseField_post_excerpt = gravityFormBaseField($fieldDefinitions, 'baseField_post_excerpt');
-    $baseField_post_image = gravityFormBaseField($fieldDefinitions, 'baseField_post_image');
-    $baseField_post_tags_empty = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_empty');
-    $baseField_post_tags_not_set = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_not_set');
-    $baseField_post_tags_text = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_text');
-    $baseField_post_tags_select = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_select');
-    $baseField_post_tags_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_checkbox');
-    $baseField_post_tags_radio = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_radio');
-    $baseField_post_tags_multiselect = gravityFormBaseField($fieldDefinitions, 'baseField_post_tags_multiselect');
-    $baseField_post_title = gravityFormBaseField($fieldDefinitions, 'baseField_post_title');
-    $baseField_product = gravityFormBaseField($fieldDefinitions, 'baseField_product');
-    $baseField_quiz = gravityFormBaseField($fieldDefinitions, 'baseField_quiz');
-    $baseField_radio = gravityFormBaseField($fieldDefinitions, 'baseField_radio');
-    $baseField_rcwdupload = gravityFormBaseField($fieldDefinitions, 'baseField_rcwdupload');
-    $baseField_select = gravityFormBaseField($fieldDefinitions, 'baseField_select');
-    $baseField_survey_checkbox = gravityFormBaseField($fieldDefinitions, 'baseField_survey_checkbox');
-    $baseField_survey_likert = gravityFormBaseField($fieldDefinitions, 'baseField_survey_likert');
-    $baseField_survey_radio = gravityFormBaseField($fieldDefinitions, 'baseField_survey_radio');
-    $baseField_survey_select = gravityFormBaseField($fieldDefinitions, 'baseField_survey_select');
-    $baseField_survey_text = gravityFormBaseField($fieldDefinitions, 'baseField_survey_text');
-    $baseField_survey_textarea = gravityFormBaseField($fieldDefinitions, 'baseField_survey_textarea');
     $baseField_text = gravityFormBaseField($fieldDefinitions, 'baseField_text');
-    $baseField_textarea = gravityFormBaseField($fieldDefinitions, 'baseField_textarea');
-    $baseField_time = gravityFormBaseField($fieldDefinitions, 'baseField_time');
 
     $baseForm = [
         'fields' => [],

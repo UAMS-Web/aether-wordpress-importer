@@ -613,14 +613,8 @@ class TextProcessor
         // Initialize array for matching bare form shortcodes
         $bareFormShortcodeMatch = [];
 
-        // Initialize variable for storing processed shortcode HTML
-        $shortcodeOnlyHtml = null;
-
         // Initialize array for matching shortcode blocks
         $shortcodeOnlyMatch = [];
-
-        // Initialize variable for storing parsed Bard content
-        $shortcodeOnlyParsed = null;
 
         // Check if the content matches the expected pattern for a single wp:shortcode block
         if (
@@ -1149,7 +1143,7 @@ class TextProcessor
                                     // strict flag, which phpstan-strict-rules requires, changes no
                                     // result.
                                     // @pest-mutate-ignore: TrueToFalse
-                                    $node = self::consumeBlockNodes(
+                                    self::consumeBlockNodes(
                                         $node,
                                         $skipCount,
                                         $blockType,
@@ -1224,7 +1218,7 @@ class TextProcessor
                                     // The count ends at the block's first closing comment, so the
                                     // walk stops there whether or not it tracks nesting
                                     // @pest-mutate-ignore: FalseToTrue
-                                    $node = self::consumeBlockNodes(
+                                    self::consumeBlockNodes(
                                         $node,
                                         ShortcodeBlockProcessor::blockSkipCount($node),
                                         $blockType,
@@ -1772,7 +1766,7 @@ class TextProcessor
     }
 
     /**
-     * Marks the nodes a block's skip count covers as consumed, and returns the last one.
+     * Marks the nodes a block's skip count covers as consumed.
      *
      * Every processor counts the block's opening comment, which is `$comment`, so one
      * fewer sibling follows it. The processors differ on the whitespace between a block's
@@ -1789,7 +1783,6 @@ class TextProcessor
      * @param  string  $blockType  The block type from the opening comment, such as `spacer`
      * @param  SplObjectStorage<DOMNode, null>  $consumedNodes  The nodes consumed so far
      * @param  bool  $tracksNesting  Whether the processor's count passes over a nested block of the same type
-     * @return DOMNode The last node consumed, or `$comment` when none is
      */
     private static function consumeBlockNodes(
         DOMNode $comment,
@@ -1797,7 +1790,7 @@ class TextProcessor
         string $blockType,
         SplObjectStorage $consumedNodes,
         bool $tracksNesting
-    ): DOMNode {
+    ): void {
         $node = $comment;
         $remaining = $skipCount - 1;
         $depth = 0;
@@ -1837,8 +1830,6 @@ class TextProcessor
                 $depth--;
             }
         }
-
-        return $node;
     }
 
     /**
