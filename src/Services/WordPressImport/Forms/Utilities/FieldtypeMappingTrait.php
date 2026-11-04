@@ -5904,12 +5904,8 @@ trait FieldtypeMappingTrait
             return $value;
         }
 
-        // Replace [#value] with the original string value
-        $value = \str_replace(
-            '[#value]',
-            $stringValue,
-            $value
-        );
+        // [#value] is replaced last, so text in the imported value that looks
+        // like a placeholder is kept as written instead of being expanded
 
         // Replace [#count] with the current count
         $value = \str_replace(
@@ -5938,7 +5934,12 @@ trait FieldtypeMappingTrait
             );
         }
 
-        return $value;
+        // Replace [#value] with the original string value
+        return \str_replace(
+            '[#value]',
+            $stringValue,
+            $value
+        );
     }
 
     /**
