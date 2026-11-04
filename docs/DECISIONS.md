@@ -1532,3 +1532,11 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: a report job that fails when a test ran in no shard.** Pest assigns every listed class to one shard by its position, so a test can only be lost if a shard is left out of the matrix, and `scripts/ci-local.test.mjs` fails on that.
 
 **Not decided here: balancing the shards.** The Windows shards took 47 to 160 seconds of test time. `pest --update-shards` could balance them, but PHPStan on Windows now sets the wall-clock time at 250 seconds, so balancing would not shorten a pull request.
+
+## A table cell link is written as an entry reference, and the host app resolves it (#395)
+
+**Decided 2026-11-04, on #395.** The importer writes a link in a `table` set's cell to an imported page as `statamic://entry::<id>`, with its query and fragment, the same as a link anywhere else in a Bard field. The host app resolves those references in cell HTML before its table cell sanitizer runs, since the sanitizer allows only `http`, `https`, `mailto` and `tel` and would otherwise remove the `href`.
+
+**Why.** A reference follows the entry when its slug or parent changes, and the host app's tooling that rewrites references when an entry moves, and its link health checks, can both see it.
+
+**Rejected: writing the entry's URL path into the cell.** A fixed path goes out of date when the entry moves, neither that tooling nor link health can see it, and entry URLs are not reliable partway through an import.
