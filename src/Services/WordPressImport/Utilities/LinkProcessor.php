@@ -3718,8 +3718,11 @@ class LinkProcessor
      * is byte for byte what `TableProcessor` stores in a cell. How libxml
      * writes a non-ASCII character depends on the document's encoding and on
      * the libxml build, so a document of any other kind can disagree with the
-     * cell. Where the serialization is not the expected `<a href="...">`, the
-     * URL is returned unchanged, and only its raw form is searched for.
+     * cell. So can the quoting: a URL holding `"` is written `&quot;` inside
+     * double quotes by some builds and raw inside single quotes by others
+     * (measured on Windows CI), so either quote is read. Where the
+     * serialization is not the expected `<a href="...">` or `<a href='...'>`,
+     * the URL is returned unchanged, and only its raw form is searched for.
      *
      * @param  string  $url  The URL as the DOM reads it
      * @return string The URL as an href attribute value
@@ -3737,22 +3740,15 @@ class LinkProcessor
         // Serialize the link as a cell's HTML is serialized
         $html = $link instanceof DOMElement ? $document->saveHTML($link) : false;
 
-        // Take the attribute value out of the markup
-        $prefix = '<a href="';
-        $suffix = '"></a>';
+        // Take the attribute value out of the markup, in whichever quotes it is in
         if (
             ! \is_string($html)
-            || ! str_starts_with($html, $prefix)
-            || ! str_ends_with($html, $suffix)
+            || \preg_match('/\A<a href=(["\'])(.*)\1><\/a>\z/s', $html, $matches) !== 1
         ) {
             return $url;
         }
 
-        return \substr(
-            $html,
-            \strlen($prefix),
-            -\strlen($suffix)
-        );
+        return $matches[2];
     }
 
     /**

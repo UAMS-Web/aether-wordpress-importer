@@ -202,7 +202,7 @@ it('points a deferred cell link at its entry whatever libxml escapes or encodes 
     $expectedHtml = '<table><tbody><tr><td><a href="'.\htmlspecialchars($reference, ENT_QUOTES | ENT_HTML5, 'UTF-8').'">Article</a></td></tr></tbody></table>';
 
     expect($replaced)->toBe([tableCellLinkSet([['cells' => tableCellLinkCells($expectedHtml)]])])
-        ->and(tableCellLinkCells($expectedHtml)[0])->toStartWith('<a href="statamic://entry::abc?');
+        ->and(tableCellLinkCells($expectedHtml)[0])->toContain('href=', 'statamic://entry::abc?');
 })->with([
     'an ampersand' => ['https://cells.uams.test/page/?a=1&b=2#s'],
     'an ampersand and angle brackets' => ['https://cells.uams.test/page/?a=1&b=<x>#s'],
