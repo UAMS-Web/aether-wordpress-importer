@@ -4590,7 +4590,7 @@ trait FieldtypeMappingTrait
                 $matches
             ) !== 1
         ) {
-            // Return the original value if format is invalid
+            // Return zero if the format is invalid
             return '0';
         }
 
