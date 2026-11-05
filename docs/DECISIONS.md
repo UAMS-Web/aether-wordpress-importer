@@ -1540,3 +1540,13 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Why.** A reference follows the entry when its slug or parent changes, and the host app's tooling that rewrites references when an entry moves, and its link health checks, can both see it.
 
 **Rejected: writing the entry's URL path into the cell.** A fixed path goes out of date when the entry moves, neither that tooling nor link health can see it, and entry URLs are not reliable partway through an import.
+
+## A Forms fieldtype mapping's `set_attributes` has no `specific` part (#445)
+
+**Decided 2026-11-05, on #445.** `set_attributes` in a Forms fieldtype mapping keeps `default` and loses `specific`. #448 removes the lookup in `FieldtypeMappingTrait::getSetAttributesFromMapping()`, the four empty `specific` tables and their comments, and the tests that pinned the lookup.
+
+**Why.** Nothing uses it, and neither key fits. Measured on 2026-11-05 at `360514b` here and at `d24173d` in `uams-statamic`: the four shipped `specific` tables (three Gravity Forms upload fieldtypes and Formidable `file`) are all empty, and the host app sets no `set_attributes` and does not touch the importer's Forms mapping classes. The full measurement and its controls are on #445.
+
+**Rejected: matching on the source fieldtype handle**, as the shipped comments documented. The table is already chosen by fieldtype, so a `specific` entry keyed by that same type can only repeat `default`.
+
+**Rejected: matching on the field's own key or id**, as the code did, with integer Gravity Forms ids fixed. That keeps a per-field override nobody has used, in a mapping every form shares, where one form's field key or id means nothing in another.
