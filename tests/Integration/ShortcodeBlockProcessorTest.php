@@ -26,6 +26,13 @@ uses(StatamicTestCase::class);
  * and no-shortcodes-extracted paths) and builds page-builder blocks with
  * Statamic's `RowId`, both of which need a booted container.
  *
+ * Equivalent mutants retain the duplicate native comment/document guards,
+ * native node-value fallbacks, and trims of unchanged blockContent() results.
+ * The diagnostic coalesces are grouped so each narrow annotation covers one
+ * operation without hiding the entity-reference fallback. With these native-DOM
+ * invariants and the pre-existing strict string-membership equivalent explained,
+ * every killable mutant is dead in the recorded Linux mutation population.
+ *
  * @command  php vendor/bin/pest tests/Integration/ShortcodeBlockProcessorTest.php
  */
 /**
@@ -337,8 +344,7 @@ it('PeopleShortcodeProcessor normalizes attribute values to lowercase in parse()
         'default',
         $this->assetImporter,
         shortcodeBlockOutput(),
-        [],
-        null
+        []
     );
 
     $attrs = shortcodeBlockNormalizeStringKeyedArray($result['attrs'] ?? null);
@@ -360,8 +366,7 @@ it('PeopleShortcodeProcessor normalizes attribute values in toPageBuilderBlock()
             'default',
             $this->assetImporter,
             shortcodeBlockOutput(),
-            [],
-            null
+            []
         )
     );
 
@@ -381,8 +386,7 @@ it('PeopleShortcodeProcessor trims attribute values before processing', function
             'default',
             $this->assetImporter,
             shortcodeBlockOutput(),
-            [],
-            null
+            []
         )
     );
 
@@ -887,3 +891,227 @@ it('process renders a lone shortcode once, with or without a page builder block'
     'table, a page builder block' => ['[table id=1 /]', 'table'],
     'caption, html alone' => ['[caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption]', 'caption'],
 ]);
+
+it('reports bounded empty-block diagnostics without reading past the closing comment', function (int $count, ?string $page, ?string $whitespace, bool $closed): void {
+    // Ignore non-content nodes but retain diagnostics that identify the export.
+    ProcessingContext::clearFormConfigContext();
+    ProcessingContext::setWordPressPageLink('https://example.test/source');
+    $root = $this->doc->appendChild($this->doc->createElement('div'));
+    $opening = $root->appendChild($this->doc->createComment('wp:shortcode'));
+    $expected = [];
+
+    for ($index = 0; $index < $count; $index++) {
+        $root->appendChild($this->doc->createComment('N'.str_repeat('x', 119)));
+
+        if ($index < 10) {
+            $expected[] = ['type' => DOMComment::class, 'nodeType' => XML_COMMENT_NODE, 'content_preview' => 'N'.str_repeat('x', 99), 'is_empty_after_trim' => null];
+        }
+    }
+
+    // Include whitespace diagnostics and a block that ends at the parent boundary.
+    if ($whitespace !== null) {
+        $root->appendChild($this->doc->createTextNode($whitespace));
+        $expected[] = ['type' => DOMText::class, 'nodeType' => XML_TEXT_NODE, 'content_preview' => $whitespace, 'is_empty_after_trim' => true];
+    }
+
+    if ($closed) {
+        $root->appendChild($this->doc->createComment('/wp:shortcode'));
+        $root->appendChild($this->doc->createElement('p', 'Outside the block'));
+    }
+
+    // Require the complete warning payload, including the ten-node diagnostic cap.
+    Log::shouldReceive('warning')->once()->withArgs(
+        /** @param array<string, mixed> $context */
+        static fn (string $message, array $context): bool => $message === 'ShortcodeBlockProcessor::process: No valid content found in wp:shortcode block (from entry: https://example.test/source)'
+            && $context === ['site' => 'clinic', 'pageSlug' => $page ?? 'none', 'node_info' => $expected, 'nodes_checked' => count($expected), 'entry_url' => 'https://example.test/source']
+    );
+
+    try {
+        expect($this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput(), pageSlug: $page))->toBeNull();
+    } finally {
+        ProcessingContext::clearWordPressPageLink();
+    }
+})->with([
+    'no siblings before the close' => [0, null, null, true],
+    'comment and whitespace diagnostics' => [1, 'entry', " \t", true],
+    'the diagnostic cap and an extra sibling' => [11, 'entry', null, true],
+    'missing closing comment' => [0, null, null, false],
+]);
+
+it('keeps unrecognized content and reports its exact preview and bracket diagnostics', function (string $content, int $length, string $preview, bool $starts, bool $ends, ?string $page): void {
+    // Isolate the warning from any context left by another import.
+    ProcessingContext::clearWordPressPageLink();
+    ProcessingContext::clearFormConfigContext();
+    $root = $this->doc->appendChild($this->doc->createElement('div'));
+    $opening = $root->appendChild($this->doc->createComment('wp:shortcode'));
+    $root->appendChild($this->doc->createTextNode($content));
+    $root->appendChild($this->doc->createComment('/wp:shortcode'));
+
+    // Require preserved content and bounded diagnostics, not only a warning count.
+    Log::shouldReceive('warning')->once()->withArgs(
+        /** @param array<string, mixed> $context */
+        static fn (string $message, array $context): bool => $message === 'ShortcodeBlockProcessor::process: No shortcodes extracted from wp:shortcode block content'
+            && $context === ['site' => 'clinic', 'pageSlug' => $page ?? 'none', 'shortcode_content' => $content, 'content_length' => $length, 'content_preview' => $preview, 'starts_with_bracket' => $starts, 'ends_with_bracket' => $ends]
+    );
+
+    expect($this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput(), pageSlug: $page))->toBe($content);
+})->with([
+    'opening bracket only' => ['['.str_repeat('a', 210), 211, '['.str_repeat('a', 199), true, false, null],
+    'closing bracket only' => [str_repeat('b', 210).']', 211, str_repeat('b', 200), false, true, 'entry'],
+    'literal replacement text' => ['PEST Mutator was here!', 22, 'PEST Mutator was here!', false, false, 'entry'],
+]);
+
+it('clears block-scoped identifiers before an injected processor builds a page builder set', function (): void {
+    // Return a custom payload whose IDs must not leak from block scope into the set.
+    $shortcodes = $this::createStub(ShortcodeProcessor::class);
+    $shortcodes->method('extract')->willReturn([['name' => 'custom', 'original' => '[custom]', 'id' => 'block-id', 'link' => 'https://example.test/block']]);
+    $shortcodes->method('getHandlers')->willReturn(['custom' => ['set' => 'custom', 'class' => PeopleShortcodeProcessor::class]]);
+    $shortcodes->method('toTiptapHtml')->willReturn('<p>Rendered</p>');
+    $shortcodes->method('process')->willReturnCallback(
+        /** @param array<int|string, mixed> $shortcode */
+        static fn (array $shortcode): array => ['type' => 'custom', 'id' => $shortcode['id'], 'link' => $shortcode['link']]
+    );
+    $processor = new ShortcodeBlockProcessor($shortcodes);
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->[custom]<!-- /wp:shortcode --></div>');
+
+    // Observe the extension's returned set rather than private dispatch details.
+    expect($processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBe([
+        'html' => '<p>Rendered</p>', 'skipCount' => 3, 'page_builder_set' => ['type' => 'custom', 'id' => '', 'link' => ''],
+    ]);
+});
+
+it('reads block boundaries only from comments and preserves text whitespace between elements', function (): void {
+    // Text and processing instructions cannot act as closing comments.
+    $root = $this->doc->appendChild($this->doc->createElement('div'));
+    $opening = $root->appendChild($this->doc->createComment(' wp:shortcode '));
+    $root->appendChild($this->doc->createProcessingInstruction('ignored', '/wp:shortcode'));
+    $root->appendChild($this->doc->createTextNode(' /wp:shortcode '));
+    $root->appendChild($this->doc->createElement('b', 'Kept'));
+    $root->appendChild($this->doc->createTextNode(' tail '));
+    $root->appendChild($this->doc->createComment(' /wp:shortcode '));
+    $root->appendChild($this->doc->createElement('p', 'Outside'));
+
+    // Count all inner nodes but ignore processing instructions as content.
+    expect($this->processor->canProcess($opening, 'clinic', null))->toBeTrue()
+        ->and(ShortcodeBlockProcessor::blockContent($opening))->toBe('/wp:shortcode <b>Kept</b> tail')
+        ->and(ShortcodeBlockProcessor::blockSkipCount($opening))->toBe(6);
+});
+
+it('reports the exact image snippet at the truncation boundary', function (int $width, ?string $page): void {
+    // Drop the shortcode but retain an adjacent image for the warning summary.
+    ImportWarningManager::clearWarnings();
+    ProcessingContext::clearWordPressPageLink();
+    $source = str_repeat('x', $width);
+    $image = '<img src="'.$source.'">';
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$image.'[subpage-list]<!-- /wp:shortcode --></div>');
+
+    try {
+        $result = $this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput(), pageSlug: $page);
+        $warnings = ImportWarningManager::getWarnings('content', 'images_beside_shortcodes');
+    } finally {
+        ImportWarningManager::clearWarnings();
+    }
+
+    // Only the 101-character tag loses its final character to truncation.
+    expect($result)->toBe($image)
+        ->and($warnings)->toBe([[
+            'site' => 'clinic', 'page_slug' => $page ?? '', 'page_link' => '',
+            'content_snippet' => $width === 88 ? $image : '<img src="'.$source.'"...',
+            'reason' => 'An image beside a shortcode in a wp:shortcode block was not imported.',
+        ]]);
+})->with([
+    'exactly 100 characters' => [88, null],
+    'one character beyond the limit' => [89, 'entry'],
+]);
+
+it('identifies content beside shortcodes without treating malformed payloads or wrappers as text', function (array $shortcodes, string $content, bool $expected): void {
+    expect(ShortcodeBlockProcessor::holdsContentBesideShortcodes($shortcodes, $content))->toBe($expected);
+})->with([
+    'only a shortcode in a wrapper' => [[['original' => '[custom]']], '<p>[custom]</p>', false],
+    'a literal replacement text shortcode' => [[['original' => 'PEST Mutator was here!']], '<p>PEST Mutator was here!</p>', false],
+    'missing original' => [[[]], 'PEST Mutator was here!', true],
+    'nonnumeric malformed payload' => [['invalid', ['original' => []]], '<p>Kept</p>', true],
+    'non-breaking whitespace' => [[['original' => '[custom]']], "\u{A0}[custom]", false],
+    'an image without text' => [[['original' => '[custom]']], '<img src="x">[custom]', true],
+]);
+
+it('preserves content when an injected extractor cannot locate its original text', function (array $payload): void {
+    // The public injection contract permits partially populated extractor results.
+    $shortcodes = $this::createStub(ShortcodeProcessor::class);
+    $shortcodes->method('extract')->willReturn([$payload]);
+    $shortcodes->method('getHandlers')->willReturn(['custom' => ['set' => 'custom', 'class' => PeopleShortcodeProcessor::class]]);
+    $shortcodes->method('process')->willReturn(['type' => 'custom']);
+    $shortcodes->method('toTiptapHtml')->willReturn('<p>Rendered</p>');
+    $processor = new ShortcodeBlockProcessor($shortcodes);
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->PEST Mutator was here!<!-- /wp:shortcode --></div>');
+
+    // Retain unmatched content after the set rather than deleting or replacing it.
+    $result = $processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput());
+
+    expect($result)->toBe([
+        'html' => 'PEST Mutator was here!', 'skipCount' => 3, 'page_builder_set' => ['type' => 'custom'], 'html_after' => 'PEST Mutator was here!',
+    ]);
+})->with([
+    'missing original text' => [['name' => 'custom']],
+    'invalid original text' => [['name' => 'custom', 'original' => []]],
+    'original not found in the block' => [['name' => 'custom', 'original' => '[elsewhere]']],
+]);
+
+it('does not dispatch malformed names to a different registered shortcode', function (array $payload): void {
+    // A custom registry distinguishes the empty fallback from a registered name.
+    $shortcodes = $this::createStub(ShortcodeProcessor::class);
+    $shortcodes->method('extract')->willReturn([$payload + ['original' => '[custom]']]);
+    $shortcodes->method('getHandlers')->willReturn(['PEST Mutator was here!' => ['set' => 'custom', 'class' => PeopleShortcodeProcessor::class]]);
+    $shortcodes->method('process')->willReturn(['type' => 'wrong-handler']);
+    $shortcodes->method('toTiptapHtml')->willReturn('<p>Wrong handler</p>');
+    $processor = new ShortcodeBlockProcessor($shortcodes);
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->[custom]<!-- /wp:shortcode --></div>');
+
+    // An absent or invalid name must leave the original block content alone.
+    expect($processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBe('[custom]');
+})->with([
+    'missing name' => [[]],
+    'invalid name' => [['name' => []]],
+]);
+
+it('drops whitespace left between empty wrappers after removing a shortcode', function (): void {
+    // Removing a shortcode can expose whitespace inside an already-trimmed block.
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>[subpage-list]</p> <p></p><!-- /wp:shortcode --></div>');
+
+    expect($this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBe('');
+});
+
+it('retains entity text in empty-block diagnostics when nodeValue is null', function (): void {
+    // Entity references expose expanded text through textContent, not nodeValue.
+    ProcessingContext::clearWordPressPageLink();
+    ProcessingContext::clearFormConfigContext();
+    $this->doc->loadXML('<!DOCTYPE root [<!ENTITY named "Named content">]><root><!--wp:shortcode-->&named;<!--/wp:shortcode--></root>');
+    $root = $this->doc->documentElement;
+    $this::assertInstanceOf(DOMElement::class, $root);
+    $opening = $root->firstChild;
+    $this::assertInstanceOf(DOMComment::class, $opening);
+
+    // Require expanded text in the warning without importing a non-content node.
+    Log::shouldReceive('warning')->once()->withArgs(
+        /** @param array<string, mixed> $context */
+        static fn (string $message, array $context): bool => $message === 'ShortcodeBlockProcessor::process: No valid content found in wp:shortcode block'
+            && $context === ['site' => 'clinic', 'pageSlug' => 'none', 'node_info' => [
+                ['type' => DOMEntityReference::class, 'nodeType' => XML_ENTITY_REF_NODE, 'content_preview' => 'Named content', 'is_empty_after_trim' => null],
+            ], 'nodes_checked' => 1]
+    );
+
+    expect($this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBeNull();
+});
+
+it('keeps the existing empty-result fallback when paragraph cleanup exhausts its regex limit', function (): void {
+    // Pin current failure behavior separately from successful cleanup.
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>'.str_repeat(' ', 100).'text[subpage-list]</p><!-- /wp:shortcode --></div>');
+    $previous = ini_set('pcre.backtrack_limit', '10');
+
+    try {
+        expect($this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBe('')
+            ->and(preg_last_error())->toBe(PREG_BACKTRACK_LIMIT_ERROR);
+    } finally {
+        ini_set('pcre.backtrack_limit', $previous);
+    }
+});
