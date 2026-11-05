@@ -88,14 +88,14 @@ it('never emits the raw human choice text as an option key', function (): void {
     // The pre-#299 shape used the choice text verbatim as the key, so a label with
     // spaces, parentheses or an ampersand became the submitted value.
     $options = productOptions(productAttributes('radio', [
-        ['text' => 'Children\'s Ticket & Meal', 'value' => 'Children\'s Ticket & Meal', 'price' => '$5.00'],
+        ['text' => "Children's Ticket & Meal", 'value' => "Children's Ticket & Meal", 'price' => '$5.00'],
     ]));
 
     $key = $options[0]['key'] ?? '';
 
     expect($key)->toBeString();
     expect($key)->toMatch('/^[a-z0-9_]+$/');
-    expect($key)->not->toBe('Children\'s Ticket & Meal');
+    expect($key)->not->toBe("Children's Ticket & Meal");
 })->group('gf-product');
 
 it('keeps option keys distinct when two choices share the same text', function (): void {
@@ -177,6 +177,29 @@ it('warns on each product mode the Statamic fieldtype cannot express', function 
     'calculation' => ['calculation'],
 ])->group('gf-product');
 
+it('names a product field without a usable id with a placeholder', function (array $id): void {
+    FieldtypeMapping::addUnsupportedProductModeWarning(
+        [
+            ...$id,
+            'label' => 'Product Name',
+            'type' => 'product',
+            'inputType' => 'price',
+        ],
+        'Springdale Caregiving',
+        'Product Name',
+        '16'
+    );
+
+    $warnings = ImportWarningManager::getWarnings('forms', 'unsupported_product_modes');
+    $first = \is_array($warnings[0] ?? null) ? $warnings[0] : [];
+
+    expect($warnings)->toHaveCount(1)
+        ->and($first['field_id'] ?? null)->toBe('?');
+})->with([
+    'no id' => [[]],
+    'an id that is not a scalar' => [['id' => [8]]],
+])->group('gf-product');
+
 it('stays quiet for the product modes that do map', function (mixed $inputType): void {
     $field = [
         'id' => 8,
@@ -205,8 +228,7 @@ it('raises the unsupported-mode warning through the real blueprint path', functi
     // mapping — the path an import actually takes — so deleting the call site
     // turns this red rather than shipping the feature dead.
     $creator = new FormBlueprintCreator;
-    $method = (new ReflectionClass($creator))->getMethod('getMappedFieldAttributes');
-    $method->setAccessible(true);
+    $method = new ReflectionClass($creator)->getMethod('getMappedFieldAttributes');
 
     $method->invoke(
         $creator,
@@ -235,8 +257,7 @@ it('raises the unsupported-mode warning through the real blueprint path', functi
 
 it('raises no unsupported-mode warning through the blueprint path for a supported mode', function (): void {
     $creator = new FormBlueprintCreator;
-    $method = (new ReflectionClass($creator))->getMethod('getMappedFieldAttributes');
-    $method->setAccessible(true);
+    $method = new ReflectionClass($creator)->getMethod('getMappedFieldAttributes');
 
     $attributes = $method->invoke(
         $creator,
