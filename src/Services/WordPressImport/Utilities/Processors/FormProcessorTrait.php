@@ -114,6 +114,8 @@ trait FormProcessorTrait
             [
                 'site' => $site,
                 'pageSlug' => $pageSlug ?? 'none',
+                // The block processor calls this warning only with a null form ID.
+                // @pest-mutate-ignore: CoalesceRemoveLeft
                 'form_id' => $formId ?? 'none',
                 'attributes' => $attributes,
             ]
@@ -162,6 +164,8 @@ trait FormProcessorTrait
             return null;
         }
 
+        // PHP normalizes integer keys identically before and after a string cast.
+        // @pest-mutate-ignore: RemoveStringCast
         $formIdString = (string) $formId;
         // Check the appropriate static cache based on plugin name
         if ($pluginName === 'Gravity Forms') {
@@ -213,6 +217,8 @@ trait FormProcessorTrait
         string $formHandle,
         string $pluginName
     ): void {
+        // Array keys normalize integers and null to the same keys as these casts.
+        // @pest-mutate-ignore: RemoveStringCast
         $formIdString = (string) $formId;
 
         if ($pluginName === 'Gravity Forms') {

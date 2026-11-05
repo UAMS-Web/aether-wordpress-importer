@@ -11,6 +11,12 @@ declare(strict_types=1);
  * is in the light Statamic band because the set's row ID comes from Statamic's
  * RowId fieldtype.
  *
+ * The shared FormProcessorTrait retains three equivalent-mutant annotations:
+ * two string casts used only as array keys, which PHP normalizes identically,
+ * and the warning's form-ID fallback, whose only caller supplies null. The
+ * warning payload is asserted in GravityFormsBlockProcessorTest. With those
+ * equivalents documented, every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/NinjaFormsShortcodeProcessorTest.php
  */
 

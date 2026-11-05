@@ -16,6 +16,11 @@ declare(strict_types=1);
  * This is in the light Statamic band because the warning goes through the
  * `Log` facade.
  *
+ * The shared block trait retains three equivalent mutants: changing the empty
+ * string check still falls through to is_numeric(), which rejects either text;
+ * and forcing integer IDs through the final string cast preserves their notes,
+ * cached handles, and tracked references. Every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/GravityFormsBlockProcessorTest.php
  */
 
