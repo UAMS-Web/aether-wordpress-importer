@@ -442,7 +442,7 @@ the fix is same-repo the author sees it in their own diff; when it is cross-repo
 the consuming tree, on whoever bumped the pin.
 
 **A characterization test whose inverting ticket lives in the sibling repo tags itself
-`@invertsOn org/repo#N`, and a ⚠️ release greps the host checkout for tickets in its range and
+`@invertsOn org/repo#N`, and a breaking-change release greps the host checkout for tickets in its range and
 names the hits in the callout.** Two lines of convention and one step in an existing flow.
 
 - **Rejected:** an automated sweep, a CI job, or a cross-repo bot. The measured cross-repo count
@@ -464,7 +464,7 @@ all pinning same-repo behavior, and none in this package. So the worked example 
 the first real use of the tag will be the next cross-repo gap somebody pins.
 
 **The DRY line.** This decision covers *naming* a test that a breaking change will invert. It does
-not cover deciding whether the breaking change is right — the ⚠️ classes stay above in this file,
+not cover deciding whether the breaking change is right — the breaking-change classes stay above in this file,
 the callout format stays in the `writing-release-notes` skill, and the tag's own semantics stay in
 [`tests/CLAUDE.md`](../tests/CLAUDE.md).
 
