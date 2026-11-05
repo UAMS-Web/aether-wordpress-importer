@@ -358,8 +358,13 @@ class PostAudioProcessor
         }
 
         // Combine content before first segment and after last segment
+        // Both pieces are trimmed; retaining an empty piece only adds outer newlines,
+        // which processIntroContent and TextProcessor trim before parsing.
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $introParts = \array_filter(
             [$beforeFirst, $afterLast],
+            // Both inputs are already trimmed by their extraction paths.
+            // @pest-mutate-ignore: UnwrapTrim
             fn (string $part): bool => \trim($part) !== ''
         );
 
@@ -697,6 +702,8 @@ class PostAudioProcessor
 
         // Extract text between "Download this episode</a>" and [accordion]
         $downloadLinkLength = \strlen($downloadLinkPattern);
+        // The excerpt goes directly to TextProcessor, which trims the same whole input.
+        // @pest-mutate-ignore: UnwrapTrim
         $introText = \trim(
             \substr(
                 $segment,
@@ -706,6 +713,9 @@ class PostAudioProcessor
         );
 
         // Return empty array if no intro text is found
+        // Falling through with empty text still returns [] before content processing;
+        // TextProcessor may initialize its private processor cache first.
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($introText === '') {
             return [];
         }
@@ -792,6 +802,9 @@ class PostAudioProcessor
         ?string $pageSlug
     ): array {
         // Return empty array if intro content is empty or only whitespace
+        // Whitespace-only input still becomes [] at TextProcessor's empty-input guard.
+        // Skipping this shortcut only allows its private cache allocation to happen earlier.
+        // @pest-mutate-ignore: UnwrapTrim, RemoveEarlyReturn
         if (\trim($intro) === '') {
             return [];
         }
@@ -971,6 +984,8 @@ class PostAudioProcessor
             // the content from [audio] on, so the segment's last [/accordion] is also the
             // content's.
             // ---
+            // This tail is parsed separately, so TextProcessor trims the same whole input.
+            // @pest-mutate-ignore: UnwrapTrim
             $afterAccordion = \trim(
                 \substr(
                     $content,
@@ -990,6 +1005,9 @@ class PostAudioProcessor
                 );
 
                 // Combine intro content
+                // TextProcessor returns indexed lists; merging either with [] preserves
+                // the same list as assigning the tail or retaining the existing intro.
+                // @pest-mutate-ignore: BooleanAndToBooleanOr
                 if (
                     $processedIntro !== []
                     && $afterAccordionProcessed !== []
