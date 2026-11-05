@@ -305,3 +305,11 @@ wpautop
 xmlreader
 xmlwriter
 zipball
+# Existing shortcode fixtures: WordPress handles, alignment class and libxml flags.
+alignright
+NODEFDTD
+NOIMPLIED
+sortpriority
+wardteams
+# Composer vendor name already cited in this dictionary's package documentation.
+spatie
