@@ -1097,7 +1097,8 @@ class DeferredProcessingCoordinator
                         static function () use ($store): void {
                             $store->clear();
                             $store->warm();
-                        }
+                        },
+                        $store
                     );
 
                     // Wait for cache to be ready

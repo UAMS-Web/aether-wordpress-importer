@@ -14,16 +14,28 @@ declare(strict_types=1);
  */
 
 use Carbon\CarbonInterval;
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Sleep;
+use Statamic\Entries\Entry;
+use Statamic\Facades\Collection as CollectionFacade;
+use Statamic\Facades\Entry as EntryFacade;
+use Statamic\Facades\Stache;
+use Statamic\Stache\Indexes\Index;
+use Statamic\Stache\Stores\AggregateStore;
+use Statamic\Stache\Stores\Store;
+use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningDisplayService;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheRebuildGuard;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
-uses(StatamicTestCase::class);
+uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
 beforeEach(function (): void {
     Sleep::fake();
@@ -61,6 +73,115 @@ function stacheGuardOperation(ArrayObject $calls, array $failures): Closure
             throw $failure;
         }
     };
+}
+
+/**
+ * An array cache that refuses every Stache index write while `$refusing` is set,
+ * as Windows refuses a write to a file another handle holds.
+ */
+final class StacheGuardRefusingStore extends ArrayStore
+{
+    /**
+     * Whether index writes are refused.
+     */
+    public static bool $refusing = false;
+
+    /**
+     * {@inheritDoc}
+     */
+    public function forever($key, $value)
+    {
+        if (self::$refusing && \str_starts_with($key, 'stache::indexes::')) {
+            throw stacheGuardRefusal();
+        }
+
+        return parent::forever($key, $value);
+    }
+}
+
+/**
+ * A store's warm state: whether it reuses its memoized entry list, and the list.
+ *
+ * @return array{mixed, mixed}
+ */
+function stacheGuardWarmState(mixed $store): array
+{
+    $read = Closure::bind(static function (Store $target): array {
+        $items = $target->fileItems;
+
+        return [$target->shouldCacheFileItems, $items instanceof Collection ? $items->all() : $items];
+    }, null, Store::class);
+
+    return $store instanceof Store ? $read($store) : [null, null];
+}
+
+/**
+ * The Stache's entries store, after saving a collection for each handle.
+ *
+ * @param  list<string>  $collections  The collection handles
+ */
+function stacheGuardEntries(array $collections = ['pages']): AggregateStore
+{
+    foreach ($collections as $handle) {
+        CollectionFacade::make($handle)->save();
+    }
+
+    $entries = Stache::store('entries');
+
+    if (! $entries instanceof AggregateStore) {
+        throw new LogicException('Expected the entries store to be an aggregate.');
+    }
+
+    return $entries;
+}
+
+/**
+ * A child store of the entries store.
+ */
+function stacheGuardChild(AggregateStore $entries, string $handle): Store
+{
+    $child = $entries->store($handle);
+
+    if (! $child instanceof Store) {
+        throw new LogicException("Expected a '{$handle}' store.");
+    }
+
+    return $child;
+}
+
+/**
+ * Save a page entry with the given id and title.
+ */
+function stacheGuardPage(string $id, string $title): void
+{
+    $entry = EntryFacade::make();
+
+    if (! $entry instanceof Entry) {
+        throw new LogicException('Expected an entry.');
+    }
+
+    $entry->collection('pages');
+    $entry->id($id);
+    $entry->slug($id);
+    $entry->data(['title' => $title]);
+    $entry->save();
+}
+
+/**
+ * Set a store's warm state, as a warm in progress leaves it.
+ *
+ * @param  Collection<string, string>|null  $items  The memoized entry list
+ */
+function stacheGuardSetWarmState(mixed $store, bool $reuse, ?Collection $items): void
+{
+    $set = Closure::bind(static function (Store $target) use ($reuse, $items): void {
+        $target->shouldCacheFileItems = $reuse;
+        $target->fileItems = $items;
+    }, null, Store::class);
+
+    if ($store instanceof Store) {
+        $set($store);
+    }
 }
 
 /**
@@ -173,6 +294,92 @@ it('lets any other failure on the retry propagate, without a warning', function 
     expect($thrown)->toBe($other)
         ->and($calls->count())->toBe(2)
         ->and(ImportWarningManager::getAllWarnings())->toBe([]);
+});
+
+it('resets a refused warm\'s memoized entry list after each refused attempt, so no later warm reuses it', function (int $refusals, bool $result): void {
+    $entries = stacheGuardEntries();
+    $pages = stacheGuardChild($entries, 'pages');
+    $states = new ArrayObject;
+    $failures = array_fill(0, $refusals, stacheGuardRefusal());
+
+    // Leave the state a warm refused part-way leaves, then refuse; record what each attempt starts from
+    $operation = static function () use ($pages, $states, &$failures): void {
+        $states->append(stacheGuardWarmState($pages));
+        stacheGuardSetWarmState($pages, true, collect(['stale-id' => 'stale']));
+
+        $failure = array_shift($failures);
+
+        if ($failure instanceof Throwable) {
+            throw $failure;
+        }
+
+        // A warm that finishes resets its own state, as Statamic's does
+        stacheGuardSetWarmState($pages, false, null);
+    };
+
+    expect(StacheRebuildGuard::run('a site', 'entries', $operation, $entries))->toBe($result)
+        ->and($states->getArrayCopy())->toBe([[false, null], [false, null]])
+        ->and(stacheGuardWarmState($pages))->toBe([false, null]);
+})->with([
+    'refused once' => [1, true],
+    'refused twice' => [2, false],
+]);
+
+it('lets the next warm after a skipped one see entries saved since (#325)', function (): void {
+    // The Stache's cache refuses its index writes while the flag is up
+    StacheGuardRefusingStore::$refusing = false;
+    Cache::extend('stache-guard-refusing', static fn (): Repository => Cache::repository(new StacheGuardRefusingStore));
+    config([
+        'cache.stores.stache-guard-refusing' => ['driver' => 'stache-guard-refusing'],
+        'statamic.stache.cache_store' => 'stache-guard-refusing',
+    ]);
+    $entries = stacheGuardEntries();
+    stacheGuardPage('first', 'First');
+    $pages = stacheGuardChild($entries, 'pages');
+
+    // A warm refused twice is skipped
+    StacheGuardRefusingStore::$refusing = true;
+    $skipped = StacheRebuildGuard::run('a site', 'entries', static function () use ($entries): void {
+        $entries->warm();
+    }, $entries);
+    StacheGuardRefusingStore::$refusing = false;
+
+    // An entry saved afterwards must be in the indexes the next warm builds
+    stacheGuardPage('second', 'Second');
+    $pages->warm();
+    $index = $pages->index('title');
+    $items = $index instanceof Index ? $index->items() : null;
+    $titles = $items instanceof Collection ? $items->sort()->values()->all() : null;
+
+    expect($skipped)->toBeFalse()
+        ->and($titles)->toBe(['First', 'Second']);
+});
+
+it('leaves the warm state alone when it is given no store', function (): void {
+    $pages = stacheGuardChild(stacheGuardEntries(), 'pages');
+    $operation = static function () use ($pages): void {
+        stacheGuardSetWarmState($pages, true, collect(['stale-id' => 'stale']));
+
+        throw stacheGuardRefusal();
+    };
+
+    StacheRebuildGuard::run('a site', 'entries', $operation);
+
+    expect(stacheGuardWarmState($pages)[0])->toBeTrue();
+});
+
+it('resets the warm state of a plain store, and of every child of an aggregate', function (): void {
+    $entries = stacheGuardEntries(['pages', 'posts']);
+    $children = [stacheGuardChild($entries, 'pages'), stacheGuardChild($entries, 'posts')];
+
+    foreach ([$entries, ...$children] as $store) {
+        stacheGuardSetWarmState($store, true, collect(['stale-id' => 'stale']));
+    }
+
+    StacheRebuildGuard::resetWarmState($entries);
+    StacheRebuildGuard::resetWarmState(null);
+
+    expect(array_map(stacheGuardWarmState(...), [$entries, ...$children]))->toBe([[false, null], [false, null], [false, null]]);
 });
 
 it('knows a refused cache write by its message', function (string $message, bool $transient): void {

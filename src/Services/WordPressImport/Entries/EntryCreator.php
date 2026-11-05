@@ -877,7 +877,8 @@ class EntryCreator
                 static function () use ($store): void {
                     $store->clear();
                     $store->warm();
-                }
+                },
+                $store
             );
             $collection = Collection::findByHandle($collectionHandle);
             if ($collection === null) {

@@ -1474,6 +1474,25 @@ describe('what it asks of the creator', function (): void {
         Sleep::assertSlept(static fn (CarbonInterval $duration): bool => (int) $duration->totalMicroseconds === 1500000, 1);
     });
 
+    it('carries on, and records the skipped rebuild, when the store\'s warm is refused twice (#325)', function (): void {
+        entryCreatorCollection('posts', ['post']);
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+        $store = Mockery::mock(Store::class);
+        $refusal = new ErrorException('file_put_contents(C:\app\storage\framework\cache\data\stache\indexes\entries-posts-title): Failed to open stream: Resource temporarily unavailable');
+        entryCreatorExpects($store, 'clear')->twice();
+        entryCreatorExpects($store, 'warm')->twice()->andThrow($refusal);
+        entryCreatorWarmingStore($store);
+
+        $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput);
+
+        expect(ImportWarningManager::getWarnings('stache', 'skipped_rebuilds'))->toBe([[
+            'location' => "after creating the 'posts' entries",
+            'store' => 'entries',
+            'error' => $refusal->getMessage(),
+        ]]);
+    });
+
     it('records nothing when the store rebuilds (#325)', function (): void {
         entryCreatorCollection('posts', ['post']);
         $rig = entryCreatorRig();

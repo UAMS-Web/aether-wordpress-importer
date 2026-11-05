@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
+use Closure;
 use ErrorException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
+use Statamic\Stache\Stores\AggregateStore;
+use Statamic\Stache\Stores\Store;
 
 /**
  * Runs a Stache clear or warm in the middle of an import, so a transient
@@ -19,6 +22,12 @@ use Illuminate\Support\Sleep;
  * operation once after a short wait; if the retry fails the same way, it
  * records the skipped rebuild with `ImportWarningManager`, so the run's summary
  * names it, and lets the import carry on. Any other failure propagates.
+ *
+ * A warm refused part-way leaves its store holding the list of entries it read
+ * for that warm, flagged for reuse, because Statamic resets that state only
+ * when the warm finishes. A later warm or lazily built index would then work
+ * from the stale list and miss entries saved since. So after each refused
+ * attempt the guard resets that state on the store it was given.
  */
 final class StacheRebuildGuard
 {
@@ -43,11 +52,12 @@ final class StacheRebuildGuard
      * @param  string  $location  Where in the import the rebuild runs, for the warning
      * @param  string  $store  The Stache store being rebuilt, for the warning
      * @param  callable(): mixed  $operation  The clear, warm or both
+     * @param  Store|null  $warmed  The store the operation warms, whose warm state a refusal resets
      * @return bool True when the operation completed, false when it was skipped
      *
      * @throws ErrorException When the operation fails other than by a transient cache write
      */
-    public static function run(string $location, string $store, callable $operation): bool
+    public static function run(string $location, string $store, callable $operation, ?Store $warmed = null): bool
     {
         // Try the operation once
         $failure = self::attempt($operation);
@@ -55,12 +65,16 @@ final class StacheRebuildGuard
             return true;
         }
 
-        // Wait for the other handle to let go, then try once more
+        // Wait for the other handle to let go, then try once more from a clean warm state
+        self::resetWarmState($warmed);
         Sleep::usleep(self::RETRY_DELAY);
         $failure = self::attempt($operation);
         if (! $failure instanceof ErrorException) {
             return true;
         }
+
+        // Leave no stale entry list behind for a later warm to reuse
+        self::resetWarmState($warmed);
 
         // Both attempts were refused: record the skipped rebuild and carry on
         $data = [
@@ -99,6 +113,40 @@ final class StacheRebuildGuard
             self::REFUSALS,
             static fn (string $refusal): bool => \str_contains($exception->getMessage(), $refusal)
         );
+    }
+
+    /**
+     * Reset the state a warm refused part-way leaves on a store and, for an
+     * aggregate store, on each of its child stores.
+     *
+     * `Store::warm()` sets `shouldCacheFileItems` and memoizes `fileItems`, and
+     * clears both only after every index has updated. Both are protected, so
+     * they are reset from inside the store's own scope.
+     *
+     * @param  Store|null  $store  The store, or null when the operation warms none
+     */
+    public static function resetWarmState(?Store $store): void
+    {
+        if (! $store instanceof Store) {
+            return;
+        }
+
+        // Reset each child store of an aggregate, such as the entries store
+        $children = $store instanceof AggregateStore ? $store->stores() : [];
+        if (\is_iterable($children)) {
+            foreach ($children as $child) {
+                if ($child instanceof Store) {
+                    self::resetWarmState($child);
+                }
+            }
+        }
+
+        // Clear the flag and the memoized entry list, as a finished warm does
+        $reset = Closure::bind(static function (Store $target): void {
+            $target->shouldCacheFileItems = false;
+            $target->fileItems = null;
+        }, null, Store::class);
+        $reset($store);
     }
 
     /**
