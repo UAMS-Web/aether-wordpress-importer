@@ -1,0 +1,9 @@
+{
+    "_comment": "Read by the Pest job of the shared CI chain (.github/workflows/ci.yml, #415) through .claude/skills/pest-testing/scripts/check-skip-baseline.php. One band covers every runner, so expected is the highest count any runner produces.",
+    "bands": {
+        "suite": {
+            "expected": 26,
+            "why": "Measured on main at 99ece857 in the CI run that preceded #415: 3 skipped on ubuntu-latest and 26 on windows-latest. The 3 are the tests that read the private exports corpus, which CI does not check out (TaxonomyDestinationTest, AccordionShortcodeProcessorTest, AdvertCorpusImportTest). Windows adds the cases guarded by PHP_OS_FAMILY: Laravel Prompts does not run there, chmod() does not deny access there, and opening a directory as a file stream fails there."
+        }
+    }
+}

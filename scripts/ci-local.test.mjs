@@ -104,22 +104,33 @@ describe('bootstrapArgs', () => {
 
 describe('local-ci.json against ci.yml', () => {
     const config = parseConfig(readFileSync(join(ROOT, 'local-ci.json'), 'utf8'))
+    const composer = JSON.parse(readFileSync(join(ROOT, 'composer.json'), 'utf8'))
     const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
     const ciJobs = ci.slice(ci.indexOf('\njobs:')).split('\n').map((line) => /^ {2}([a-z][\w-]*):$/.exec(line)?.[1]).filter(Boolean)
+    const jobText = (job) => ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
     const LOCAL_ONLY = ['dependencies', 'synced-files', 'handed-back-workflow']
     // The aggregate the ruleset requires as `CI` (#163). It runs no command of its own, so it
     // has no local counterpart.
     const AGGREGATE = 'ci'
+    // The job that calls the shared chain in UAMS-Web/uams-ci-workflows (#415).
+    const CALL = 'checks'
     const chained = ciJobs.filter((job) => job !== AGGREGATE)
+    const plain = chained.filter((job) => job !== CALL)
+    // Each local job that mirrors a job of the called chain, and the Composer script that chain
+    // job runs. `validate` runs a fixed command in the chain, not a script.
+    const CHAIN_MIRRORS = { pint: 'test:pint', phpstan: 'stan', rector: 'test:refactor', pest: 'test' }
+    const CHAIN_VALIDATE = 'composer validate --no-check-publish --no-check-all'
 
     it('reads ci.yml\'s jobs, so an empty comparison cannot pass', () => {
-        assert.ok(ciJobs.length >= 8, `read ${ciJobs.length} ci.yml jobs`)
+        assert.ok(ciJobs.length >= 5, `read ${ciJobs.length} ci.yml jobs`)
+        assert.ok(ciJobs.includes(CALL), `ci.yml has no \`${CALL}\` job`)
     })
 
-    it('runs every job ci.yml gates, and nothing else but the declared local-only jobs', () => {
+    it('runs every plain job, every chain job it mirrors, and nothing else but the declared local-only jobs', () => {
         const names = config.jobs.map((job) => job.name)
+        const mirrored = [...plain, 'validate', ...Object.keys(CHAIN_MIRRORS)]
 
-        assert.deepEqual(names.filter((name) => !LOCAL_ONLY.includes(name)).sort(), [...chained].sort())
+        assert.deepEqual(names.filter((name) => !LOCAL_ONLY.includes(name)).sort(), mirrored.sort())
         assert.deepEqual(names.filter((name) => LOCAL_ONLY.includes(name)).sort(), [...LOCAL_ONLY].sort())
     })
 
@@ -134,29 +145,58 @@ describe('local-ci.json against ci.yml', () => {
         assert.equal(run['handed-back-workflow'], 'node .claude/skills/handed-back-label/scripts/check-handed-back-workflow.mjs')
     })
 
-    it('runs each mirrored command as ci.yml does', () => {
+    it('runs each mirrored plain command as ci.yml does', () => {
         const run = Object.fromEntries(config.jobs.map((job) => [job.name, job.run]))
         const ciLines = ci.split('\n').map((line) => line.trim())
 
-        for (const name of ['validate', 'rector', 'pest', 'node-test', 'python-test']) {
-            // A whole line, not a substring: `--testsuite=Unit` is a prefix of ci.yml's
-            // `--testsuite=Unit,Integration`, so `includes` would pass a narrowed command.
-            // `--shard` is the one difference a shard's command may carry (#376).
-            const mirrored = ciLines.map((line) => line.replace(/ --shard=.*$/, ''))
-            assert.ok(mirrored.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
+        for (const name of ['node-test', 'python-test']) {
+            // A whole line, not a substring, so a narrowed command cannot pass.
+            assert.ok(ciLines.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
         }
     })
 
-    // A shard left out of the matrix drops its tests with every check still green, so this
-    // is the failure nothing else would report (#376).
-    it('runs every Pest shard on the matrix', () => {
-        const own = ci.slice(ci.indexOf('\n  pest:\n') + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
-        const total = Number(/--shard=\$\{\{ matrix\.shard \}\}\/(\d+)$/m.exec(own)?.[1])
-        const shards = (/^ {8}shard: \[([\d, ]+)\]$/m.exec(own)?.[1] ?? '').split(', ').map(Number)
+    // The called chain runs Composer scripts from this repository's checkout, so a local command
+    // mirrors it when it is that script, with `vendor/bin/` in front of a Composer binary.
+    it('runs each chain job\'s Composer script as the chain does', () => {
+        const run = Object.fromEntries(config.jobs.map((job) => [job.name, job.run]))
 
-        assert.ok(total >= 2, `read a shard total of ${total}`)
-        assert.deepEqual(shards, Array.from({ length: total }, (_, index) => index + 1))
-        assert.match(own, new RegExp(`^ {4}name: Pest shard \\$\\{\\{ matrix\\.shard \\}\\}/${total} `, 'm'))
+        assert.equal(run.validate, CHAIN_VALIDATE)
+
+        for (const [name, script] of Object.entries(CHAIN_MIRRORS)) {
+            const command = composer.scripts?.[script]
+
+            assert.equal(typeof command, 'string', `composer.json has no \`${script}\` script`)
+            assert.equal(run[name], command.startsWith('node ') ? command : `vendor/bin/${command}`, `${name} does not run \`composer ${script}\``)
+        }
+    })
+
+    // A tracked PHP file under a dot-directory is skipped by a bare `pint --test`, so the script
+    // the chain's Pint job runs must be the one that names those directories.
+    it('lints the dot-directories in the chain\'s Pint job', () => {
+        assert.equal(composer.scripts?.['test:pint'], 'node scripts/run-pint.mjs')
+    })
+
+    describe('the call to the shared chain', () => {
+        const own = jobText(CALL)
+
+        it('pins a release tag, never a branch', () => {
+            assert.match(own, /^ {4}uses: UAMS-Web\/uams-ci-workflows\/\.github\/workflows\/ci\.yml@v\d+\.\d+\.\d+$/m)
+        })
+
+        // The Windows leg (#186). The chain runs these four on Linux alone unless they are named.
+        it('keeps every chain job on Windows', () => {
+            const listed = (/^ {6}all-platform-jobs: '([^']*)'$/m.exec(own)?.[1] ?? '').split(/\s+/)
+
+            for (const job of ['composer-validate', 'pint', 'rector', 'phpstan']) {
+                assert.ok(listed.includes(job), `${job} is not in all-platform-jobs`)
+            }
+            assert.doesNotMatch(own, /^ {6}linux-only: true$/m)
+        })
+
+        // Deferred to post-launch on #315: no mutation run of this repository finished on a hosted runner.
+        it('leaves mutation testing to the local run, as #315 decided', () => {
+            assert.match(own, /^ {6}mutate: false$/m)
+        })
     })
 
     describe('the CI aggregate the ruleset requires', () => {
@@ -174,7 +214,7 @@ describe('local-ci.json against ci.yml', () => {
         })
 
         it('needs every other job, so a job left off the list is required by nothing', () => {
-            assert.ok(chained.length >= 8, `read ${chained.length} chained jobs`)
+            assert.ok(chained.length >= 4, `read ${chained.length} chained jobs`)
             assert.deepEqual([...needs].sort(), [...chained].sort())
         })
 
@@ -183,18 +223,17 @@ describe('local-ci.json against ci.yml', () => {
             assert.doesNotMatch(body, /RUN_REMOTE_CI/)
 
             for (const job of chained) {
-                const own = ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
-                assert.match(own, /^ {4}if: vars\.RUN_REMOTE_CI != 'false'$/m, `${job} is not gated`)
+                assert.match(jobText(job), /^ {4}if: vars\.RUN_REMOTE_CI != 'false'$/m, `${job} is not gated`)
             }
         })
 
         // The Windows leg (#186). A matrix keeps one `needs:` entry per job, so this is what
         // fails when a job stops running on Windows: nothing in `needs:` would change.
-        it('runs every job on both operating systems, each leg reporting', () => {
-            assert.ok(chained.length >= 8, `read ${chained.length} chained jobs`)
+        it('runs every plain job on both operating systems, each leg reporting', () => {
+            assert.ok(plain.length >= 3, `read ${plain.length} plain jobs`)
 
-            for (const job of chained) {
-                const own = ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
+            for (const job of plain) {
+                const own = jobText(job)
 
                 assert.match(own, /^ {4}runs-on: \$\{\{ matrix\.os \}\}$/m, `${job} does not run on the matrix`)
                 assert.match(own, /^ {8}os: \[ubuntu-latest, windows-latest\]$/m, `${job} does not list both operating systems`)
@@ -219,6 +258,13 @@ describe('local-ci.json against ci.yml', () => {
         it('passes only when every needed job succeeded', () => {
             assert.ok(script.includes('RESULTS'), 'read no script from the CI step')
             assert.equal(run('success success success').status, 0)
+        })
+
+        it('fails when it reads no results at all', () => {
+            const r = run('')
+
+            assert.equal(r.status, 1)
+            assert.match(r.stdout, /No needed job results to read/)
         })
 
         for (const result of ['failure', 'skipped', 'cancelled']) {
