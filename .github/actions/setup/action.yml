@@ -1,0 +1,64 @@
+name: Set up PHP and Composer
+description: Install PHP (8.4 by default), restore the Composer cache, and install the locked dependencies. Run after actions/checkout.
+
+# cspell:ignore opcache
+# (the PHP extension's ini prefix, which cannot be reworded)
+
+# Template: .claude/skills/code-quality/templates/setup-action.yml in
+# UAMS-Web/uams-claude-skills, copied to .github/actions/setup/action.yml. The jobs of the shared
+# chain that .github/workflows/ci.yml calls run it as `./.github/actions/setup`, from this
+# repository's checkout.
+#
+# This copy differs from the template in three ways, each carried over from the jobs it replaced (#415):
+#
+# - `extensions`: the set the Pest, PHPStan and Rector jobs loaded. PHPStan and Rector reflect over
+#   DOMDocument and SimpleXMLElement, the suite needs gd and SQLite, and a Windows PHP does not load
+#   `fileinfo` by default, which `composer install` checks.
+# - `ini-values`: OPcache on everywhere, with the tracing JIT off on Windows, where PHP 8.4
+#   segfaults partway through this suite under `opcache.jit=tracing` (#254).
+# - The Composer GitHub token: every dependency is public, so the token only lifts api.github.com's
+#   anonymous rate limit for dist downloads.
+
+inputs:
+  php-version:
+    description: The PHP version to install.
+    required: false
+    default: '8.4'
+  coverage:
+    description: The coverage driver to install, as shivammathur/setup-php names it. `none` for every job except the one that runs mutation testing, which passes `pcov`.
+    required: false
+    default: none
+
+runs:
+  using: composite
+  steps:
+    - name: Set up PHP ${{ inputs.php-version }}
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
+        coverage: ${{ inputs.coverage }}
+        tools: composer:v2
+        ini-values: ${{ runner.os == 'Windows' && 'opcache.enable_cli=1, opcache.jit=off' || 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing' }}
+
+    - name: Configure Composer GitHub token
+      shell: bash
+      env:
+        TOKEN: ${{ github.token }}
+      run: composer config --global github-oauth.github.com "$TOKEN"
+
+    - name: Determine Composer cache directory
+      id: composer-cache
+      shell: bash
+      run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Composer packages
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: composer-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock') }}
+        restore-keys: composer-${{ runner.os }}-
+
+    - name: Install Composer dependencies
+      shell: bash
+      run: composer install --no-interaction --no-progress --prefer-dist

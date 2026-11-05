@@ -206,7 +206,7 @@ Core fields (`id`, `type`, `slug`, `status`, `title`, `content`, `excerpt`, `par
 
 `id`, `title`, `link`, `description`, `language`, `wxr_version`, `base_site_url`, `base_blog_url`, `archived`, `deleted`, `spam`, and `counts`.
 
-⚠️ **`counts.by_post_type` is a table inventory, not a fetch plan.** It reports raw `wp_posts` rows, so it lists types this deployment does not serve (`revision`, `acf-field`) *and* types present in the table but **not registered in the running process** — on the install measured, 28 `kb` and 6 `uamspeople` rows that `GET /posts/kb` answers with a `404`. That is deliberate and recorded upstream as **D-036**; the registration signal lives on `/post-types`, not here.
+**`counts.by_post_type` is a table inventory, not a fetch plan.** It reports raw `wp_posts` rows, so it lists types this deployment does not serve (`revision`, `acf-field`) *and* types present in the table but **not registered in the running process** — on the install measured, 28 `kb` and 6 `uamspeople` rows that `GET /posts/kb` answers with a `404`. That is deliberate and recorded upstream as **D-036**; the registration signal lives on `/post-types`, not here.
 
 The three post figures differ on purpose: `rows` is the whole table bar `auto-draft`, `posts` counts only the configured types, `by_post_type` is the breakdown. `terms`, `comments` and `options` are single whole-table figures.
 
@@ -269,7 +269,7 @@ Two properties matter for consumers:
 - **A value is served as stored.** A JSON string is a value rather than an encoding, so it goes out as the string it is and the consumer decodes it. `minerva-kb-options` is the example this importer reads.
 - **A single credential-shaped key withholds the whole row**, not just that key. So "settings arrived empty" should send you to the denylist, not to a suspicion that the API is broken.
 
-⚠️ **The filter is a denylist, so its failure direction is leaking rather than dropping.** Anything captured from `/options` and committed to a repository needs review first: on the install measured, at least one credential-bearing core option is **served** rather than withheld (it happened to hold a default placeholder, but a configured site would not). Check `/options` output for credential-bearing names before committing it.
+**The filter is a denylist, so its failure direction is leaking rather than dropping.** Anything captured from `/options` and committed to a repository needs review first: on the install measured, at least one credential-bearing core option is **served** rather than withheld (it happened to hold a default placeholder, but a configured site would not). Check `/options` output for credential-bearing names before committing it.
 
 ## Error responses
 

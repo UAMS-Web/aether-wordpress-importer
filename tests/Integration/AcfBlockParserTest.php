@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Mockery;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;

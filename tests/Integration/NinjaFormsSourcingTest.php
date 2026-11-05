@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Closure;
 use Illuminate\Console\Command;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Http\Client\Request;
