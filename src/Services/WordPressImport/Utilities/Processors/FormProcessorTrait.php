@@ -148,25 +148,6 @@ trait FormProcessorTrait
     }
 
     /**
-     * Check if a form handle exists for the given form ID.
-     *
-     * @param  string|int|null  $formId  The form ID to check
-     * @param  string  $pluginName  The plugin name ('Gravity Forms', 'Formidable Forms' or 'Ninja Forms')
-     * @return bool True if a form handle exists, false otherwise
-     */
-    protected function hasFormHandle(
-        string|int|null $formId,
-        string $pluginName
-    ): bool {
-        $formHandle = $this->getFormHandle(
-            $formId,
-            $pluginName
-        );
-
-        return $formHandle !== null;
-    }
-
-    /**
      * Get the form handle for the given form ID.
      *
      * @param  string|int|null  $formId  The form ID to look up
