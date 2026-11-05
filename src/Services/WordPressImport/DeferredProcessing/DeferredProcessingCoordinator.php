@@ -22,6 +22,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogConte
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheRebuildGuard;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
 
 /**
@@ -1088,11 +1089,17 @@ class DeferredProcessingCoordinator
 
                 // @pest-mutate-ignore: InstanceOfToTrue
                 if ($store instanceof Store) {
-                    // Clear Stache cache
-                    $store->clear();
-
-                    // Warm Stache cache
-                    $store->warm();
+                    // Clear and warm the store; a cache write refused twice skips the
+                    // rebuild (#325), and the entry is still looked for once more below
+                    StacheRebuildGuard::run(
+                        "loading entry '{$entryId}' from '{$collectionHandle}' for deferred processing",
+                        'entries',
+                        static function () use ($store): void {
+                            $store->clear();
+                            $store->warm();
+                        },
+                        $store
+                    );
 
                     // Wait for cache to be ready
                     Sleep::usleep(500000); // 500ms delay after re-warm

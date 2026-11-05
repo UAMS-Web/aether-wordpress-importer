@@ -10,7 +10,9 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Integration/StacheCacheManagementTraitTest.php
  */
 
+use Illuminate\Support\Sleep;
 use Statamic\Facades\Stache as StacheFacade;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\StacheCacheManagementTrait;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
@@ -109,6 +111,52 @@ final class StacheCacheManagementTraitTestEntriesStore
 }
 
 /**
+ * A collection store whose entries clear throws each of the given failures in turn,
+ * then completes, counting its calls.
+ */
+final class StacheCacheManagementTraitTestRefusingStore
+{
+    /**
+     * How many times the entries clear was called.
+     */
+    public int $clears = 0;
+
+    /**
+     * @param  list<Throwable>  $failures  The failures to throw, in order
+     */
+    public function __construct(
+        private array $failures
+    ) {}
+
+    /**
+     * Clear the paths, which never fails here.
+     */
+    public function clearCachedPaths(): void {}
+
+    /**
+     * Throw the next failure, if any.
+     */
+    public function clear(): void
+    {
+        $this->clears++;
+
+        $failure = array_shift($this->failures);
+
+        if ($failure instanceof Throwable) {
+            throw $failure;
+        }
+    }
+}
+
+/**
+ * The failure PHP raises when Windows refuses a Stache cache write (#173).
+ */
+function stacheCacheTraitRefusal(): ErrorException
+{
+    return new ErrorException('file_put_contents(/app/storage/framework/cache/data/stache/paths/entries-posts): Failed to open stream: Permission denied');
+}
+
+/**
  * Make the Stache facade return the given value for the entries store.
  */
 function stacheCacheTraitEntriesStore(mixed $entriesStore): void
@@ -162,6 +210,44 @@ it('does nothing when the entries store is missing or cannot hand out a collecti
     'no entries store' => [null],
     'an entries store with no store()' => [new stdClass],
 ]);
+
+it('carries on, and records the skipped clear, when the entries clear is refused twice (#325)', function (): void {
+    Sleep::fake();
+    ImportWarningManager::clearWarnings();
+    $collectionStore = new StacheCacheManagementTraitTestRefusingStore([stacheCacheTraitRefusal(), stacheCacheTraitRefusal()]);
+    stacheCacheTraitEntriesStore(new StacheCacheManagementTraitTestEntriesStore($collectionStore));
+
+    (new StacheCacheManagementTraitTestUser)->clear('posts', true);
+
+    expect($collectionStore->clears)->toBe(2)
+        ->and(ImportWarningManager::getWarnings('stache', 'skipped_rebuilds'))->toBe([[
+            'location' => "clearing the 'posts' collection cache",
+            'store' => 'entries::posts',
+            'error' => stacheCacheTraitRefusal()->getMessage(),
+        ]]);
+    ImportWarningManager::clearWarnings();
+});
+
+it('clears the entries on the retry, with no warning, when the first clear is refused (#325)', function (): void {
+    Sleep::fake();
+    ImportWarningManager::clearWarnings();
+    $collectionStore = new StacheCacheManagementTraitTestRefusingStore([stacheCacheTraitRefusal()]);
+    stacheCacheTraitEntriesStore(new StacheCacheManagementTraitTestEntriesStore($collectionStore));
+
+    (new StacheCacheManagementTraitTestUser)->clear('posts', true);
+
+    expect($collectionStore->clears)->toBe(2)
+        ->and(ImportWarningManager::getAllWarnings())->toBe([]);
+});
+
+it('lets any other failure of the entries clear propagate (#325)', function (): void {
+    Sleep::fake();
+    $other = new ErrorException('Undefined array key "posts"');
+    stacheCacheTraitEntriesStore(new StacheCacheManagementTraitTestEntriesStore(new StacheCacheManagementTraitTestRefusingStore([$other])));
+
+    expect(fn () => (new StacheCacheManagementTraitTestUser)->clear('posts', true))
+        ->toThrow(ErrorException::class, 'Undefined array key "posts"');
+});
 
 it('does nothing when the collection store is missing or cannot clear its paths', function (mixed $collectionStore): void {
     $entriesStore = new StacheCacheManagementTraitTestEntriesStore($collectionStore);

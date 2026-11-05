@@ -37,6 +37,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Metadata
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SlugGenerator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheRebuildGuard;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
@@ -869,8 +870,16 @@ class EntryCreator
         // Warm the Stache cache for the collection to ensure entries are indexed
         $store = StacheFacade::store('entries');
         if ($store instanceof Store) {
-            $store->clear();
-            $store->warm();
+            // Rebuild the store, skipping the rebuild if a cache write is refused twice (#325)
+            StacheRebuildGuard::run(
+                "after creating the '{$collectionHandle}' entries",
+                'entries',
+                static function () use ($store): void {
+                    $store->clear();
+                    $store->warm();
+                },
+                $store
+            );
             $collection = Collection::findByHandle($collectionHandle);
             if ($collection === null) {
                 // Enhance log context with entry information

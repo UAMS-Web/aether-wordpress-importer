@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits;
 
 use Statamic\Facades\Stache as StacheFacade;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheRebuildGuard;
 
 /**
  * Trait providing Stache cache management functionality.
@@ -67,7 +68,14 @@ trait StacheCacheManagementTrait
                     'clear'
                 )
             ) {
-                $collectionStore->clear();
+                // A cache write refused twice skips the clear rather than ending the run (#325)
+                StacheRebuildGuard::run(
+                    "clearing the '{$collectionHandle}' collection cache",
+                    "entries::{$collectionHandle}",
+                    static function () use ($collectionStore): void {
+                        $collectionStore->clear();
+                    }
+                );
             }
         }
     }

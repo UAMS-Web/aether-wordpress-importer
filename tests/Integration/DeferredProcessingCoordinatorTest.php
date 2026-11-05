@@ -21,6 +21,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
@@ -66,11 +67,24 @@ final class DpcRecordingStore extends EntriesStore
     public static ?EntriesStore $real = null;
 
     /**
+     * The failures each clear throws in turn, before the clears complete.
+     *
+     * @var list<Throwable>
+     */
+    public static array $clearFailures = [];
+
+    /**
      * {@inheritDoc}
      */
     public function clear(): void
     {
         self::$calls->append('clear');
+
+        $failure = array_shift(self::$clearFailures);
+
+        if ($failure instanceof Throwable) {
+            throw $failure;
+        }
     }
 
     /**
@@ -205,6 +219,8 @@ beforeEach(function (): void {
 
     Sleep::fake();
     dpcClear();
+    DpcRecordingStore::$clearFailures = [];
+    ImportWarningManager::clearWarnings();
 });
 
 afterEach(function (): void {
@@ -239,6 +255,14 @@ function dpcForms(array $answer = []): DpcForms
     $forms->answer = $answer;
 
     return $forms;
+}
+
+/**
+ * The failure PHP raises when Windows refuses a Stache cache write (#173).
+ */
+function dpcRefusal(): ErrorException
+{
+    return new ErrorException('file_put_contents(/app/storage/framework/cache/data/stache/keys/entries): Failed to open stream: Permission denied');
 }
 
 /**
@@ -698,6 +722,59 @@ it('rebuilds the entries store after seven misses, and looks once more', functio
         ->and($output)->toContain('Saved entry with table updates.')
         ->and(dpcData('about-12-abc'))->toBe(['blueprint' => 'page', 'title' => 'Rebuilt', 'content' => [], 'page_builder' => []]);
     Sleep::assertSequence(array_fill(0, 8, Sleep::usleep(500000)));
+});
+
+it('rebuilds the entries store on the retry when the first clear is refused, and looks once more (#325)', function (): void {
+    DpcRecordingStore::$calls = new ArrayObject;
+    DpcRecordingStore::$onWarm = dpcEntry('about-12-abc', ['title' => 'Rebuilt'], false);
+    $real = Stache::store('entries');
+    DpcRecordingStore::$real = $real instanceof EntriesStore ? $real : null;
+    DpcRecordingStore::$clearFailures = [dpcRefusal()];
+    Stache::registerStore(new DpcRecordingStore);
+    Sleep::whenFakingSleep(function (): void {
+        DpcRecordingStore::$calls->append('sleep');
+    });
+    TablePressShortcodeProcessor::addTableId('5', null, null, '12');
+
+    $output = dpcRun(dpcCoordinator([12 => ['entry' => 'about-12-abc']], null, dpcContent()));
+
+    expect(array_slice(DpcRecordingStore::$calls->getArrayCopy(), 7))->toBe(['clear', 'sleep', 'clear', 'warm', 'sleep'])
+        ->and(ImportWarningManager::getAllWarnings())->toBe([])
+        ->and($output)->toContain('Saved entry with table updates.')
+        ->and(dpcData('about-12-abc'))->toMatchArray(['title' => 'Rebuilt']);
+});
+
+it('records the skipped rebuild, looks once more, and goes on, when the clear is refused twice (#325)', function (): void {
+    DpcRecordingStore::$calls = new ArrayObject;
+    $real = Stache::store('entries');
+    DpcRecordingStore::$real = $real instanceof EntriesStore ? $real : null;
+    $refusal = dpcRefusal();
+    DpcRecordingStore::$clearFailures = [dpcRefusal(), $refusal];
+    Stache::registerStore(new DpcRecordingStore);
+    Sleep::whenFakingSleep(function (): void {
+        DpcRecordingStore::$calls->append('sleep');
+    });
+    TablePressShortcodeProcessor::addTableId('5', null, null, '12');
+
+    $output = dpcRun(dpcCoordinator([12 => ['entry' => 'gone-12-abc']], null, dpcContent()));
+
+    expect(array_slice(DpcRecordingStore::$calls->getArrayCopy(), 7))->toBe(['clear', 'sleep', 'clear', 'sleep'])
+        ->and(ImportWarningManager::getWarnings('stache', 'skipped_rebuilds'))->toBe([[
+            'location' => "loading entry 'gone-12-abc' from 'pages' for deferred processing",
+            'store' => 'entries',
+            'error' => $refusal->getMessage(),
+        ]])
+        ->and($output)->toContain("Failed to find entry 'gone-12-abc' in 'pages' collection in site 'default'.");
+});
+
+it('lets any other failure of the clear propagate (#325)', function (): void {
+    DpcRecordingStore::$calls = new ArrayObject;
+    DpcRecordingStore::$clearFailures = [new ErrorException('Undefined array key "pages"')];
+    Stache::registerStore(new DpcRecordingStore);
+    TablePressShortcodeProcessor::addTableId('5', null, null, '12');
+
+    expect(fn () => dpcRun(dpcCoordinator([12 => ['entry' => 'gone-12-abc']], null, dpcContent())))
+        ->toThrow(ErrorException::class, 'Undefined array key "pages"');
 });
 
 it('says so, and goes on, when an entry cannot be found', function (): void {
