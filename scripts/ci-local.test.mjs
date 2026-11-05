@@ -149,7 +149,7 @@ describe('local-ci.json against ci.yml', () => {
         const run = Object.fromEntries(config.jobs.map((job) => [job.name, job.run]))
         const ciLines = ci.split('\n').map((line) => line.trim())
 
-        for (const name of ['node-test', 'python-test']) {
+        for (const name of ['mutate-ignore-breadth', 'node-test', 'python-test']) {
             // A whole line, not a substring, so a narrowed command cannot pass.
             assert.ok(ciLines.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
         }

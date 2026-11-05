@@ -1,0 +1,322 @@
+{
+    "findings": [
+        {
+            "path": "src/Services/WordPressImport/Entries/BaseEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: DecrementInteger, IncrementInteger, IdenticalToNotIdentical, IfNegated, ModulusToMultiplication, PlusToMinus",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "DecrementInteger=3, IncrementInteger=3, IdenticalToNotIdentical=1, IfNegated=1, ModulusToMultiplication=1, PlusToMinus=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/BaseEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: DecrementInteger, IncrementInteger, IdenticalToNotIdentical, IfNegated, ModulusToMultiplication, PlusToMinus, RemoveIntegerCast",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "DecrementInteger=3, IncrementInteger=3, IdenticalToNotIdentical=1, IfNegated=1, ModulusToMultiplication=1, PlusToMinus=1, RemoveIntegerCast=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/BaseEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: DecrementInteger, IncrementInteger, IdenticalToNotIdentical, IfNegated, ModulusToMultiplication, PlusToMinus, RemoveIntegerCast",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "DecrementInteger=3, IncrementInteger=3, IdenticalToNotIdentical=1, IfNegated=1, ModulusToMultiplication=1, PlusToMinus=1, RemoveIntegerCast=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/BaseEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: BooleanAndToBooleanOr",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "BooleanAndToBooleanOr=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/BaseEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: EmptyStringToNotEmpty",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "EmptyStringToNotEmpty=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/Creators/AdvertEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: EmptyStringToNotEmpty, BooleanAndToBooleanOr",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "EmptyStringToNotEmpty=2, BooleanAndToBooleanOr=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/Creators/KbEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: InstanceOfToTrue",
+            "finding": "removes NO mutant",
+            "detail": "InstanceOfToTrue=0"
+        },
+        {
+            "path": "src/Services/WordPressImport/Entries/Creators/PageEntryCreator.php",
+            "marker": "// @pest-mutate-ignore: TrueToFalse",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "TrueToFalse=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Forms/Utilities/NinjaForms/FormConfigurationManager.php",
+            "marker": "// @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "GreaterToGreaterOrEqual=1, DecrementInteger=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Globals/Creators/RedirectRuleGlobalCreator.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=5"
+        },
+        {
+            "path": "src/Services/WordPressImport/Globals/Creators/RedirectRuleGlobalCreator.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=5"
+        },
+        {
+            "path": "src/Services/WordPressImport/Globals/Creators/RedirectRuleGlobalCreator.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem, IncrementInteger, DecrementInteger",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2, IncrementInteger=2, DecrementInteger=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/AttachmentReferenceCollector.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=7"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/AttachmentReferenceCollector.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/AttachmentReferenceCollector.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=12"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/AttachmentReferenceCollector.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=10"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/Client.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem, IncrementInteger, DecrementInteger",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=4, IncrementInteger=4, DecrementInteger=4"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/ContentTypeReads.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=4"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/ContentTypeReads.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/ContentTypeReads.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=3"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/RedirectPluginRules.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/RedirectPluginRules.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/RedirectPluginRules.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/RedirectPluginRules.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=3"
+        },
+        {
+            "path": "src/Services/WordPressImport/MigrationApi/WxrMaterializer.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=5"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/Loaders/JsonFileLoader.php",
+            "marker": "// @pest-mutate-ignore: FalseToTrue, RemoveMethodCall, RemoveArrayItem, RemoveEarlyReturn",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "FalseToTrue=1, RemoveMethodCall=2, RemoveArrayItem=1, RemoveEarlyReturn=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/Loaders/XmlFileLoader.php",
+            "marker": "// @pest-mutate-ignore: FalseToTrue, RemoveMethodCall, RemoveArrayItem, RemoveEarlyReturn",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "FalseToTrue=1, RemoveMethodCall=2, RemoveArrayItem=1, RemoveEarlyReturn=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/MinervaKbSettings/Loader.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/MinervaKbSettings/Loader.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/MinervaKbSettings/Loader.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/MinervaKbSettings/Loader.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Prompts/NavigationMenuSelector.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Taxonomies/TaxonomyDispositions.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=21"
+        },
+        {
+            "path": "src/Services/WordPressImport/Taxonomies/TaxonomyDispositions.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=7"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/BardTexstyleAttributeMapper.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=6"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/BardTexstyleAttributeMapper.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=3"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/BardTexstyleAttributeMapper.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=4"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/ContentProcessor.php",
+            "marker": "// @pest-mutate-ignore: RemoveMethodCall, CoalesceRemoveLeft, ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides, UnwrapArrayMap, UnwrapTrim, RemoveArrayItem, RemoveEarlyReturn",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveMethodCall=1, CoalesceRemoveLeft=1, ConcatRemoveLeft=4, ConcatRemoveRight=4, ConcatSwitchSides=4, UnwrapArrayMap=1, UnwrapTrim=1, RemoveArrayItem=3, RemoveEarlyReturn=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/ContentProcessor.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem, RemoveEarlyReturn",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2, RemoveEarlyReturn=1"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/ContentRoot.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=7"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/DatalessEntrySweeper.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/FieldMapper.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=4"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/HtmlTagStripper.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=42"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/KeyTracker.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=483"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/KeyTracker.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=24"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/OutboundUrlGuard.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=3"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/OutboundUrlGuard.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=6"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/Processors/CaptionShortcodeProcessor.php",
+            "marker": "// @pest-mutate-ignore: EmptyStringToNotEmpty",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "EmptyStringToNotEmpty=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/Processors/QuoteProcessor.php",
+            "marker": "// @pest-mutate-ignore: InstanceOfToTrue",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "InstanceOfToTrue=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/SafeMathEvaluator.php",
+            "marker": "// @pest-mutate-ignore: DecrementInteger, IncrementInteger, RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "DecrementInteger=2, IncrementInteger=2, RemoveArrayItem=3"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/SafeMathEvaluator.php",
+            "marker": "// @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "ConcatRemoveLeft=2, ConcatRemoveRight=2, ConcatSwitchSides=2"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/SafeMathEvaluator.php",
+            "marker": "// @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "ConcatRemoveLeft=3, ConcatRemoveRight=3, ConcatSwitchSides=3"
+        },
+        {
+            "path": "src/Services/WordPressImport/Utilities/WxrSanitizer.php",
+            "marker": "// @pest-mutate-ignore: RemoveArrayItem",
+            "finding": "removes MORE than one mutant of a named mutator",
+            "detail": "RemoveArrayItem=4"
+        }
+    ]
+}

@@ -21,7 +21,7 @@ name: CI
 #   this repository's changed classes finished on a hosted runner. The `mutate-ignore` annotation
 #   check still runs.
 #
-# PLAIN JOBS. `spell`, `node-test` and `python-test` are not in the chain and stay here as jobs of
+# PLAIN JOBS. `mutate-ignore-breadth`, `spell`, `node-test` and `python-test` stay here as jobs of
 # their own, each a matrix over `ubuntu-latest` and `windows-latest`.
 #
 # REQUIRED CHECKS (#163). A ruleset for this repository requires three contexts
@@ -91,6 +91,23 @@ jobs:
     with:
       all-platform-jobs: 'composer-validate pint rector phpstan'
       mutate: false
+
+  mutate-ignore-breadth:
+    name: Mutation annotation breadth (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    if: vars.RUN_REMOTE_CI != 'false'
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      # PARITY: mirrored by the mutate-ignore-breadth job in local-ci.json.
+      - name: Measure mutation annotation breadth
+        run: php .claude/skills/pest-testing/scripts/check-mutate-ignore-breadth.php
 
   spell:
     name: Spell check (${{ matrix.os }})
@@ -206,6 +223,7 @@ jobs:
     name: CI
     needs:
       - checks
+      - mutate-ignore-breadth
       - spell
       - node-test
       - python-test
