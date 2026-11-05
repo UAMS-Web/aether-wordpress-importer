@@ -9,6 +9,7 @@ use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Sleep;
 use Laravel\Prompts\Prompt;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\GlobalSet;
@@ -556,6 +557,7 @@ beforeEach(function (): void {
     IwriLog::$calls = [];
     IwriEntries::$onCreate = null;
     IwriTypes::$prefer = null;
+    IwriPagesStore::$failures = [];
     config(['wordpress-import.measure_filesize' => false]);
     Site::setSites([
         'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
@@ -569,6 +571,14 @@ afterEach(function (): void {
     SiteResolver::clearSelectedSite();
     exec('rm -rf '.escapeshellarg($this->root));
 });
+
+/**
+ * The failure PHP raises when Windows refuses a Stache cache write (#173).
+ */
+function iwriRefusal(): ErrorException
+{
+    return new ErrorException('file_put_contents(/app/storage/framework/cache/data/stache/keys/pages): Failed to open stream: Permission denied');
+}
 
 /**
  * Save a collection for the given sites.
@@ -1289,6 +1299,13 @@ final class IwriPagesStore extends Store
     public static int $cleared = 0;
 
     /**
+     * The failures each clear throws in turn, before the clears complete.
+     *
+     * @var list<Throwable>
+     */
+    public static array $failures = [];
+
+    /**
      * {@inheritDoc}
      */
     public function key(): string
@@ -1320,6 +1337,12 @@ final class IwriPagesStore extends Store
     public function clear(): void
     {
         self::$cleared++;
+
+        $failure = array_shift(self::$failures);
+
+        if ($failure instanceof Throwable) {
+            throw $failure;
+        }
     }
 }
 
@@ -1506,6 +1529,54 @@ it('clears the Stache before the navigation pass', function (): void {
     iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
 
     expect(IwriPagesStore::$cleared)->toBe(1);
+});
+
+it('clears the Stache on the retry, with no warning, when the first clear before the navigation pass is refused (#325)', function (): void {
+    Sleep::fake();
+    iwriCollection('pages');
+    IwriPagesStore::$cleared = 0;
+    IwriPagesStore::$failures = [iwriRefusal()];
+    Stache::registerStore(new IwriPagesStore);
+    [$command, $buffer] = iwriCommand();
+
+    [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
+
+    expect($status)->toBe(0)
+        ->and(IwriPagesStore::$cleared)->toBe(2)
+        ->and($output)->toContain("Stache cache cleared before navigation import.\n")
+        ->and($output)->not->toContain('stache - skipped_rebuilds');
+});
+
+it('goes on to the navigation pass, and reports the skipped clear, when the clear before it is refused twice (#325)', function (): void {
+    Sleep::fake();
+    iwriCollection('pages');
+    IwriPagesStore::$cleared = 0;
+    IwriPagesStore::$failures = [iwriRefusal(), iwriRefusal()];
+    Stache::registerStore(new IwriPagesStore);
+    [$command, $buffer] = iwriCommand();
+
+    [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
+
+    expect($status)->toBe(0)
+        ->and(IwriPagesStore::$cleared)->toBe(2)
+        ->and($output)->toContain(
+            "Stache cache could not be cleared before navigation import; continuing with the cache as it stands.\n"
+            ."Skipping navigation menu import - no active menu in primary navigation position\n"
+        )
+        ->and($output)->not->toContain('Stache cache cleared before navigation import.')
+        ->and($output)->toContain("stache - skipped_rebuilds:\n")
+        ->and($output)->toContain('"location":"before the navigation import","store":"all"');
+});
+
+it('lets any other failure of the clear before the navigation pass propagate (#325)', function (): void {
+    Sleep::fake();
+    iwriCollection('pages');
+    IwriPagesStore::$failures = [new ErrorException('Undefined array key "pages"')];
+    Stache::registerStore(new IwriPagesStore);
+    [$command, $buffer] = iwriCommand();
+
+    expect(fn () => iwriRun($command, $buffer, [iwriPart($this, ['page'])]))
+        ->toThrow(ErrorException::class, 'Undefined array key "pages"');
 });
 
 it('localizes the redirects global set for the site it enables', function (): void {

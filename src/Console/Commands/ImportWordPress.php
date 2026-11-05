@@ -72,6 +72,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processo
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheRebuildGuard;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\VerificationWorkspace;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
@@ -2445,13 +2446,7 @@ class ImportWordPress extends Command
         // Clear and refresh Stache cache before navigation import. This ensures all newly
         // created entries are properly indexed and findable.
         // ---
-        Stache::clear();
-
-        // ---
-        // Log the cache clearing action to inform the user that the Stache has been
-        // refreshed.
-        // ---
-        $this->info('Stache cache cleared before navigation import.');
+        $this->clearStacheBeforeNavigation();
 
         // Handle navigation menu import after all content types are imported
         // This ensures all entries are fully processed and cached before navigation import.
@@ -2606,6 +2601,35 @@ class ImportWordPress extends Command
 
         // Return success status code
         return 0;
+    }
+
+    /**
+     * Clear the whole Stache before the navigation import, so the menus resolve
+     * every entry the run created.
+     *
+     * A transient cache-write failure skips the clear rather than ending the run
+     * (#325): `StacheRebuildGuard` records it in the run's warnings, and the
+     * navigation import goes ahead against the cache as it stands.
+     */
+    protected function clearStacheBeforeNavigation(): void
+    {
+        // Clear the Stache, retrying once if a cache write is refused
+        $cleared = StacheRebuildGuard::run(
+            'before the navigation import',
+            'all',
+            static function (): void {
+                Stache::clear();
+            }
+        );
+
+        // Tell the user whether the Stache was refreshed
+        if ($cleared) {
+            $this->info('Stache cache cleared before navigation import.');
+
+            return;
+        }
+
+        $this->warn('Stache cache could not be cleared before navigation import; continuing with the cache as it stands.');
     }
 
     /**

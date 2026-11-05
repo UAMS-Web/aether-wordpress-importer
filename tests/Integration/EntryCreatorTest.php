@@ -892,6 +892,32 @@ describe('what it hands out', function (): void {
 });
 
 /**
+ * Answer the given store to the cache warming alone, which calls the Stache facade
+ * from createEntries() itself, and the real store to every other caller.
+ *
+ * @param  mixed  $store  The store the cache warming receives
+ */
+function entryCreatorWarmingStore(mixed $store): void
+{
+    $stache = app(Statamic\Stache\Stache::class);
+    entryCreatorExpects(Stache::partialMock(), 'store')->andReturnUsing(static function (string $key) use ($stache, $store): mixed {
+        foreach (\debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) as $index => $frame) {
+            if ($frame['function'] === '__callStatic') {
+                $caller = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)[$index + 1] ?? [];
+
+                if (($caller['class'] ?? '') === EntryCreator::class && $caller['function'] === 'createEntries') {
+                    return $store;
+                }
+
+                break;
+            }
+        }
+
+        return $stache->store($key);
+    });
+}
+
+/**
  * Return the sole concrete Expectation inside a CompositeExpectation, so its
  * fluent methods are visible to PHPStan.
  *
@@ -1425,6 +1451,50 @@ describe('what it asks of the creator', function (): void {
         });
 
         $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput);
+    });
+
+    it('carries on, and records the skipped rebuild, when the store\'s clear is refused twice (#325)', function (): void {
+        entryCreatorCollection('posts', ['post']);
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+        $store = Mockery::mock(Store::class);
+        $refusal = new ErrorException('file_put_contents(/app/storage/framework/cache/data/stache/keys/entries): Failed to open stream: Permission denied');
+        entryCreatorExpects($store, 'clear')->twice()->andThrow($refusal);
+        entryCreatorExpects($store, 'warm')->never();
+        entryCreatorWarmingStore($store);
+
+        $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput);
+
+        expect(ImportWarningManager::getWarnings('stache', 'skipped_rebuilds'))->toBe([[
+            'location' => "after creating the 'posts' entries",
+            'store' => 'entries',
+            'error' => $refusal->getMessage(),
+        ]]);
+        // The wait after the rebuild still runs, so the import went on past the skipped one
+        Sleep::assertSlept(static fn (CarbonInterval $duration): bool => (int) $duration->totalMicroseconds === 1500000, 1);
+    });
+
+    it('records nothing when the store rebuilds (#325)', function (): void {
+        entryCreatorCollection('posts', ['post']);
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+
+        $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput);
+
+        expect(ImportWarningManager::getWarnings('stache', 'skipped_rebuilds'))->toBe([]);
+    });
+
+    it('lets any other failure of the store\'s warm propagate (#325)', function (): void {
+        entryCreatorCollection('posts', ['post']);
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+        $store = Mockery::mock(Store::class);
+        entryCreatorExpects($store, 'clear')->once();
+        entryCreatorExpects($store, 'warm')->once()->andThrow(new ErrorException('Undefined array key "posts"'));
+        entryCreatorWarmingStore($store);
+
+        expect(fn () => $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput))
+            ->toThrow(ErrorException::class, 'Undefined array key "posts"');
     });
 
     it('logs the site, and the collection, with each cache warning', function (bool $store, string $phrase, array $context): void {
