@@ -51,12 +51,12 @@ const FORMS_KT_UNTRANSLATED_OPTIONS = ['options' => [['text' => 'A', 'value' => 
  * Map one choice through a `key_translation` with `mapAttributesFromMapping()`.
  *
  * @param  array<int|string, mixed>  $keyTranslation  The `key_translation` configuration
- * @param  array<string, mixed>  $data  The other source attributes
+ * @param  array<int|string, mixed>  $data  The other source attributes
  * @param  ?string  $fieldtype  The source fieldtype
- * @param  ?array<string, mixed>  $original  The original field data
+ * @param  ?array<int|string, mixed>  $original  The original field data
  * @return mixed The mapped attributes
  */
-function translateFormsChoiceKeys(
+function pickFormsKeyTranslationTable(
     array $keyTranslation,
     array $data = [],
     ?string $fieldtype = null,
@@ -81,7 +81,7 @@ it('picks the key translation table', function (
     ?array $original,
     array $expected
 ): void {
-    expect(translateFormsChoiceKeys($keyTranslation, $data, $fieldtype, $original))->toBe($expected);
+    expect(pickFormsKeyTranslationTable($keyTranslation, $data, $fieldtype, $original))->toBe($expected);
 })->with([
     // A plain table, and the default and specific tables
     'a plain table' => [FORMS_KT_FALLBACK, [], null, null, FORMS_KT_FALLBACK_OPTIONS],
