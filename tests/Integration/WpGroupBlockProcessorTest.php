@@ -17,6 +17,16 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * `alignwide`. This is in the light Statamic band because TextProcessor and
  * ShortcodeProcessor log through the `Log` facade.
  *
+ * The shared unwrapping trait retains equivalent mutants: its DOMComment type
+ * tests duplicate trimmedCommentText()'s rejection of non-comments, whose own
+ * callers already narrow to comments. DOM text and comment values cannot reach
+ * their non-string fallback. Trimming a class list changes only empty tokens, which
+ * cannot change whether a class prefix matches. Traversed elements already
+ * have an owner document, and the non-wrapper serialization branch appends
+ * only to an empty string. Every killable mutant is dead.
+ *
+ * cspell:ignore alignwide aligncenter NOIMPLIED NODEFDTD
+ *
  * @command  php vendor/bin/pest tests/Integration/WpGroupBlockProcessorTest.php
  */
 uses(StatamicTestCase::class);
@@ -241,4 +251,165 @@ it('ignores nodes that are not table sets', function (array $node): void {
 
 it('returns empty Bard content unchanged', function (): void {
     expect(groupBardContent(['align' => 'wide'], [], GROUP_SHORTCODE_TABLE))->toBe([]);
+});
+
+it('keeps the opening node identity in the processed block result', function (): void {
+    $node = groupOpeningNode('<!-- wp:group --><p>Inside</p><!-- /wp:group -->');
+
+    $result = (new WpGroupBlockProcessor)->process(
+        $node,
+        [],
+        'default',
+        $this::createStub(AssetImporter::class),
+        new BufferedOutput
+    );
+
+    expect($result['processedNode'] ?? null)->toBe($node);
+});
+
+it('unwraps only matching elements and class prefixes while preserving child text', function (string $inner, string $expected): void {
+    $result = processGroup('<!-- wp:group -->'.$inner.'<!-- /wp:group -->');
+
+    expect($result['html'] ?? null)->toBe($expected);
+})->with([
+    'prefix with a suffix and other classes' => [
+        '<div class="other wp-block-group-variant trailing"> lead <p>Middle</p> tail </div>',
+        ' lead <p>Middle</p> tail ',
+    ],
+    'prefix only at the end of a class' => [
+        '<div class="other-wp-block-group"><p>Keep wrapper</p></div>',
+        '<div class="other-wp-block-group"><p>Keep wrapper</p></div>',
+    ],
+    'matching class on a different element' => [
+        '<section class="wp-block-group"><p>Keep section</p></section>',
+        '<section class="wp-block-group"><p>Keep section</p></section>',
+    ],
+    'no class' => ['<div><p>Keep div</p></div>', '<div><p>Keep div</p></div>'],
+    'nested wrapper and unrelated comment' => [
+        '<div class="wp-block-group"><div class="wp-block-group"><!-- other -->Inner</div></div>',
+        '<!-- other -->Inner',
+    ],
+]);
+
+it('counts nested sibling blocks through the outer closing comment', function (): void {
+    $result = processGroup(
+        '<!-- wp:group -->A<!-- wp:group --><div class="wp-block-group"><p>Nested</p></div><!-- /wp:group -->B<!-- /wp:group --><p>After</p>'
+    );
+
+    expect($result['html'] ?? null)->toBe('A<!-- wp:group --><p>Nested</p><!-- /wp:group -->B')
+        ->and($result['skipCount'] ?? null)->toBe(7);
+});
+
+it('uses all remaining siblings when a closing group comment is missing', function (): void {
+    $result = processGroup('<!-- wp:group --><p>First</p><p>Last</p>');
+
+    expect($result['html'] ?? null)->toBe('<p>First</p><p>Last</p>')
+        ->and($result['skipCount'] ?? null)->toBe(3);
+});
+
+it('returns null when the only sibling content is whitespace', function (): void {
+    expect(processGroup("<!-- wp:group --> \n\t <!-- /wp:group -->"))->toBeNull();
+});
+
+it('preserves raw text without adding classic-editor paragraph breaks', function (): void {
+    $result = processGroup("<!-- wp:group -->First\n\nSecond<!-- /wp:group -->");
+
+    expect($result['html'] ?? null)->toBe("First\n\nSecond")
+        ->and($result['bardContent'] ?? null)->toBe([[
+            'type' => 'paragraph',
+            'content' => [['type' => 'text', 'text' => 'FirstSecond']],
+            'attrs' => [],
+        ]]);
+});
+
+it('does not increase nesting depth for unrelated sibling comments', function (): void {
+    $result = processGroup('<!-- wp:group --><!-- other --><p>Inside</p><!-- /wp:group --><p>After</p>');
+
+    expect($result['html'] ?? null)->toBe('<!-- other --><p>Inside</p>')
+        ->and($result['skipCount'] ?? null)->toBe(4);
+});
+
+it('ignores processing instructions both beside and inside the wrapper', function (): void {
+    // Construct the DOM directly because HTML parsing turns instructions into comments.
+    $document = new DOMDocument;
+    $root = $document->createElement('root');
+    $document->appendChild($root);
+    $node = $document->createComment(' wp:group ');
+    $root->appendChild($node);
+    $root->appendChild($document->createProcessingInstruction('outer', 'ignored'));
+    $wrapper = $document->createElement('div');
+    $wrapper->setAttribute('class', 'wp-block-group');
+    $wrapper->appendChild($document->createProcessingInstruction('inner', 'ignored'));
+    $wrapper->appendChild($document->createElement('p', 'Kept'));
+    $root->appendChild($wrapper);
+    $root->appendChild($document->createComment(' /wp:group '));
+
+    // Process through the public API, preserving the caller's skip accounting.
+    $result = (new WpGroupBlockProcessor)->process(
+        $node,
+        [],
+        'default',
+        $this::createStub(AssetImporter::class),
+        new BufferedOutput
+    );
+
+    expect($result['html'] ?? null)->toBe('<p>Kept</p>')
+        ->and($result['skipCount'] ?? null)->toBe(4);
+});
+
+it('lets a nested details block convert its summary to a Bard heading', function (): void {
+    $result = processGroup(
+        '<!-- wp:group --><!-- wp:details --><details class="wp-block-details"><summary>Question</summary><p>Answer</p></details><!-- /wp:details --><!-- /wp:group -->'
+    );
+
+    expect($result['bardContent'] ?? null)->toBe([
+        [
+            'type' => 'heading',
+            'attrs' => ['level' => 2],
+            'content' => [['type' => 'text', 'text' => 'Question']],
+        ],
+        [
+            'type' => 'paragraph',
+            'content' => [['type' => 'text', 'text' => 'Answer']],
+            'attrs' => [],
+        ],
+    ]);
+});
+
+it('retains an element without a class even when an extension uses an empty class prefix', function (): void {
+    $processor = new class extends WpGroupBlockProcessor
+    {
+        /**
+         * Match any nonempty class through the existing customization hook.
+         */
+        protected function getWrapperClassPrefix(): string
+        {
+            return '';
+        }
+    };
+
+    $result = $processor->process(
+        groupOpeningNode('<!-- wp:group --><div><p>Keep wrapper</p></div><!-- /wp:group -->'),
+        [],
+        'default',
+        $this::createStub(AssetImporter::class),
+        new BufferedOutput
+    );
+
+    expect($result['html'] ?? null)->toBe('<div><p>Keep wrapper</p></div>');
+});
+
+it('rejects non-comment nodes even when the block-name hook cannot run', function (): void {
+    $processor = new class extends WpGroupBlockProcessor
+    {
+        /**
+         * Represent an extension whose block metadata is unavailable.
+         */
+        protected function getBlockName(): string
+        {
+            throw new LogicException('Block metadata is unavailable.');
+        }
+    };
+
+    expect($processor->canProcess((new DOMDocument)->createElement('p'), 'default', null))->toBeFalse();
 });

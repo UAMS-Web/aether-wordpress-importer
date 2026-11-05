@@ -121,12 +121,16 @@ trait UnwrappingBlockProcessorTrait
     private function trimmedCommentText(
         DOMNode $node
     ): string {
+        // Every caller already narrows to DOMComment before reading comment text.
+        // @pest-mutate-ignore: InstanceOfToTrue
         if (! ($node instanceof DOMComment)) {
             return '';
         }
 
         $value = $node->nodeValue;
 
+        // DOMComment::nodeValue is always a string.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($value) ? \trim($value) : '';
     }
 
@@ -262,6 +266,8 @@ trait UnwrappingBlockProcessorTrait
         // The loop breaks as soon as $depth reaches 0, so $depth is always > 0 here.
         while ($currentNode instanceof DOMNode) {
             // Check if this is a closing block comment
+            // trimmedCommentText() independently returns empty text for other nodes.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($currentNode instanceof DOMComment
             && \preg_match(
                 '/^\/wp:'.$escapedBlockName.'\s*$/',
@@ -287,6 +293,8 @@ trait UnwrappingBlockProcessorTrait
             }
 
             // Check if this is a closing block comment
+            // trimmedCommentText() independently returns empty text for other nodes.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($currentNode instanceof DOMComment
             && \preg_match(
                 '/^wp:'.$escapedBlockName.'\s*({.+?})?\s*$/s',
@@ -318,6 +326,8 @@ trait UnwrappingBlockProcessorTrait
             if ($currentNode instanceof DOMText) {
                 // Trim whitespace from the text node's value
                 $nodeValue = $currentNode->nodeValue;
+                // DOMText::nodeValue is always a string.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $text = \is_string($nodeValue) ? \trim($nodeValue) : '';
 
                 // Check if the trimmed text is not empty
@@ -375,6 +385,8 @@ trait UnwrappingBlockProcessorTrait
             // Split class attribute into individual class values
             $classes = \preg_split(
                 '/\s+/',
+                // Extra empty tokens cannot match the group or details class prefix.
+                // @pest-mutate-ignore: UnwrapTrim
                 \trim($class)
             );
 
@@ -413,6 +425,8 @@ trait UnwrappingBlockProcessorTrait
                 if ($child instanceof DOMText) {
                     // Trim whitespace from text content
                     $childValue = $child->nodeValue;
+                    // DOMText::nodeValue is always a string.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
                     $text = \is_string($childValue) ? \trim($childValue) : '';
 
                     // Check if text content is not empty after trimming
@@ -432,7 +446,11 @@ trait UnwrappingBlockProcessorTrait
             // Include non-wrapper elements as-is
             $ownerDocument = $element->ownerDocument;
 
+            // Traversed elements belong to the document containing the opening node.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($ownerDocument instanceof \DOMDocument) {
+                // This branch has not appended anything to the initial empty content.
+                // @pest-mutate-ignore: ConcatEqualToEqual
                 $content .= $ownerDocument->saveHTML($element);
             }
         }
@@ -474,6 +492,8 @@ trait UnwrappingBlockProcessorTrait
 
             // Check if this is a closing block comment
             if (
+                // trimmedCommentText() independently rejects non-comment nodes.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 $currentNode instanceof DOMComment
                 && \preg_match(
                     '/^\/wp:'.$escapedBlockName.'\s*$/',
@@ -493,6 +513,8 @@ trait UnwrappingBlockProcessorTrait
                     break;
                 }
             } elseif (
+                // trimmedCommentText() independently rejects non-comment nodes.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 $currentNode instanceof DOMComment
                 && \preg_match(
                     '/^wp:'.$escapedBlockName.'\s*({.+?})?\s*$/s',
