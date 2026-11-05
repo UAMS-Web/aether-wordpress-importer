@@ -261,11 +261,6 @@ class FieldtypeMapping
                     'dynamic' => 'id',
                     'restrict' => true,
                 ],
-                'specific' => [
-                    // <source_fieldtype_handle> => [
-                    //     <statamic_attribute> => <value>
-                    // ],
-                ],
             ],
         ],
 
@@ -279,11 +274,6 @@ class FieldtypeMapping
                     'folder' => '[#site_handle]',
                     'dynamic' => 'id',
                     'restrict' => true,
-                ],
-                'specific' => [
-                    // <source_fieldtype_handle> => [
-                    //     <statamic_attribute> => <value>
-                    // ],
                 ],
             ],
         ],
@@ -523,11 +513,6 @@ class FieldtypeMapping
                     'folder' => '[#site_handle]',
                     'dynamic' => 'id',
                     'restrict' => true,
-                ],
-                'specific' => [
-                    // <source_fieldtype_handle> => [
-                    //     <statamic_attribute> => <value>
-                    // ],
                 ],
             ],
         ],

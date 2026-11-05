@@ -7066,6 +7066,9 @@ trait FieldtypeMappingTrait
     /**
      * Get the set_attributes configuration for a fieldtype mapping.
      *
+     * Returns the table's `default` attributes with `[#site_handle]` replaced in
+     * their keys and string values. Any other part of the table is ignored.
+     *
      * @param  array<int|string, mixed>  $mappingArray  The mapping array (type => mapping config)
      * @param  string|array<int|string, mixed>  $fieldOrType  The field type string or full field array
      * @param  ?string  $siteHandle  The site handle for placeholder replacement
@@ -7076,13 +7079,9 @@ trait FieldtypeMappingTrait
         string|array $fieldOrType,
         ?string $siteHandle = null
     ): ?array {
-        if (\is_string($fieldOrType)) {
-            $type = $fieldOrType;
-            $field = [];
-        } else { // Otherwise
-            $type = self::stringValue($fieldOrType['type'] ?? null);
-            $field = $fieldOrType;
-        }
+        $type = \is_string($fieldOrType)
+            ? $fieldOrType
+            : self::stringValue($fieldOrType['type'] ?? null);
 
         if (
             $type === null
@@ -7106,34 +7105,10 @@ trait FieldtypeMappingTrait
 
         $setAttributes = self::asArray($mapping['set_attributes']);
 
-        // Start with default attributes
+        // Start with the default attributes
         $attributes = self::asArray(
             self::mappingValue($setAttributes, 'default')
         );
-
-        // Merge with specific attributes if the field has a specific fieldtype handle
-        $specificAttributes = self::asArray(
-            self::mappingValue($setAttributes, 'specific')
-        );
-        if ($specificAttributes !== []) {
-            $fieldHandle = self::stringValue(
-                $field['field_key'] ?? $field['id'] ?? null
-            );
-            $fieldSpecificAttributes = $fieldHandle !== null
-                ? self::asArray(
-                    self::mappingValue(
-                        $specificAttributes,
-                        $fieldHandle
-                    )
-                )
-                : [];
-            if ($fieldSpecificAttributes !== []) {
-                $attributes = \array_merge(
-                    $attributes,
-                    $fieldSpecificAttributes
-                );
-            }
-        }
 
         // Process placeholders in the attributes
         if ($attributes !== [] && $siteHandle !== null) {

@@ -11,14 +11,16 @@ declare(strict_types=1);
  * `getLinkedFieldFromMapping()` picks a fieldtype's `linked_field` from its
  * `based_on_other_attribute_value` table, then its `based_on_attribute_value`
  * table (each with an optional `default`/`specific` split), then `default`.
- * `getSetAttributesFromMapping()` merges a fieldtype's `set_attributes`
- * `default` with the entry for the field's key and resolves `[#site_handle]`.
+ * `getSetAttributesFromMapping()` returns a fieldtype's `set_attributes`
+ * `default` with `[#site_handle]` resolved, and ignores any other part (#448).
  * A line-coverage run left most of the first two unexecuted.
  *
  * @command  php vendor/bin/pest tests/Unit/FormsFieldReferencesAndLinkedFieldsTest.php
  */
 
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping as FormidableFieldtypeMapping;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FieldtypeMapping as NinjaFieldtypeMapping;
 
 /**
  * Translate the field references in a string.
@@ -153,12 +155,10 @@ it('resolves set attributes from the mapping', function (
     expect(FieldtypeMapping::getSetAttributesFromMapping(['t' => ['default' => 'D', 'set_attributes' => $setAttributes]], $fieldOrType, $siteHandle))->toBe($expected);
 })->with([
     'a default' => [['default' => ['a' => 1]], 't', null, ['a' => 1]],
-    'a field key entry' => [['default' => ['a' => 1, 'b' => 1], 'specific' => ['k1' => ['b' => 2]]], ['type' => 't', 'field_key' => 'k1'], null, ['a' => 1, 'b' => 2]],
-    'a field id entry' => [['default' => ['a' => 1], 'specific' => ['9' => ['b' => 2]]], ['type' => 't', 'id' => '9'], null, ['a' => 1, 'b' => 2]],
-    'a field key before the id' => [['specific' => ['k1' => ['b' => 'key'], '9' => ['b' => 'id']]], ['type' => 't', 'field_key' => 'k1', 'id' => '9'], null, ['b' => 'key']],
-    'an integer id, unmatched' => [['default' => ['a' => 1], 'specific' => ['9' => ['b' => 2]]], ['type' => 't', 'id' => 9], null, ['a' => 1]],
-    'no entry for the field' => [['default' => ['a' => 1], 'specific' => ['k1' => ['b' => 2]]], ['type' => 't', 'field_key' => 'k2'], null, ['a' => 1]],
-    'by type only' => [['default' => ['a' => 1], 'specific' => ['k1' => ['b' => 2]]], 't', null, ['a' => 1]],
+    'a specific part, for a matching field key' => [['default' => ['a' => 1, 'b' => 1], 'specific' => ['k1' => ['b' => 2]]], ['type' => 't', 'field_key' => 'k1'], null, ['a' => 1, 'b' => 1]],
+    'a specific part, for a matching id' => [['default' => ['a' => 1], 'specific' => ['9' => ['b' => 2]]], ['type' => 't', 'id' => '9'], null, ['a' => 1]],
+    'a specific part only' => [['specific' => ['k1' => ['b' => 'key']]], ['type' => 't', 'field_key' => 'k1'], null, []],
+    'a specific part, with a site handle' => [['default' => ['folder' => '[#site_handle]'], 'specific' => ['k1' => ['folder' => 'x']]], ['type' => 't', 'field_key' => 'k1'], 'arch', ['folder' => 'arch']],
     'nothing set' => [[], 't', null, []],
     'a site handle in keys and values' => [['default' => ['folder' => 'forms/[#site_handle]', '[#site_handle]_flag' => true]], 't', 'arch', ['folder' => 'forms/arch', 'arch_flag' => true]],
     'no site handle' => [['default' => ['folder' => 'forms/[#site_handle]']], 't', null, ['folder' => 'forms/[#site_handle]']],
@@ -166,6 +166,36 @@ it('resolves set attributes from the mapping', function (
     'an unknown type' => [['default' => ['a' => 1]], 'u', null, null],
     'an empty type' => [['default' => ['a' => 1]], ['type' => ''], null, null],
     'no type' => [['default' => ['a' => 1]], ['label' => 'x'], null, null],
+]);
+
+it('gives each shipped upload fieldtype its asset settings', function (array $mapping, string $type): void {
+    expect(FieldtypeMapping::getSetAttributesFromMapping($mapping, ['type' => $type, 'field_key' => 'k1', 'id' => '9'], 'arch'))->toBe([
+        'container' => 'form_entry_uploads',
+        'folder' => 'arch',
+        'dynamic' => 'id',
+        'restrict' => true,
+    ]);
+})->with([
+    'Gravity Forms file upload' => [FieldtypeMapping::getMapping(), 'fileupload'],
+    'Gravity Forms RCWD uploader' => [FieldtypeMapping::getMapping(), 'rcwdupload'],
+    'Gravity Forms post image' => [FieldtypeMapping::getMapping(), 'post_image'],
+    'Formidable file' => [FormidableFieldtypeMapping::getMapping(), 'file'],
+]);
+
+it('ships no set attributes table with a specific part', function (array $mappings): void {
+    $withSpecific = [];
+
+    foreach ($mappings as $type => $mapping) {
+        if (\is_array($mapping) && \is_array($mapping['set_attributes'] ?? null) && \array_key_exists('specific', $mapping['set_attributes'])) {
+            $withSpecific[] = $type;
+        }
+    }
+
+    expect($withSpecific)->toBe([]);
+})->with([
+    'Gravity Forms' => [FieldtypeMapping::getMapping()],
+    'Formidable' => [FormidableFieldtypeMapping::getMapping()],
+    'Ninja Forms' => [NinjaFieldtypeMapping::getMapping()],
 ]);
 
 it('resolves no set attributes for a mapping without them', function (): void {

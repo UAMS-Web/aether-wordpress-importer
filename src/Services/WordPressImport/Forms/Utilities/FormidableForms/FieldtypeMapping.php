@@ -283,11 +283,6 @@ class FieldtypeMapping
                     'dynamic' => 'id',
                     'restrict' => true,
                 ],
-                'specific' => [
-                    // <source_fieldtype_handle> => [
-                    //     <statamic_attribute> => <value>
-                    // ],
-                ],
             ],
         ],
 
