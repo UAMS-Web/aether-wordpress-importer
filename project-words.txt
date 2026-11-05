@@ -242,6 +242,8 @@ symfony
 tablepress
 testbench
 Testbench
+# Existing class identifier in the annotation baseline paths.
+Texstyle
 throughs
 timjossund
 toplevel

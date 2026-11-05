@@ -31,6 +31,11 @@
       "always": true
     },
     {
+      "name": "mutate-ignore-breadth",
+      "run": "php .claude/skills/pest-testing/scripts/check-mutate-ignore-breadth.php",
+      "always": true
+    },
+    {
       "name": "pest",
       "run": "vendor/bin/pest --testsuite=Unit,Integration",
       "always": true
