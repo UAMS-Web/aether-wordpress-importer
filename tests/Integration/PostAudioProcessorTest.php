@@ -29,6 +29,15 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * segments becomes the intro. Most tests replace the audio and accordion processors
  * with mocks, so what is handed to them can be asserted; one runs the real ones.
  *
+ * Equivalent annotations retain outer empty-part separators, trimming already
+ * trimmed parts, direct-input trims repeated by TextProcessor, empty-input early
+ * returns, and merging an indexed list with an empty list. Empty-input fallthrough
+ * can allocate TextProcessor's private cache earlier, but imports no content.
+ * Trims before joining raw markup are not equivalent: preformatted text and a
+ * NUL before a heading distinguish them, as do encoded heading attributes for
+ * the title-capture index. On Linux, PHP 8.4.27 with PCOV, 259 mutants were tested
+ * with no survivors or timeouts; every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/PostAudioProcessorTest.php
  */
 uses(StatamicTestCase::class);
@@ -75,8 +84,8 @@ function postAudioExpects(LegacyMockInterface|MockInterface $mock, string $metho
  */
 function postAudioImporter(): AssetImporter
 {
-    $importer = (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor();
-    (new ReflectionProperty(AssetImporter::class, 'baseBlogUrl'))->setValue($importer, 'https://example.test');
+    $importer = new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
+    new ReflectionProperty(AssetImporter::class, 'baseBlogUrl')->setValue($importer, 'https://example.test');
 
     return $importer;
 }
@@ -98,7 +107,7 @@ function postAudioProcessor(
 
     foreach (['audioProcessor' => $audio, 'accordionProcessor' => $accordion, 'shortcodeProcessor' => $shortcodes] as $property => $value) {
         if ($value !== null) {
-            (new ReflectionProperty(PostAudioProcessor::class, $property))->setValue($processor, $value);
+            new ReflectionProperty(PostAudioProcessor::class, $property)->setValue($processor, $value);
         }
     }
 
@@ -338,6 +347,7 @@ it('keeps the text before the first h3 as the whole intro when nothing follows t
     expect($result['intro'] ?? null)->toBe($intro);
 })->with([
     'no download link' => ['<p>Lead</p><h3>One</h3>[audio mp3="https://example.test/1.mp3"][/audio]<p>more</p>', [postAudioParagraph('Lead')]],
+    'literal mutation text' => ['PEST Mutator was here!<h3>One</h3>[audio][/audio][accordion][/accordion]', [postAudioParagraph('PEST Mutator was here!')]],
     'nothing before the first h3' => ['<h3>One</h3>[audio mp3="https://example.test/1.mp3"][/audio][accordion][/accordion]', []],
     'an h2 alone before the first h3' => ["<h2>Episodes</h2>\n&nbsp;\n<h3>One</h3>[audio][/audio][accordion][/accordion]  ", []],
     'an h2 that does not end the lead' => ['<h2>Title</h2><p>Lead</p><h3>One</h3>[audio][/audio][accordion][/accordion]', [
@@ -394,6 +404,9 @@ it('treats content with neither an h3 nor an audio shortcode as all intro', func
         ->toBe(['segments' => [], 'intro' => $intro]);
 })->with([
     'text' => ['Just text<img src="x.jpg">', [postAudioParagraph('Just text')]],
+    'classic editor paragraphs' => ["First paragraph\n\nSecond paragraph", [postAudioParagraph('First paragraph'), postAudioParagraph('Second paragraph')]],
+    'literal mutation text' => ['PEST Mutator was here!', [postAudioParagraph('PEST Mutator was here!')]],
+    'raw HTML block text' => ["<!-- wp:html -->First paragraph\n\nSecond paragraph<!-- /wp:html -->", [postAudioParagraph('First paragraphSecond paragraph')]],
     'whitespace' => ["  \n ", []],
     'an image only' => ['<img src="x.jpg" />', []],
 ]);
@@ -561,7 +574,81 @@ it('gives a segment no excerpt when nothing sits between the download link and t
 })->with([
     'whitespace only' => ['<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a> <img src="i.jpg"> [accordion][/accordion]'],
     'no download link' => ['<h3>One</h3>[audio mp3="x"][/audio] Some text [accordion][/accordion]'],
+    'no accordion after a download link' => ['<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a>'.str_repeat('Long trailing text. ', 20)],
 ]);
+
+it('preserves paragraph boundaries in the segment excerpt and clears its metadata context', function (string $excerpt, array $expected): void {
+    // Record the metadata received by the audio importer.
+    /** @var ArrayObject<int, array<string, mixed>> $calls */
+    $calls = new ArrayObject;
+    $content = '<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a>'
+        .$excerpt.'[accordion][/accordion]';
+
+    // Process through the public entry point rather than the private intro parser.
+    postAudioRun(postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)), $content);
+
+    // Require the correct paragraph structure and no metadata leaking to later imports.
+    expect(data_get($calls, '0.asset_excerpt'))->toBe($expected)
+        ->and(ProcessingContext::getAudioAssetExcerpt())->toBeNull();
+})->with([
+    'classic editor' => [" First paragraph\n\nSecond paragraph ", [postAudioParagraph('First paragraph'), postAudioParagraph('Second paragraph')]],
+    'literal mutation text' => ['PEST Mutator was here!', [postAudioParagraph('PEST Mutator was here!')]],
+    'raw HTML block' => ["<!-- wp:html -->First paragraph\n\nSecond paragraph<!-- /wp:html -->", [postAudioParagraph('First paragraphSecond paragraph')]],
+]);
+
+it('preserves literal text in all single segment intro positions and the asset title', function (): void {
+    // Use the empty-string mutator's replacement as legitimate content, not an empty value.
+    $text = 'PEST Mutator was here!';
+    /** @var ArrayObject<int, array<string, mixed>> $calls */
+    $calls = new ArrayObject;
+    $content = $text.'[audio mp3="x"][/audio]<a>Download this episode</a>'
+        .$text.'[accordion][/accordion]'.$text;
+
+    // Exercise all three intro positions through the public single-segment path.
+    $result = postAudioRun(postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)), $content, $text);
+
+    // Keep every occurrence and preserve the same text as the audio asset title.
+    expect($result['intro'] ?? null)->toBe([postAudioParagraph($text), postAudioParagraph($text), postAudioParagraph($text)])
+        ->and(data_get($calls, '0.asset_title'))->toBe($text);
+});
+
+it('trims each intro piece before joining markup across an audio segment', function (string $content): void {
+    // Allow a preformatted wrapper to span the audio content being removed.
+    $result = postAudioRun(postAudioProcessor(postAudioRecordingProcessor(new ArrayObject), postAudioAccordion(new ArrayObject)), $content);
+
+    // Preserve the intentional separator without retaining whitespace at either join.
+    expect(data_get($result, 'intro.0.type'))->toBe('codeBlock')
+        ->and(data_get($result, 'intro.0.content.0.text'))->toBe("A\n\nB");
+})->with([
+    'tail after an accordion' => ['<pre>A<h3>One</h3>[audio mp3="x"][/audio][accordion][/accordion] B</pre>'],
+    'tail after a download link' => ['<pre>A<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a> B</pre>'],
+    'space exposed by a removed heading' => ['<pre>A <h2>Episodes</h2><h3>One</h3>[audio mp3="x"][/audio][accordion][/accordion]B</pre>'],
+    'single segment prefix' => ['<pre>A [audio mp3="x"][/audio]<a>Download this episode</a>B</pre>[accordion][/accordion]'],
+    'single segment suffix without an accordion' => ['<pre>A[audio mp3="x"][/audio]<a>Download this episode</a> B</pre>'],
+]);
+
+it('removes a trailing section heading separated from the audio heading by a NUL', function (): void {
+    // Trim the prefix before deciding whether its final heading is only a section label.
+    $content = "<h2>Episodes</h2>\0<h3>One</h3>[audio mp3=\"x\"][/audio][accordion][/accordion]";
+    $result = postAudioRun(postAudioProcessor(postAudioRecordingProcessor(new ArrayObject), postAudioAccordion(new ArrayObject)), $content);
+
+    // Do not retain the section label as the entry intro.
+    expect($result['intro'] ?? null)->toBe([]);
+});
+
+it('reads only heading contents as the segment title when an attribute holds an encoded delimiter', function (): void {
+    // Record titles passed to the audio importer without interpreting heading attributes as text.
+    /** @var ArrayObject<int, array<string, mixed>> $calls */
+    $calls = new ArrayObject;
+    $content = '<h3 data-label="&gt;X">One</h3>[audio mp3="x"][/audio][accordion][/accordion]';
+
+    // Process the heading through the public audio entry point.
+    postAudioRun(postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)), $content);
+
+    // Require both title consumers to receive the heading body alone.
+    expect(data_get($calls, '0.segment_title'))->toBe('One')
+        ->and(data_get($calls, '0.asset_title'))->toBe('One');
+});
 
 it('returns nothing when the only audio shortcode sits inside an image tag the second image pass removes', function (): void {
     /** @var AudioShortcodeProcessor&MockInterface $audio */
