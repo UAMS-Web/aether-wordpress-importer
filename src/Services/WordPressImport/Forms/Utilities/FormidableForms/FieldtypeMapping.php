@@ -4374,7 +4374,7 @@ class FieldtypeMapping
      * Formidable Forms stores conditional logic in the field_options JSON with these
      * key properties:
      *   - show_hide: "show" or "hide" (action type, defaults to "show")
-     *   - any_all: "all" or "any" (logic type, defaults to "all")
+     *   - any_all: "all" or "any" (logic type, defaults to "any", as in Formidable Pro)
      *   - hide_field: Array of field IDs to check
      *   - hide_field_cond: Array of operators (==, !=, >, <, LIKE)
      *   - hide_opt: Array of values to compare against
@@ -4404,7 +4404,7 @@ class FieldtypeMapping
             ? $fieldOptions['show_hide']
             : 'show';
 
-        // Extract logic type (all/any) with fallback to 'all' when not specified
+        // Extract logic type (all/any) with fallback to 'any', Formidable Pro's default, when not specified
         $logicType = \is_string($fieldOptions['any_all'] ?? null)
             ? $fieldOptions['any_all']
             : 'any';
@@ -4534,7 +4534,7 @@ class FieldtypeMapping
             $actionType = $conditions['send_stop'] === 'stop' ? 'hide' : 'show';
         }
 
-        // Extract logic type (all/any) with fallback to 'all' when not specified
+        // Extract logic type (all/any) with fallback to 'any', Formidable Pro's default, when not specified
         $logicType = \is_string($conditions['any_all'] ?? null)
             ? $conditions['any_all']
             : 'any';
