@@ -149,10 +149,21 @@ describe('local-ci.json against ci.yml', () => {
         const run = Object.fromEntries(config.jobs.map((job) => [job.name, job.run]))
         const ciLines = ci.split('\n').map((line) => line.trim())
 
-        for (const name of ['node-test', 'python-test']) {
+        for (const name of ['node-test', 'python-test', 'changed-tests']) {
             // A whole line, not a substring, so a narrowed command cannot pass.
             assert.ok(ciLines.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
         }
+    })
+
+    it('runs the shared changed-tests report with history and independent dependencies', () => {
+        const own = jobText('changed-tests')
+        const job = config.jobs.find((job) => job.name === 'changed-tests')
+
+        assert.equal(job.run, 'node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs --tests tests/Unit --tests tests/Integration')
+        assert.equal(config.base, 'main', 'the local fallback must match the configured base')
+        assert.match(own, /^ {10}fetch-depth: 0$/m)
+        assert.match(own, /^ {6}- uses: \.\/\.github\/actions\/setup$/m)
+        assert.doesNotMatch(own, /--install none|continue-on-error|\|\| true/)
     })
 
     // The called chain runs Composer scripts from this repository's checkout, so a local command

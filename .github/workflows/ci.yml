@@ -92,6 +92,33 @@ jobs:
       all-platform-jobs: 'composer-validate pint rector phpstan'
       mutate: false
 
+  changed-tests:
+    name: Changed tests against base (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    if: vars.RUN_REMOTE_CI != 'false'
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - uses: ./.github/actions/setup
+
+      # Feature tests require the host app and are excluded from this standalone report.
+      # Test failures against base are reported, not rejected. An unavailable comparison fails.
+      # PARITY: mirrored by the `changed-tests` job in local-ci.json.
+      - name: Report changed tests against base
+        run: node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs --tests tests/Unit --tests tests/Integration
+
   spell:
     name: Spell check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -206,6 +233,7 @@ jobs:
     name: CI
     needs:
       - checks
+      - changed-tests
       - spell
       - node-test
       - python-test
