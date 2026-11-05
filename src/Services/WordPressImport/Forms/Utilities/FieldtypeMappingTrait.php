@@ -11739,7 +11739,7 @@ trait FieldtypeMappingTrait
                     $data
                 );
                 if ($result !== null) {
-                    return $resultProcessor !== null ? $resultProcessor($result) : $result;
+                    return $resultProcessor !== null ? $resultProcessor($result[0]) : $result[0];
                 }
             }
 
@@ -11763,7 +11763,7 @@ trait FieldtypeMappingTrait
                     $data
                 );
                 if ($result !== null) {
-                    return $resultProcessor !== null ? $resultProcessor($result) : $result;
+                    return $resultProcessor !== null ? $resultProcessor($result[0]) : $result[0];
                 }
             }
         }
@@ -11788,7 +11788,7 @@ trait FieldtypeMappingTrait
                 $data
             );
             if ($result !== null) {
-                return $resultProcessor !== null ? $resultProcessor($result) : $result;
+                return $resultProcessor !== null ? $resultProcessor($result[0]) : $result[0];
             }
         }
 
