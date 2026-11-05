@@ -114,6 +114,8 @@ trait FormProcessorTrait
             [
                 'site' => $site,
                 'pageSlug' => $pageSlug ?? 'none',
+                // The block processor calls this warning only with a null form ID.
+                // @pest-mutate-ignore: CoalesceRemoveLeft
                 'form_id' => $formId ?? 'none',
                 'attributes' => $attributes,
             ]
@@ -148,25 +150,6 @@ trait FormProcessorTrait
     }
 
     /**
-     * Check if a form handle exists for the given form ID.
-     *
-     * @param  string|int|null  $formId  The form ID to check
-     * @param  string  $pluginName  The plugin name ('Gravity Forms', 'Formidable Forms' or 'Ninja Forms')
-     * @return bool True if a form handle exists, false otherwise
-     */
-    protected function hasFormHandle(
-        string|int|null $formId,
-        string $pluginName
-    ): bool {
-        $formHandle = $this->getFormHandle(
-            $formId,
-            $pluginName
-        );
-
-        return $formHandle !== null;
-    }
-
-    /**
      * Get the form handle for the given form ID.
      *
      * @param  string|int|null  $formId  The form ID to look up
@@ -181,6 +164,8 @@ trait FormProcessorTrait
             return null;
         }
 
+        // PHP normalizes integer keys identically before and after a string cast.
+        // @pest-mutate-ignore: RemoveStringCast
         $formIdString = (string) $formId;
         // Check the appropriate static cache based on plugin name
         if ($pluginName === 'Gravity Forms') {
@@ -232,6 +217,8 @@ trait FormProcessorTrait
         string $formHandle,
         string $pluginName
     ): void {
+        // Array keys normalize integers and null to the same keys as these casts.
+        // @pest-mutate-ignore: RemoveStringCast
         $formIdString = (string) $formId;
 
         if ($pluginName === 'Gravity Forms') {

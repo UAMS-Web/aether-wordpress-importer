@@ -11,6 +11,12 @@ declare(strict_types=1);
  * is in the light Statamic band because the set's row ID comes from Statamic's
  * RowId fieldtype.
  *
+ * The shared FormProcessorTrait retains three equivalent-mutant annotations:
+ * two string casts used only as array keys, which PHP normalizes identically,
+ * and the warning's form-ID fallback, whose only caller supplies null. The
+ * warning payload is asserted in GravityFormsBlockProcessorTest. With those
+ * equivalents documented, every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/NinjaFormsShortcodeProcessorTest.php
  */
 
@@ -113,6 +119,9 @@ it('uses the created Ninja Forms handle, not another plugin\'s handle for the sa
 });
 
 it('notes a missing form ID without tracking one', function (array $attributes): void {
+    // Keep an invalid cached ID from turning a missing reference into a form link.
+    setNinjaShortcodeHandles('createdNinjaFormsHandles', ['' => 'not_a_valid_reference']);
+
     $set = parseNinjaShortcode($attributes);
 
     expect(ninjaSetAttr($set, 'values'))->toBe([
@@ -124,6 +133,29 @@ it('notes a missing form ID without tracking one', function (array $attributes):
     'no id' => [[]],
     'empty id' => [['id' => '']],
 ]);
+
+it('preserves a nonnumeric shortcode ID in the import note and tracking', function (): void {
+    // Pin string IDs rather than imposing the block processor's numeric-only rule.
+    $set = parseNinjaShortcode(['id' => 'PEST Mutator was here!']);
+
+    // Resolve the same ID after a form has been created for it.
+    setNinjaShortcodeHandles('createdNinjaFormsHandles', ['PEST Mutator was here!' => 'named_form']);
+    $linkedSet = parseNinjaShortcode(['id' => 'PEST Mutator was here!']);
+
+    // Check both consumers of the ID so rejecting it cannot silently drop a reference.
+    expect(ninjaSetAttr($set, 'values'))->toBe([
+        'type' => 'form',
+        'import_wordpress_notes' => 'Ninja Forms form ID PEST Mutator was here!',
+    ])
+        ->and(ninjaSetAttr($linkedSet, 'values'))->toBe([
+            'type' => 'form',
+            'form' => 'named_form',
+        ])
+        ->and(NinjaFormsShortcodeProcessor::getFormIds())->toBe([
+            'PEST Mutator was here!',
+            'PEST Mutator was here!',
+        ]);
+});
 
 it('gives each set its own row ID', function (): void {
     $first = parseNinjaShortcode(['id' => '1']);

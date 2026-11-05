@@ -167,6 +167,8 @@ trait FormBlockProcessorTrait
     private function formIdFromBlockAttributes(
         array $attributes
     ): int|string|null {
+        // is_numeric() also rejects both the empty string and the mutation's text.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if (
             ! isset($attributes['formId'])
             || $attributes['formId'] === ''
@@ -180,6 +182,8 @@ trait FormBlockProcessorTrait
             return null;
         }
 
+        // Both branches produce the same form reference after tracking casts it.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (\is_int($formId) || \is_string($formId)) {
             return $formId;
         }
