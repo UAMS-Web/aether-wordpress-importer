@@ -101,7 +101,7 @@ it('rejects comments that are not a wp:gravityforms/form block', function (strin
 })->with([
     'closing comment' => ['/wp:gravityforms/form'],
     'formidable block' => ['wp:formidable/simple-form {"formId":"3"}'],
-    'longer block name' => ['wp:gravityforms/formx'],
+    'longer block name' => ['wp:gravityforms/forms'],
     'prefixed' => ['x wp:gravityforms/form'],
     'trailing text' => ['wp:gravityforms/form {"formId":"3"} extra'],
     'empty attribute braces' => ['wp:gravityforms/form {}'],
@@ -167,6 +167,45 @@ it('escapes form handles in the set markup', function (): void {
 
     expect($result['html'] ?? null)->toBe(
         '<div data-set-type="form"'.SetMarkupNonce::attribute().' data-set-attr-form="a&quot;b&lt;c"></div>'
+    );
+});
+
+it('escapes extension field names and values and omits unsupported attributes', function (): void {
+    // Add extension fields through the processor's public customization method.
+    $processor = new class extends GravityFormsBlockProcessor
+    {
+        /**
+         * Supply extension values with unsafe names and unsupported value types.
+         *
+         * @param  array<int|string, mixed>  $values  The values to augment
+         * @param  array<int|string, mixed>  $attributes  The original block attributes
+         */
+        public function handleTitleAndDescription(
+            array &$values,
+            array $attributes
+        ): void {
+            $values['custom"field'] = '<value>';
+            $values['empty'] = null;
+            $values['nested'] = ['value'];
+            $values[7] = 'numeric key';
+        }
+    };
+
+    // Exercise the same public process entry point as a normal form block.
+    $node = (new DOMDocument)->createComment('wp:gravityforms/form');
+    $result = $processor->process(
+        $node,
+        ['formId' => '3'],
+        'default',
+        (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor(),
+        new BufferedOutput
+    );
+
+    // Require escaping of both halves of the attribute and exclusion of invalid fields.
+    expect($result['html'] ?? null)->toBe(
+        '<div data-set-type="form"'.SetMarkupNonce::attribute()
+        .' data-set-attr-import_wordpress_notes="Gravity Forms form ID 3"'
+        .' data-set-attr-custom&quot;field="&lt;value&gt;"></div>'
     );
 });
 
