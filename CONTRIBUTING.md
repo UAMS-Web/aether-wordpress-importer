@@ -33,3 +33,11 @@ The [pull request template](.github/pull_request_template.md) fills in the skele
 
 Coding agents follow the same path. Their instructions are in [`AGENTS.md`](AGENTS.md) and the shared skills and rules under `.claude/`, which are synced from `UAMS-Web/uams-claude-skills`.
 <!-- uams-claude-skills:end -->
+
+## Amp orbs
+
+Amp runs [`.agents/setup`](.agents/setup) before capturing a project snapshot. It installs PHP 8.4 with the CI extensions and PCOV, Composer 2, Node 22, and the locked Composer and npm dependencies. In a primary checkout it also provisions worktree slot `a` when absent, with its own dependencies. Existing slots are not changed; refresh them through `scripts/worktree-slots.mjs` after their base moves.
+
+Exact snapshots skip setup. Stale snapshots rerun it, reusing installed system packages and download caches. The warm dependency installs are intentionally left to the package managers rather than custom cache markers.
+
+[`.agents/resume`](.agents/resume) only checks that the tools and dependencies are present. It does not install packages, start services, or authenticate a user. This package needs no database, app server, environment file, or private exports corpus for its normal standalone checks. Host-app tests still require the separate host application.

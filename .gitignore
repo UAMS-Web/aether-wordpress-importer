@@ -50,3 +50,6 @@ __pycache__/
 # that had it initialized keeps the clone after the gitlink is gone, and this keeps that
 # clone from reading as untracked work or being added back by a broad `git add`.
 /src/Services/WordPressImport/Tests/Exports/
+
+# Orb portal metadata is local to each thread.
+/.amp/portals/*
