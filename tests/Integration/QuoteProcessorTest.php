@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+// Existing Latin fixtures and serialized alignment values are intentional.
+// cspell:ignore aligncenter alignwide aliquet Donec eleifend felis fringilla justo magnis mollis natoque Nullam
+// cspell:ignore pede pellentesque penatibus porttitor pretium quis sociis tincidunt ultricies vulputate
+
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -19,6 +23,15 @@ uses(StatamicTestCase::class);
  * Tests the processing of WordPress wp:quote blocks into Tiptap-compatible
  * HTML for Statamic Bard sets. Routed to the light Statamic band because the
  * null-return paths log via the `Log` facade, which needs a booted container.
+ *
+ * Accepted equivalents retain defensive guards: fixed native XPath expressions
+ * yield element lists, selected nodes retain native document ownership, the
+ * internal HTML parser emits arrays, and alignment and author values are already
+ * nonempty strings. An empty comment cannot contain the closing block marker.
+ * These invariants do not guarantee serialization: a caller-supplied document can
+ * report failure, and the exact warning snippet tests that fallback separately.
+ * Linux, PHP 8.4.27, PCOV: 149 default-set mutants tested, with no uncovered result
+ * or timeout. Under the stated invariants, every killable mutant is dead.
  *
  * @command  php vendor/bin/pest tests/Integration/QuoteProcessorTest.php
  */
@@ -362,10 +375,8 @@ it('rejects a text node that reads like the block comment', function (): void {
 });
 
 it('warns with the site, page and attributes when no blockquote is found', function (?string $pageSlug, string $logged): void {
-    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($logged): bool {
-        return str_contains($message, 'QuoteProcessor::process: No valid wp:quote blockquote found')
-            && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'attributes' => ['align' => 'wide']];
-    });
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No valid wp:quote blockquote found')
+        && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'attributes' => ['align' => 'wide']]);
 
     $comment = quoteProcessorCommentNode($this->doc, '<!-- wp:quote --><p>Not a quote.</p><!-- /wp:quote -->');
 
@@ -378,10 +389,8 @@ it('warns with the site, page and attributes when no blockquote is found', funct
 it('warns once, with the start of the block, when the quote has no paragraphs', function (?string $pageSlug, string $logged): void {
     $blockquote = '<blockquote class="wp-block-quote"><cite>'.str_repeat('a', 120).'</cite></blockquote>';
 
-    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($blockquote, $logged): bool {
-        return str_contains($message, 'QuoteProcessor::process: No paragraphs found in wp:quote block')
-            && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'node_html' => substr($blockquote, 0, 100).'...'];
-    });
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No paragraphs found in wp:quote block')
+        && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'node_html' => substr($blockquote, 0, 100).'...']);
 
     $comment = quoteProcessorCommentNode($this->doc, '<!-- wp:quote -->'.$blockquote.'<!-- /wp:quote -->');
 
@@ -390,6 +399,33 @@ it('warns once, with the start of the block, when the quote has no paragraphs', 
     'a page slug' => ['a-page', 'a-page'],
     'no page slug' => [null, 'none'],
 ]);
+
+it('keeps an empty diagnostic snippet when the supplied document cannot serialize', function (): void {
+    // A caller can supply a document with a serializer that reports failure.
+    $document = new class extends DOMDocument
+    {
+        /**
+         * Report serialization failure for the supplied node.
+         *
+         * @param  ?DOMNode  $node  The node to serialize
+         * @return false Serialization is unavailable
+         */
+        public function saveHTML(?DOMNode $node = null): string|false
+        {
+            return false;
+        }
+    };
+
+    // Keep the diagnostic fallback observable, not merely the null result.
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No paragraphs found in wp:quote block')
+        && $context === ['site' => 'test-site', 'pageSlug' => 'test-page', 'node_html' => '...']);
+
+    $comment = quoteProcessorCommentNode($document, '<!-- wp:quote --><blockquote class="wp-block-quote"></blockquote><!-- /wp:quote -->');
+
+    // Native ownership still points to the caller's custom document.
+    expect($comment->ownerDocument)->toBe($document);
+    expect($this->processor->process($comment, [], 'test-site', $this->assetImporter, quoteProcessorNullOutput(), [], [], 'test-page'))->toBeNull();
+});
 
 it('writes the set markup with the nonce, the alignment and the quote', function (): void {
     $html = '<!-- wp:quote --><blockquote class="wp-block-quote"><p>Words.</p></blockquote><!-- /wp:quote -->';
@@ -477,12 +513,10 @@ it('stops collecting sibling paragraphs at the closing comment', function (): vo
 });
 
 it('warns and returns null when no paragraph parses to any content', function (): void {
-    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context): bool {
-        return str_contains($message, 'QuoteProcessor::process: No valid paragraph content parsed in wp:quote block')
-            && ($context['site'] ?? null) === 'test-site'
-            && ($context['pageSlug'] ?? null) === 'test-page'
-            && ($context['node_html'] ?? null) === substr('<blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120), 0, 100).'...';
-    });
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No valid paragraph content parsed in wp:quote block')
+        && ($context['site'] ?? null) === 'test-site'
+        && ($context['pageSlug'] ?? null) === 'test-page'
+        && ($context['node_html'] ?? null) === substr('<blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120), 0, 100).'...');
 
     $html = '<!-- wp:quote --><blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120).'</script></p></blockquote><!-- /wp:quote -->';
 
