@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This package has no daemons or authentication to restore. Never install on wake.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+for tool in php composer node npm; do
+    command -v "$tool" >/dev/null || { echo "Missing $tool; run .agents/setup" >&2; exit 1; }
+done
+[[ -f vendor/autoload.php && -x node_modules/.bin/cspell ]] || {
+    echo 'Missing package dependencies; run .agents/setup' >&2
+    exit 1
+}
+echo 'Orb toolchain and dependencies available'
