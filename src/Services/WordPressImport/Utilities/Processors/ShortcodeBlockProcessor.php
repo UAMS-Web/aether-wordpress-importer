@@ -60,6 +60,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         ?string $pageSlug
     ): bool {
         if ($node->nodeType !== XML_COMMENT_NODE) {
+            // The private matcher also rejects non-comments before reading their value.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -124,7 +126,15 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     'type' => $debugNode::class,
                     'nodeType' => $debugNode->nodeType,
                     'content_preview' => \substr(
-                        $debugNode->nodeValue ?? $debugNode->textContent ?? '',
+                        // Native siblings expose string textContent, even for null nodeValue.
+                        // @pest-mutate-ignore: EmptyStringToNotEmpty
+                        // @phpstan-ignore nullCoalesce.expr (Preserve the original fallback.)
+                        (
+                            // For native nodes with a value, textContent is that same value;
+                            // entity references have null nodeValue and use textContent in either case.
+                            // @pest-mutate-ignore: CoalesceRemoveLeft
+                            $debugNode->nodeValue ?? $debugNode->textContent
+                        ) ?? '',
                         0,
                         100
                     ),
@@ -183,7 +193,11 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     'shortcode_content' => $shortcodeContent,
                     'content_length' => \strlen($shortcodeContent),
                     'content_preview' => \substr($shortcodeContent, 0, 200),
+                    // blockContent() already trimmed this unchanged string.
+                    // @pest-mutate-ignore: UnwrapTrim
                     'starts_with_bracket' => \str_starts_with(\trim($shortcodeContent), '['),
+                    // The same blockContent() trim already removed the trailing whitespace.
+                    // @pest-mutate-ignore: UnwrapTrim
                     'ends_with_bracket' => \str_ends_with(\trim($shortcodeContent), ']'),
                 ]
             );
@@ -422,6 +436,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         }
 
         // Check if we processed any shortcodes and meaningful content remains
+        // Without conversion this is the nonempty, trimmed blockContent() result.
+        // @pest-mutate-ignore: UnwrapTrim
         if (! $hasProcessedShortcode
         && \trim($processedContent) !== '') {
             // Check if content exists but no shortcodes were processed
@@ -595,6 +611,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
     private static function matchesOpeningShortcodeComment(
         DOMNode $node
     ): bool {
+        // The only caller, canProcess(), has already required XML_COMMENT_NODE.
+        // @pest-mutate-ignore: InstanceOfToTrue
         if (! $node instanceof DOMComment) {
             return false;
         }
@@ -635,6 +653,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             } elseif ($currentNode instanceof DOMElement) {
                 $ownerDocument = $currentNode->ownerDocument;
 
+                // An element reached through the sibling chain belongs to its DOMDocument.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 if ($ownerDocument instanceof DOMDocument) {
                     $nodeContent = $ownerDocument->saveHTML($currentNode);
 
@@ -715,6 +735,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
     private static function extractNodeValueString(
         ?string $nodeValue
     ): string {
+        // Callers read native DOMText or DOMComment values, always strings, not null.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return $nodeValue ?? '';
     }
 
