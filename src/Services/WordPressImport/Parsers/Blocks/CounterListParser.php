@@ -193,6 +193,8 @@ class CounterListParser
         foreach ($sections as $section) {
             // Skip malformed section rows before reading keyed values.
             if (! is_array($section)) {
+                // The sole caller uses private normalization, which creates only arrays.
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 

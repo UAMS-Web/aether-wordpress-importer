@@ -25,6 +25,10 @@ use UAMSWeb\Aether\WordPressImporter\Tests\Support\FakeAssetImporter;
  * their count, the crop key, the footer link, the blocks it skips, and what it
  * reports about a gallery the block cannot render.
  *
+ * Equivalent image-count fallback mutants cannot be reached: the private
+ * assembly method always supplies an images array to the reporting method.
+ * Every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/GalleryParserTest.php
  */
 uses(StatamicTestCase::class);
@@ -710,6 +714,14 @@ it('converts the crop value to the radio option key', function (string $entry, m
     'a padded ratio' => [' 0.75 ', 0.75],
     'an integer' => [1, 1],
 ]);
+
+it('serializes a negative zero crop string as the canonical positive zero', function (string $entry): void {
+    // Import the accepted numeric string through the public entry point.
+    $set = glSet($entry, glMinimal() + ['gallery_crop' => '-0.0']);
+
+    // Compare its serialized sign, which ordinary numeric equality cannot detect.
+    expect(json_encode($set['crop'] ?? null, JSON_PRESERVE_ZERO_FRACTION))->toBe('0.0');
+})->with('glEntries');
 
 it('falls back to no crop for a value that is not an option, and warns', function (string $entry): void {
     $set = [];

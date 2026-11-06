@@ -96,6 +96,8 @@ class OverlayParser
         foreach ($sections as $section) {
             // Skip invalid section rows that are not arrays.
             if (! is_array($section)) {
+                // Both public callers use private normalization, which creates only arrays.
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -255,7 +257,7 @@ class OverlayParser
      * replicator set.
      *
      * Maps block attributes to a uamsweb_block_overlay set, processing the
-     * overlay_section repeater for items. Handles textareas as plain text, imports
+     * overlay_section repeater for items. Handles text areas as plain text, imports
      * images via AssetImporter, and omits empty optional fields.
      *
      * @param  array<int|string, mixed>  $attributes  The block attributes from the wp:acf/text-overlay comment

@@ -116,7 +116,7 @@ function contentExpected(array $fields): array
  */
 function contentConvert(string $html): string
 {
-    $result = (new ReflectionMethod(ContentParser::class, 'convertIframesToVideoEmbeds'))
+    $result = new ReflectionMethod(ContentParser::class, 'convertIframesToVideoEmbeds')
         ->invoke(new ContentParser, $html);
 
     return \is_string($result) ? $result : '';
@@ -141,6 +141,11 @@ function contentVideoDiv(string $type, string $url, string $align = 'aligncenter
 }
 
 dataset('contentEntries', ['block', 'module']);
+
+it('preserves literal text that resembles a mutation marker', function (string $entry): void {
+    expect(contentSet($entry, ['content_content' => 'PEST Mutator was here!']))
+        ->toBe(contentExpected(['body' => contentParagraph('PEST Mutator was here!')]));
+})->with('contentEntries');
 
 it('maps the heading, hide flag, background and body', function (string $entry): void {
     expect(contentSet($entry, [
@@ -301,25 +306,23 @@ it('maps every field-key name, as the empty-body warning lists them', function (
         'field_content_geo_region_b' => 'r',
     ]);
 
-    $logSpy->shouldHaveReceived('warning', function (string $message, array $context): bool {
-        return $context['normalized_data_keys'] === [
-            'field_content_heading_b',
-            'field_content_hide_heading_b',
-            'field_content_content_b',
-            'field_content_description_b',
-            'field_content_background_color_b',
-            'field_content_geo_valid_b',
-            'field_content_geo_b',
-            'field_content_geo_region_b',
-            'content_heading',
-            'content_hide_heading',
-            'content_content',
-            'content_background_color',
-            'content_geo_valid',
-            'content_geo',
-            'content_geo_region',
-        ];
-    });
+    $logSpy->shouldHaveReceived('warning', fn (string $message, array $context): bool => $context['normalized_data_keys'] === [
+        'field_content_heading_b',
+        'field_content_hide_heading_b',
+        'field_content_content_b',
+        'field_content_description_b',
+        'field_content_background_color_b',
+        'field_content_geo_valid_b',
+        'field_content_geo_b',
+        'field_content_geo_region_b',
+        'content_heading',
+        'content_hide_heading',
+        'content_content',
+        'content_background_color',
+        'content_geo_valid',
+        'content_geo',
+        'content_geo_region',
+    ]);
 });
 
 it('keeps a module whose body is empty, without a warning', function (mixed $content): void {

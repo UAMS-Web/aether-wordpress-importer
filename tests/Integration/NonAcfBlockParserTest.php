@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Process\Process;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\NonAcfBlockParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
@@ -39,6 +40,48 @@ afterEach(function (): void {
     (new NonAcfBlockParser)->resetStaticVariables();
 });
 
+it('preserves a standalone Formidable shortcode before any explicit reset', function (): void {
+    // Start fresh so reset hooks cannot conceal an incorrect initial block state.
+    $script = <<<'PHP'
+    require 'vendor/autoload.php';
+
+    use Symfony\Component\Console\Output\NullOutput;
+    use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+    use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\NonAcfBlockParser;
+    use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+
+    // Fix only the delegated conversion, leaving the parser's initial state intact.
+    $shortcodes = Mockery::mock(ShortcodeProcessor::class);
+    $shortcodes->shouldReceive('processShortcodesInContent')->andReturn('preserved');
+    $parser = new NonAcfBlockParser(shortcodeProcessor: $shortcodes);
+    $document = new DOMDocument;
+    $document->loadXML('<body><div>[formidable id="5"]</div></body>');
+    $nodes = $document->documentElement->childNodes;
+    $accumulator = [];
+    $result = $parser->parseNode(
+        $nodes->item(0),
+        0,
+        $nodes,
+        $accumulator,
+        'default',
+        Mockery::mock(AssetImporter::class),
+        new NullOutput
+    );
+
+    // Return observable parsing output rather than the private block-state flag.
+    echo json_encode([$result, $accumulator], JSON_THROW_ON_ERROR);
+    PHP;
+
+    $process = new Process([PHP_BINARY, '-r', $script], dirname(__DIR__, 2));
+    $process->setTimeout(10);
+    $process->mustRun();
+
+    expect(json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR))->toBe([
+        ['processed' => true, 'skipCount' => 1],
+        [['html' => 'preserved']],
+    ]);
+});
+
 /**
  * The body child nodes of an HTML document.
  *
@@ -49,6 +92,7 @@ function nonAcfNodes(string $html): DOMNodeList
 {
     $doc = new DOMDocument;
     $doc->loadHTML('<html><body>'.$html.'</body></html>', LIBXML_NOERROR);
+
     $body = $doc->getElementsByTagName('body')->item(0);
     \assert($body instanceof DOMElement);
 
@@ -159,7 +203,7 @@ function nonAcfParseAt(NonAcfBlockParser $parser, DOMNodeList $nodes, int $index
 
 dataset('nonAcfFormProcessors', ['tablePress', 'gravity', 'formidable', 'ninja']);
 
-it('appends a claiming processor\'s HTML with its skip count', function (string $key): void {
+it("appends a claiming processor's HTML with its skip count", function (string $key): void {
     $parser = nonAcfParser([$key => nonAcfProcessor(
         [
             'tablePress' => TablePressBlockProcessor::class,
@@ -239,7 +283,7 @@ it('asks the processors in order and stops at the first that claims the block', 
     $gravity->shouldNotHaveReceived('canProcess');
 });
 
-it('passes the block comment\'s JSON object to the processor as its attributes', function (string $comment, array $expected): void {
+it("passes the block comment's JSON object to the processor as its attributes", function (string $comment, array $expected): void {
     $tablePress = nonAcfProcessor(TablePressBlockProcessor::class, true, ['html' => '<p>Table</p>']);
     $accumulator = [];
     $nodes = nonAcfNodes($comment);
@@ -257,7 +301,7 @@ it('passes the block comment\'s JSON object to the processor as its attributes',
     'no object' => ['<!-- wp:block /-->', []],
 ]);
 
-it('returns a shortcode block\'s page builder set directly', function (): void {
+it("returns a shortcode block's page builder set directly", function (): void {
     $set = ['type' => 'uamsweb_block_blogroll'];
     $accumulator = [];
 
@@ -470,7 +514,7 @@ it('runs the HTML through the link processor, the Bard parser and the heading de
     $headingDemoter = Mockery::mock(HeadingDemoter::class, ['demote' => [['type' => 'demoted']]]);
     $content = [];
 
-    $set = (new NonAcfBlockParser($bardParser, $linkProcessor, $headingDemoter))
+    $set = new NonAcfBlockParser($bardParser, $linkProcessor, $headingDemoter)
         ->finalizeNonAcfContent([['html' => '<p>A</p>'], ['html' => '<p>B</p>']], $content, 'default', new FakeAssetImporter, new NullOutput);
 
     expect($set['body'] ?? null)->toBe([['type' => 'demoted']]);
@@ -486,7 +530,7 @@ it('produces no set when there is nothing to fold', function (array $fragments, 
     $headingDemoter = Mockery::mock(HeadingDemoter::class, ['demote' => $demoted]);
     $content = [];
 
-    expect((new NonAcfBlockParser($bardParser, null, $headingDemoter))
+    expect(new NonAcfBlockParser($bardParser, null, $headingDemoter)
         ->finalizeNonAcfContent($fragments, $content, 'default', new FakeAssetImporter, new NullOutput))->toBeNull();
 })->with([
     'no fragments' => [[], [['type' => 'p']], [['type' => 'p']]],

@@ -38,6 +38,10 @@ use UAMSWeb\Aether\WordPressImporter\Tests\Support\FakeAssetImporter;
  * Every block parser is replaced with a recorder, so each test sees exactly
  * which parser was called, with what, and returns a set naming it.
  *
+ * Equivalent fallback mutants cannot run: extracted block markup always has
+ * an opening comment beneath its body, and the fixed common processors supply
+ * integer skip counts. Every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/AcfBlockParserTest.php
  */
 uses(StatamicTestCase::class);
@@ -564,6 +568,36 @@ describe('a self-closing block', function (): void {
         'content' => ['uams-content', 'content'],
     ]);
 
+    it('skips native namespace nodes within a paired block node list', function (): void {
+        // Build the documented mixed node list using native XPath results.
+        $document = new DOMDocument;
+        $document->loadXML('<root xmlns:p="urn:probe"><!--wp:acf/uams-section {"data":{}}--><leaf/></root>');
+
+        $nodes = new DOMXPath($document)->query('//comment() | //leaf/namespace::*');
+        expect($nodes)->toBeInstanceOf(DOMNodeList::class);
+        \assert($nodes instanceof DOMNodeList);
+        $node = $nodes->item(0);
+        expect($node)->toBeInstanceOf(DOMComment::class)
+            ->and($nodes->item(1))->toBeInstanceOf(DOMNameSpaceNode::class);
+        \assert($node instanceof DOMComment);
+
+        // Parse the opening comment without treating namespace objects as content.
+        $calls = new AcfBlockCalls;
+        $context = new AcfBlockContext;
+        $result = acfBlockParser($calls)->parseNode(
+            $node,
+            0,
+            $nodes,
+            'test_site',
+            $context->assetImporter,
+            $context->output
+        );
+
+        // Preserve the paired block while omitting non-DOMNode XPath results.
+        expect($result)->toBe(['processed' => true, 'skipCount' => 3, 'set' => ['set' => 'section']])
+            ->and($calls->calls[0][1][1])->toBe([]);
+    });
+
     it('is matched against the block types in order', function (): void {
         $calls = new AcfBlockCalls;
 
@@ -757,6 +791,15 @@ describe('the inner content of a section or content block', function (): void {
 });
 
 describe('a Stacked block', function (): void {
+    it('rejects a block without its required attributes', function (): void {
+        $calls = new AcfBlockCalls;
+
+        $result = acfBlockParse(acfBlockParser($calls), new AcfBlockContext, '<!-- wp:acf/text-stacked /-->');
+
+        expect($result)->toBe(['processed' => false, 'skipCount' => 0, 'set' => null])
+            ->and($calls->calls)->toBe([]);
+    });
+
     it('is parsed as a Stacked block when an item has an image', function (string $suffix, int $skip): void {
         $calls = new AcfBlockCalls;
         $calls->returns['stacked'] = ['items' => ['item']];
@@ -1299,7 +1342,10 @@ describe('blocks in an HTML string', function (): void {
     it('restores the libxml error mode the caller had when a block parser changes it', function (): void {
         $previous = libxml_use_internal_errors(false);
         $calls = new AcfBlockCalls;
-        $calls->onRecord = static function (): void {
+        $observedMode = null;
+        $calls->onRecord = static function () use (&$observedMode): void {
+            // Observe the restored caller mode before the delegated parser changes it.
+            $observedMode = libxml_use_internal_errors();
             libxml_use_internal_errors(true);
         };
 
@@ -1307,13 +1353,14 @@ describe('blocks in an HTML string', function (): void {
             acfBlocksFromHtml(acfBlockParser($calls), new AcfBlockContext, '<!-- wp:acf/cta {"data":{}} /-->');
 
             expect($calls->names())->toBe(['cta'])
+                ->and($observedMode)->toBeFalse()
                 ->and(libxml_use_internal_errors())->toBeFalse();
         } finally {
             libxml_use_internal_errors($previous);
         }
     });
 
-    it('raises no warning for a block comment libxml cannot read cleanly', function (): void {
+    it('raises no warning for block content libxml cannot read cleanly', function (string $html): void {
         $previous = libxml_use_internal_errors(false);
         $warnings = [];
         set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
@@ -1323,14 +1370,17 @@ describe('blocks in an HTML string', function (): void {
         });
 
         try {
-            acfBlocksFromHtml(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, "<!-- wp:acf/cta {\"data\":{\"a\":\"\x01\"}} /-->");
+            acfBlocksFromHtml(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, $html);
         } finally {
             restore_error_handler();
             libxml_use_internal_errors($previous);
         }
 
         expect($warnings)->toBe([]);
-    });
+    })->with([
+        'control byte in comment' => ["<!-- wp:acf/cta {\"data\":{\"a\":\"\x01\"}} /-->"],
+        'invalid tag in paired content' => ['<!-- wp:acf/uams-section {"data":{}} --><not-html>Body</not-html><!-- /wp:acf/uams-section -->'],
+    ]);
 
     it('leaves no libxml error behind for a block comment libxml cannot read cleanly', function (): void {
         $previous = libxml_use_internal_errors(true);

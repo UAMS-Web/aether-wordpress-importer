@@ -17,6 +17,10 @@ use UAMSWeb\Aether\WordPressImporter\Tests\Support\FakeAssetImporter;
  * file that was imported, and the whole set skipped when no item survives.
  *
  * Both entry points share one mapping, so each case runs through both.
+ * The invalid-row ContinueToBreak and body-fallback EmptyStringToNotEmpty
+ * mutants are equivalent: both public callers construct every section as an
+ * array containing a non-null body field before calling private processItems().
+ * Every killable mutant is dead.
  *
  * @command  php vendor/bin/pest tests/Integration/LinkListParserTest.php
  */

@@ -7,6 +7,10 @@ declare(strict_types=1);
  * comment, reads the JSON attributes after its name, and hands them to the
  * knowledge base topics parser, leaving every other node unprocessed (#1314).
  *
+ * The empty-string fallback mutant is equivalent even for a nullable comment:
+ * neither empty text nor the mutation sentinel contains the block prefix or
+ * JSON braces. Every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Unit/MinervaKBBlockParserTest.php
  */
 

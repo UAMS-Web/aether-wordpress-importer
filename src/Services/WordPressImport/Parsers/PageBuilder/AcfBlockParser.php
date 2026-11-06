@@ -734,8 +734,8 @@ class AcfBlockParser
     private function getNodeText(
         DOMNode $node
     ): string {
-        // Every caller passes a comment node, whose nodeValue is always a string, so
-        // the fallback only narrows the type.
+        // Neither empty text nor the mutation sentinel matches block-comment syntax,
+        // including when a caller supplies a comment subclass with a null value.
         // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($node->nodeValue) ? $node->nodeValue : '';
     }
@@ -995,14 +995,7 @@ class AcfBlockParser
         // caller's mode (wordpress-importer-archive#1354). The mode is process-wide, so leaving it on
         // would silence every later libxml warning in the import, including
         // the invalid-expression warning XpathHelper logs.
-        //
-        // Switching collection off shows only as a warning from loadHTML(), and
-        // which comments make libxml raise one depends on its version: 2.11
-        // flags a control character in a comment, the macOS build the gate runs
-        // does not. No input is known to raise one on every version, so this
-        // mutant is not killed.
         // ---
-        // @pest-mutate-ignore: TrueToFalse
         $previousInternalErrors = \libxml_use_internal_errors(true);
 
         try {
@@ -1017,19 +1010,16 @@ class AcfBlockParser
             // Clear any libxml errors that occurred during parsing
             \libxml_clear_errors();
 
-            // Put back the mode the body had. parseAcfBlocksFromHtml() restores
-            // the caller's mode in its own finally, so no test can observe this
-            // call except from inside the body; it keeps warnings visible while
-            // the block parsers run.
-            // @pest-mutate-ignore: RemoveFunctionCall
+            // Restore the mode before invoking a delegated block parser.
             \libxml_use_internal_errors($previousInternalErrors);
         }
 
         $body = $document->getElementsByTagName('body')->item(0);
 
         // The markup above always gives the document a body whose first child is the
-        // block's opening comment, so this guard only narrows the types.
-        // @pest-mutate-ignore: InstanceOfToTrue, RemoveNullSafeOperator
+        // block's opening comment, so this guard only narrows the types and its
+        // early return cannot run.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveNullSafeOperator, RemoveEarlyReturn
         if (! $body?->firstChild instanceof DOMNode) {
             return null;
         }
@@ -1090,8 +1080,7 @@ class AcfBlockParser
         while ($i < $nodes->length) {
             $node = $nodes->item($i);
 
-            // The loop bound keeps item() in range, so this guard only narrows the type
-            // @pest-mutate-ignore: InstanceOfToTrue
+            // Skip namespace-axis objects in the public XPath node-list input.
             if (! $node instanceof DOMNode) {
                 $i++;
 
@@ -1123,6 +1112,9 @@ class AcfBlockParser
 
                 // Check if block was successfully processed by a processor
                 if ($result !== null && $result !== []) {
+                    // The fixed common processors and helper normalization always
+                    // supply an integer skip count, so this fallback cannot run.
+                    // @pest-mutate-ignore:DecrementInteger,IncrementInteger
                     $skipCount = \is_int($result['skipCount'] ?? null)
                         ? $result['skipCount']
                         : 0;
