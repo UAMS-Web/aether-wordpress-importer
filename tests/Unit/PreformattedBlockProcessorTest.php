@@ -51,7 +51,7 @@ function preformattedOpeningNode(string $html): DOMNode
  */
 function preformattedAssetImporter(): AssetImporter
 {
-    return (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor();
+    return new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
 }
 
 /**
@@ -64,16 +64,24 @@ function preformattedAssetImporter(): AssetImporter
  */
 function processPreformatted(string $html, BufferedOutput $output, ?string $pageSlug = null): ?string
 {
-    return (new PreformattedBlockProcessor)->process(
-        preformattedOpeningNode($html),
-        [],
-        'default',
-        preformattedAssetImporter(),
-        $output,
-        [],
-        [],
-        $pageSlug
-    );
+    // Bound both exhausted-list and stuck-closing-comment traversal.
+    $previousLimit = (int) ini_get('max_execution_time');
+    set_time_limit(3);
+
+    try {
+        return (new PreformattedBlockProcessor)->process(
+            preformattedOpeningNode($html),
+            [],
+            'default',
+            preformattedAssetImporter(),
+            $output,
+            [],
+            [],
+            $pageSlug
+        );
+    } finally {
+        set_time_limit($previousLimit);
+    }
 }
 
 /**
@@ -106,7 +114,7 @@ it('rejects comments that are not an opening wp:preformatted block', function (s
 })->with([
     'closing comment' => ['/wp:preformatted'],
     'with attributes' => ['wp:preformatted {"fontSize":"small"}'],
-    'longer block name' => ['wp:preformattedx'],
+    'longer block name' => ['wp:preformatted-extra'],
     'prefixed' => ['x wp:preformatted'],
     'another block' => ['wp:code'],
 ]);
@@ -162,12 +170,12 @@ it('accepts a closing comment with surrounding whitespace', function (): void {
 
 it('skips other comments inside the block without collecting them', function (): void {
     $result = processPreformatted(
-        '<!-- wp:preformatted -->one<!-- note --><!-- /wp:preformatted extra -->two<!-- /wp:preformatted -->',
+        '<!-- wp:preformatted -->red<!-- note --><!-- /wp:preformatted extra -->wood<!-- /wp:preformatted -->',
         new BufferedOutput
     );
 
     // Neither the note nor the comment with trailing text closes the block
-    expect($result)->toBe('<pre>onetwo</pre>');
+    expect($result)->toBe('<pre>redwood</pre>');
 });
 
 it('does not treat text that reads /wp:preformatted as the closing comment', function (): void {
