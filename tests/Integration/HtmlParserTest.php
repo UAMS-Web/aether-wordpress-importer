@@ -37,8 +37,16 @@ function htmlParserProcess(array $context, ?string $pageSlug = null): array
 {
     $assetImporter = new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
 
-    /** @var array<string, mixed> $result */
-    $result = (new HtmlParser)->process($context, 'default', $assetImporter, new NullOutput, [], $pageSlug);
+    // Fail nonterminating ancestor traversal before the mutation child's outer timeout.
+    $previousLimit = (int) ini_get('max_execution_time');
+    set_time_limit(3);
+
+    try {
+        /** @var array<string, mixed> $result */
+        $result = (new HtmlParser)->process($context, 'default', $assetImporter, new NullOutput, [], $pageSlug);
+    } finally {
+        set_time_limit($previousLimit);
+    }
 
     return $result;
 }
