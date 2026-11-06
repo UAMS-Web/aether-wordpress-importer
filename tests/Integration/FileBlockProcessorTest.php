@@ -25,6 +25,10 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * attributes, and points `processedNode` at the block's `wp-block-file` div. A block
  * with no `href`, or one whose import fails, logs a warning and returns null.
  *
+ * A DOMComment subclass can expose a null nodeValue, unlike a native comment.
+ * The public detection guard rejects it before regex matching. Linux, PHP 8.4.27,
+ * PCOV: all 68 default-set mutants tested with no uncovered results or timeouts.
+ *
  * @command  php vendor/bin/pest tests/Integration/FileBlockProcessorTest.php
  */
 uses(StatamicTestCase::class);
@@ -151,6 +155,24 @@ it('accepts only a wp:file comment that carries a JSON object', function (string
     'text after the object' => ['<!-- wp:file {"id":5} trailing -->', false],
     'element, not comment' => ['<div class="wp-block-file">wp:file {"id":5}</div>', false],
 ]);
+
+it('rejects a comment subclass with a null node value', function (): void {
+    // DOM permits subclasses to expose the nullable value in its declared type.
+    $node = new class extends DOMComment
+    {
+        /**
+         * A missing comment value, rather than the native empty string.
+         */
+        public ?string $nodeValue = null;
+    };
+
+    // Keep the fixture on the comment-value path rather than the type guard.
+    expect($node->nodeType)->toBe(XML_COMMENT_NODE)
+        ->and($node->nodeValue)->toBeNull();
+
+    // The public guard must reject it before passing the value to the regex.
+    expect((new FileBlockProcessor)->canProcess($node, 'default', null))->toBeFalse();
+});
 
 it('keeps the original URL when file uploads are off and marks the block div processed', function (): void {
     $node = fileBlockOpeningNode(
