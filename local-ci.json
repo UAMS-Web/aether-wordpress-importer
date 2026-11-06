@@ -41,6 +41,12 @@
       "always": true
     },
     {
+      "name": "changed-tests",
+      "_note": "Reports standalone Unit and Integration tests against the merge base of origin/main; the shared script reads GITHUB_BASE_REF in Actions. Feature tests require the host app and are excluded. Test failures against base are information, while an unavailable comparison fails. With no changed Test.php files it reports nothing to compare without installing dependencies.",
+      "run": "node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs --tests tests/Unit --tests tests/Integration",
+      "always": true
+    },
+    {
       "name": "spell",
       "_note": "The prose corpus with a zero-files floor; see scripts/run-spell.mjs. Not npm run spell, which checks a broader corpus than the gate.",
       "run": "node scripts/run-spell.mjs",
