@@ -19,6 +19,15 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * fields and the filter, and `url` selects the link behavior. `orderby` is
  * `PeopleShortcodeOrderByTest`, and attribute normalization is `ShortcodeBlockProcessorTest`.
  *
+ * The Linux/PHP 8.4.27/PCOV default population contains 180 mutants: 174 tested
+ * by the runner and six uncovered constant-array removals. Direct plugin
+ * controls detect all six through order output or unexpected warnings; the
+ * unchanged order suite passes. The three strict word-list membership
+ * annotations explain the accepted equivalents. No uncovered candidate is
+ * counted as killed without its separate execution control.
+ *
+ * cspell:ignore lastname freehtml deptweb triweb sorttext
+ *
  * @command  php vendor/bin/pest tests/Integration/PeopleShortcodeProcessorTest.php
  */
 uses(StatamicTestCase::class);
