@@ -62,7 +62,7 @@ function spacerNodeAt(DOMNodeList $nodes, int $index): DOMNode
  */
 function spacerAssetImporter(): AssetImporter
 {
-    return (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor();
+    return new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
 }
 
 it('recognizes a wp:spacer comment with or without attributes', function (string $comment): void {
@@ -83,7 +83,7 @@ it('rejects comments that are not an opening wp:spacer block', function (string 
 })->with([
     'closing comment' => ['/wp:spacer'],
     'another block' => ['wp:separator'],
-    'longer block name' => ['wp:spacerx'],
+    'longer block name' => ['wp:spacer-extra'],
     'prefixed' => ['x wp:spacer'],
     'trailing text after attributes' => ['wp:spacer {"height":"40px"} extra'],
 ]);
@@ -104,13 +104,21 @@ it('strips the block and counts every node through the closing comment', functio
 
     expect($opening)->toBeInstanceOf(DOMComment::class);
 
-    $result = (new WpSpacerBlockProcessor)->process(
-        $opening,
-        [],
-        'default',
-        spacerAssetImporter(),
-        new BufferedOutput
-    );
+    // Bound termination when the traversal reaches its closing comment.
+    $previousLimit = (int) ini_get('max_execution_time');
+    set_time_limit(3);
+
+    try {
+        $result = (new WpSpacerBlockProcessor)->process(
+            $opening,
+            [],
+            'default',
+            spacerAssetImporter(),
+            new BufferedOutput
+        );
+    } finally {
+        set_time_limit($previousLimit);
+    }
 
     // Opening comment, the spacer div and the closing comment; the trailing
     // paragraph is not part of the block
@@ -156,13 +164,21 @@ it('does not treat text that reads /wp:spacer as the closing comment', function 
 it('counts every remaining sibling when the closing comment is missing', function (): void {
     $nodes = spacerFragmentNodes('<!-- wp:spacer --><div class="wp-block-spacer"></div><p>after</p>');
 
-    $result = (new WpSpacerBlockProcessor)->process(
-        spacerNodeAt($nodes, 0),
-        [],
-        'default',
-        spacerAssetImporter(),
-        new BufferedOutput
-    );
+    // Bound termination after the walk reaches the end of the sibling list.
+    $previousLimit = (int) ini_get('max_execution_time');
+    set_time_limit(3);
+
+    try {
+        $result = (new WpSpacerBlockProcessor)->process(
+            spacerNodeAt($nodes, 0),
+            [],
+            'default',
+            spacerAssetImporter(),
+            new BufferedOutput
+        );
+    } finally {
+        set_time_limit($previousLimit);
+    }
 
     expect($result['skipCount'] ?? null)->toBe(3);
 });
