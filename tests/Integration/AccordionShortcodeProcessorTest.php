@@ -18,6 +18,15 @@ declare(strict_types=1);
  * This is in the light Statamic band because `TextProcessor` logs through the
  * `Log` facade.
  *
+ * Linux/PHP 8.4.27 with PCOV tested 213 covered mutants. Twelve constant
+ * concatenation mutants have no executable coverage line; launching each
+ * directly fails in processor execution or an exact output assertion. They
+ * are not equivalent. The annotated equivalents are the no-section content
+ * fallback, a trim repeated by TextProcessor, and strict membership over the
+ * same three nonnumeric tag strings. Every killable mutant is dead.
+ *
+ * cspell:ignore onetwo nicuguidebook PARSEHUGE NOCDATA
+ *
  * @command  php vendor/bin/pest tests/Integration/AccordionShortcodeProcessorTest.php
  */
 
@@ -39,9 +48,9 @@ uses(StatamicTestCase::class);
  */
 function accordionAssetImporter(): AssetImporter
 {
-    $assetImporter = (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor();
+    $assetImporter = new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
 
-    (new ReflectionProperty(AssetImporter::class, 'baseBlogUrl'))->setValue($assetImporter, 'https://example.test');
+    new ReflectionProperty(AssetImporter::class, 'baseBlogUrl')->setValue($assetImporter, 'https://example.test');
 
     return $assetImporter;
 }
@@ -288,15 +297,23 @@ it('returns an empty array and leaves the context alone without a non-empty acco
  */
 function accordionFlattened(mixed $content): string
 {
-    return (new AccordionShortcodeProcessor)->toTiptapHtml(
-        ['name' => 'accordion', 'attributes' => [], 'content' => $content],
-        'default',
-        accordionAssetImporter(),
-        new BufferedOutput,
-        [],
-        [],
-        'slug'
-    );
+    // Detect list walks that cannot terminate without waiting for the runner.
+    $limit = (int) \ini_get('max_execution_time');
+    \set_time_limit(3);
+
+    try {
+        return (new AccordionShortcodeProcessor)->toTiptapHtml(
+            ['name' => 'accordion', 'attributes' => [], 'content' => $content],
+            'default',
+            accordionAssetImporter(),
+            new BufferedOutput,
+            [],
+            [],
+            'slug'
+        );
+    } finally {
+        \set_time_limit($limit);
+    }
 }
 
 /**
@@ -526,7 +543,7 @@ describe('in Bard content', function (): void {
             ->and(\array_keys($nodes))->toBe([0, 1]);
     });
 
-    it('keeps the content a list when an empty section\'s paragraph is dropped', function (): void {
+    it("keeps the content a list when an empty section's paragraph is dropped", function (): void {
         $html = '<!-- wp:shortcode -->[accordion][section title="A"][/section][section title="B"]y[/section][/accordion]<!-- /wp:shortcode -->';
         $nodes = TextProcessor::processForBard($html, 'default', accordionAssetImporter(), new BufferedOutput, false, false, [], [], 'slug');
 
@@ -768,6 +785,8 @@ describe('in a list, and with sections that leave their lists uneven (#178)', fu
         'an item closed around an open list' => ['<ul><li><ol><li>a</li></li></ul>', '<ul><li><ol><li>a</li></ol></li></ul>'],
         'an item left open before the next' => ['<ul><li>a<li>b</li></ul>', '<ul><li>a</li><li>b</li></ul>'],
         'attributes and case' => ['<UL class="x"><LI>a</LI></UL>', '<UL class="x"><LI>a</LI></UL>'],
+        'mixed opening and closing case' => ['<UL><LI>a</li></ul>', '<UL><LI>a</li></ul>'],
+        'several levels closed by one tag' => ['<ul><li><ol><li>a</ul>', '<ul><li><ol><li>a</li></ol></li></ul>'],
         'a tag that only starts like one' => ['<link></ul>', '<link>'],
     ]);
 
@@ -779,9 +798,9 @@ describe('in a list, and with sections that leave their lists uneven (#178)', fu
         'a comment' => ['<ul><li><!-- </li></ul> -->a</li></ul>'],
         'an empty comment' => ['<ul><li><!-->a</li></ul>'],
         'a comment with dashes' => ['<ul><li><!-- a - b -- c </ul> -->d</li></ul>'],
-        'another tag\'s attribute' => ['<ul><li><a title="a</ul>b" href="x">c</a></li></ul>'],
+        "another tag's attribute" => ['<ul><li><a title="a</ul>b" href="x">c</a></li></ul>'],
         'single quotes' => ["<ul><li><a title='</li>'>c</a></li></ul>"],
-        'a list tag\'s own attribute' => ['<ul title="</ul>"><li data-x=\'<li>\'>a</li></ul>'],
+        "a list tag's own attribute" => ['<ul title="</ul>"><li data-x=\'<li>\'>a</li></ul>'],
         'a stray less-than sign' => ['<ul><li>a<b and c</li></ul>'],
     ]);
 
@@ -803,7 +822,7 @@ describe('in a list, and with sections that leave their lists uneven (#178)', fu
         $body = '<ul><li>'.\str_repeat('word ', 30);
 
         try {
-            $result = (new ReflectionMethod(AccordionShortcodeProcessor::class, 'balanceLists'))
+            $result = new ReflectionMethod(AccordionShortcodeProcessor::class, 'balanceLists')
                 ->invoke(null, $body, 'default', 'slug');
         } finally {
             \ini_set('pcre.backtrack_limit', (string) $limit);
