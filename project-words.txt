@@ -242,6 +242,8 @@ symfony
 tablepress
 testbench
 Testbench
+# Existing class identifier in the annotation baseline paths.
+Texstyle
 throughs
 timjossund
 toplevel
@@ -303,3 +305,11 @@ wpautop
 xmlreader
 xmlwriter
 zipball
+# Existing shortcode fixtures: WordPress handles, alignment class and libxml flags.
+alignright
+NODEFDTD
+NOIMPLIED
+sortpriority
+wardteams
+# Composer vendor name already cited in this dictionary's package documentation.
+spatie

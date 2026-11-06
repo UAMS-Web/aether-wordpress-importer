@@ -123,3 +123,34 @@ it('reads a missing image alt as empty', function (): void {
     expect($result)->toHaveKey('altOverride')
         ->and($result['altOverride'])->toBeNull();
 });
+
+it('preserves arbitrary nonempty image text without attachment metadata', function (string $text): void {
+    expect(altTextProcess(['imgAlt' => $text]))->toBe([
+        'imgAlt' => $text,
+        'altOverride' => $text,
+    ]);
+})->with(['0', 'PEST Mutator was here!']);
+
+it('does not invent an attachment id when the context supplies none', function (array $context): void {
+    // A textual ID in the supplied XML must not become the missing-ID default.
+    $attachments = [altTextAttachment('PEST Mutator was here!', 'A nurse')];
+
+    expect(altTextProcess($context, $attachments))->toBe($context + ['altOverride' => 'A nurse']);
+})->with([
+    'absent' => [['imgAlt' => 'A nurse']],
+    'null' => [['imgAlt' => 'A nurse', 'attachmentId' => null]],
+    'an array' => [['imgAlt' => 'A nurse', 'attachmentId' => []]],
+]);
+
+it('matches a supplied textual or zero attachment id exactly', function (string|int $id, string $postId): void {
+    $result = altTextProcess(
+        ['imgAlt' => 'A nurse', 'attachmentId' => $id],
+        [altTextAttachment('8', 'Other text'), altTextAttachment($postId, 'A nurse')]
+    );
+
+    expect($result)->toBe(['imgAlt' => 'A nurse', 'attachmentId' => $id, 'altOverride' => null]);
+})->with([
+    'text' => ['legacy-key', 'legacy-key'],
+    'string zero' => ['0', '0'],
+    'integer zero' => [0, '0'],
+]);

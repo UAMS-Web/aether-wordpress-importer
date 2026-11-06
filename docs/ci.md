@@ -14,7 +14,7 @@ The runner is the shared one, [`.claude/skills/local-ci/local-ci.mjs`](../.claud
 
 ## Changed tests against base
 
-The additional `changed-tests` reporting job runs the shared `pest-testing` script locally and on Linux and Windows in Actions. It is listed in the aggregate `CI` job's `needs:`. Together with the eight gating jobs listed below, it is the ninth mirrored job. With no changed standalone test files, it reports nothing to compare without installing scratch dependencies.
+The additional `changed-tests` reporting job runs the shared `pest-testing` script locally and on Linux and Windows in Actions. It is listed in the aggregate `CI` job's `needs:`. It and `mutate-ignore-breadth` are mirrored in `local-ci.json` beside the eight jobs listed below. With no changed standalone test files, it reports nothing to compare without installing scratch dependencies.
 
 Only `tests/Unit` and `tests/Integration` are selected, matching the standalone suites that package CI runs. **`tests/Feature` is deliberately excluded:** those tests require the consuming host application's `Tests\TestCase`, content model, and configuration, none of which this package boots. A successful report makes no claim about host-bound tests; changes to their behavior still require the separate host-app run described in [`tests/CLAUDE.md`](../tests/CLAUDE.md).
 
