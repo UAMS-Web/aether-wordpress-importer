@@ -85,8 +85,8 @@ class WordPressCoreBlockParser
         if ($node->nodeType === XML_COMMENT_NODE) {
             // Trim whitespace from comment value
             $nodeValue = $node->nodeValue;
-            // A comment node's value is always a string, so the empty fallback is
-            // never taken; it is there for the declared ?string type (#1314)
+            // Empty text and the mutation sentinel contain neither JSON braces nor
+            // the supported block prefix, so both leave a nullable comment unprocessed.
             // @pest-mutate-ignore: EmptyStringToNotEmpty
             $comment = is_string($nodeValue) ? \trim($nodeValue) : '';
 

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+// cspell:ignore coveredstatements
+
 /**
  * Build or refresh a three-pass coverage tracker CSV for a Pest repository.
  *

@@ -27,6 +27,8 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProc
  *
  * Automatically removes any anchor tags that wrap images within caption
  * shortcodes to prevent unwanted link behavior in the imported content.
+ *
+ * cspell:ignore imageless
  */
 class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
 {
@@ -145,6 +147,9 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
         // document always serializes, so this only narrows the type.
         // @pest-mutate-ignore: FalseToTrue
         if ($imgHtml === false) {
+            // Normal parsing selects this native image from its owning document;
+            // no public input or collaborator can replace its serializer.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 

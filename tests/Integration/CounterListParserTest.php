@@ -15,6 +15,10 @@ use UAMSWeb\Aether\WordPressImporter\Tests\Support\FakeAssetImporter;
  * counter replicator set: one item per valid counted section, skipping an
  * invalid section, and the whole block when the heading, the custom start or
  * every item is missing.
+ * The invalid-row ContinueToBreak mutant is equivalent: the sole private
+ * processItems() caller supplies normalizeSections() output, whose rows are
+ * always arrays, so the defensive non-array branch cannot run publicly.
+ * Every killable mutant is dead.
  *
  * @command  php vendor/bin/pest tests/Integration/CounterListParserTest.php
  */

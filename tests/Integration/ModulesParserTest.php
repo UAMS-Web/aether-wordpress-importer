@@ -96,7 +96,7 @@ it('returns no fields when no key carries the prefix', function (): void {
 
 it('parses modules in order, reading each one from its own postmeta', function (): void {
     $sets = modulesParse(
-        [0 => 'modules_uams_section', '1' => 'modules_uams_section'],
+        [0 => 'modules_uams_section', '01' => 'modules_uams_section'],
         [
             'uamswp_modules_0_section_heading' => 'First',
             'uamswp_modules_1_section_heading' => 'Second',
@@ -136,9 +136,7 @@ it('routes every supported module type to a parser', function (string $type): vo
 
     modulesParse([0 => $type]);
 
-    $logSpy->shouldNotHaveReceived('warning', function (string $message): bool {
-        return str_contains($message, 'module type');
-    });
+    $logSpy->shouldNotHaveReceived('warning', fn (string $message): bool => str_contains($message, 'module type'));
 })->with([
     'modules_text_stacked',
     'modules_link_list',

@@ -21,8 +21,22 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * figure, a figure with no table and a table with no usable rows each log a warning
  * and return null.
  *
+ * Equivalent mutations preserve the centered/unstriped figure fallback, private
+ * string/boolean values, unused empty-grid width, sequential group keys, full-row
+ * output/state, same-row zero/one hold expiry, nonnumeric tag membership, and
+ * native cell ownership. The full-row equivalent may perform extra iterations.
+ * Synthetic document fixtures cover failed serialization and invalid UTF-8;
+ * they do not characterize ordinary WXR data.
+ *
+ * Linux/PHP 8.4.27/PCOV: 316 default-set candidates, 314 tested, and two uncovered
+ * MAX_COLUMNS declaration mutations. Direct controls kill both constant changes
+ * and all eight boundary candidates; the unchanged child passes 127 tests and
+ * 174 assertions. With the nine bounded equivalents explained, every killable
+ * mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/TableProcessorTest.php
  */
+// cspell:ignore alignwide alignfull aligncenter
 uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
@@ -74,7 +88,7 @@ function processTable(DOMNode $node, array $attributes = [], ?string $pageSlug =
         $node,
         $attributes,
         'default',
-        (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor(),
+        new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor(),
         new BufferedOutput,
         [],
         [],
@@ -112,6 +126,22 @@ it('accepts only a wp:table comment', function (string $html, bool $expected): v
     'element, not comment' => ['<p>wp:table</p>', false],
 ]);
 
+it('rejects a synthetic comment with a null node value', function (): void {
+    // Exercise the nullable DOM contract, not a value observed in WXR exports.
+    $node = new class extends DOMComment
+    {
+        /**
+         * @var ?string Synthetic value unavailable from an ordinary comment.
+         */
+        public ?string $nodeValue = null;
+    };
+
+    // Verify the comment reaches the value guard rather than the node-type guard.
+    expect($node->nodeType)->toBe(XML_COMMENT_NODE)
+        ->and($node->nodeValue)->toBeNull()
+        ->and((new TableProcessor)->canProcess($node, 'default', null))->toBeFalse();
+});
+
 it('maps every section, flag and the caption into a table set', function (): void {
     $node = tableOpeningNode(
         '<!-- wp:table {"align":"wide"} -->'
@@ -119,7 +149,7 @@ it('maps every section, flag and the caption into a table set', function (): voi
         .'<figure class="wp-block-table is-style-stripes">'
         .'<table class="has-fixed-layout">'
         .'<thead><tr><th>Name</th><th>Role</th></tr></thead>'
-        .'<tbody><tr><td> <strong>Ann</strong> O\'Hara </td><td>Chair</td></tr><tr><td>Bo</td><td>Member</td></tr></tbody>'
+        ."<tbody><tr><td> <strong>Ann</strong> O'Hara </td><td>Chair</td></tr><tr><td>Bo</td><td>Member</td></tr></tbody>"
         .'<tfoot><tr><td>Total</td><td>2</td></tr></tfoot>'
         .'</table>'
         .'<table><tbody><tr><td>second table</td></tr></tbody></table>'
@@ -253,6 +283,7 @@ it('reads a plain table whatever its sections', function (string $html, array $r
     'rows of different widths' => ['<table><tbody><tr><td>1</td><td>2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '2'], ['3', '']]],
     'a colspan' => ['<table><tbody><tr><td colspan="2">1</td><td>2</td></tr><tr><td>3</td><td>4</td><td>5</td></tr></tbody></table>', [['1', '', '2'], ['3', '4', '5']]],
     'a rowspan' => ['<table><tbody><tr><td rowspan="2">1</td><td>2</td></tr><tr><td>3</td></tr><tr><td>4</td><td>5</td></tr></tbody></table>', [['1', '2'], ['', '3'], ['4', '5']]],
+    'a finite rowspan across three rows' => ['<table><tbody><tr><td rowspan="3">A</td><td>B</td></tr><tr><td>C</td></tr><tr><td>D</td></tr><tr><td>E</td><td>F</td></tr></tbody></table>', [['A', 'B'], ['', 'C'], ['', 'D'], ['E', 'F']]],
     'a rowspan in the last column' => ['<table><tbody><tr><td>1</td><td rowspan="2">2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '2'], ['3', '']]],
     'a span of both kinds' => ['<table><tbody><tr><td rowspan="2" colspan="2">1</td><td>2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '', '2'], ['', '', '3']]],
     'a rowspan past the last row' => ['<table><tbody><tr><td rowspan="9">1</td><td>2</td></tr></tbody></table>', [['1', '2']]],
@@ -262,6 +293,93 @@ it('reads a plain table whatever its sections', function (string $html, array $r
     'a rowspan of zero, to the end of its group' => ['<table><tbody><tr><td rowspan="0">a</td><td>b</td></tr><tr><td>c</td></tr><tr><td>d</td></tr></tbody><tbody><tr><td>e</td><td>f</td></tr></tbody></table>', [['a', 'b'], ['', 'c'], ['', 'd'], ['e', 'f']]],
     'rows with no section around a body' => ['<table><tr><td rowspan="2">a</td><td>b</td></tr><tr><td>c</td></tr><tbody><tr><td>d</td><td>e</td></tr></tbody><tr><td>f</td><td>g</td></tr></table>', [['a', 'b'], ['', 'c'], ['d', 'e'], ['f', 'g']]],
     'a span that is not a number' => ['<table><tbody><tr><td colspan="x" rowspan="0">1</td><td>2</td></tr></tbody></table>', [['1', '2']]],
+]);
+
+it('ignores direct non-element children without PHP diagnostics', function (): void {
+    // Preserve comment and text children through the native XML parser.
+    $document = new DOMDocument;
+    $document->loadXML('<table><!-- before row -->text<tr><td>A</td><td>B</td></tr></table>');
+
+    $table = $document->documentElement;
+    if (! $table instanceof DOMElement) {
+        throw new RuntimeException('Fixture has no table.');
+    }
+
+    // Make an attempted tagName read on either non-element fail observably.
+    set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
+    try {
+        $set = (new TableProcessor)->renderSet($table);
+    } finally {
+        restore_error_handler();
+    }
+
+    // Keep the valid row unchanged despite the preceding siblings.
+    expect($set)->toContain(" data-set-attr-table_data='[{&quot;cells&quot;:[&quot;A&quot;,&quot;B&quot;]}]'");
+});
+
+it('keeps a later cell child when a synthetic serializer fails for the first', function (): void {
+    // Simulate saveHTML failure without claiming ordinary exports produce it.
+    $document = new class extends DOMDocument
+    {
+        /**
+         * Fail only the first child element and serialize the rest normally.
+         *
+         * @param  ?DOMNode  $node  The node to serialize
+         * @return string|false The native HTML, or the synthetic failure
+         */
+        public function saveHTML(?DOMNode $node = null): string|false
+        {
+            return $node?->nodeName === 'strong' ? false : parent::saveHTML($node);
+        }
+    };
+    $document->loadXML('<table><tr><td><strong>lost</strong><em>kept</em></td></tr></table>');
+
+    $table = $document->documentElement;
+    if (! $table instanceof DOMElement) {
+        throw new RuntimeException('Fixture has no table.');
+    }
+
+    // Assert the public set retains the second child's complete markup.
+    expect((new TableProcessor)->renderSet($table))->toContain(
+        " data-set-attr-table_data='[{&quot;cells&quot;:[&quot;&lt;em&gt;kept&lt;\/em&gt;&quot;]}]'"
+    );
+});
+
+it('encodes synthetic cell serialization safely with a valid control', function (string $serialized, string $expected): void {
+    // Inject serializer bytes rather than asking libxml to parse invalid UTF-8.
+    $document = new class extends DOMDocument
+    {
+        /**
+         * @var string Synthetic serializer result for a cell child.
+         */
+        public string $serialized = '';
+
+        /**
+         * Return caller-controlled bytes at the document serialization boundary.
+         *
+         * @param  ?DOMNode  $node  The node to serialize
+         * @return string The synthetic serialized child
+         */
+        public function saveHTML(?DOMNode $node = null): string
+        {
+            return $this->serialized;
+        }
+    };
+    $document->serialized = $serialized;
+    $document->loadXML('<table><tr><td><span>A</span></td></tr></table>');
+
+    $table = $document->documentElement;
+    if (! $table instanceof DOMElement) {
+        throw new RuntimeException('Fixture has no table.');
+    }
+
+    // Assert the exact public attribute, including the fallback on encoding failure.
+    expect((new TableProcessor)->renderSet($table))->toContain(" data-set-attr-table_data='{$expected}'");
+})->with([
+    'invalid UTF-8' => ["\xB1", '[]'],
+    'valid serializer control' => ['A', '[{&quot;cells&quot;:[&quot;A&quot;]}]'],
 ]);
 
 it('holds a colspan to the most HTML allows', function (): void {
@@ -350,6 +468,37 @@ it('cuts the snippet of a figure with no table to 100 characters and names the p
         ]]);
 });
 
+it('warns with an empty snippet when synthetic figure serialization fails', function (): void {
+    // Keep the caller's document while simulating a serializer failure.
+    $warnings = tableWarnings();
+    $document = new class extends DOMDocument
+    {
+        /**
+         * Fail serialization independently of the native XML tree.
+         *
+         * @param  ?DOMNode  $node  The node to serialize
+         * @return false The synthetic serialization failure
+         */
+        public function saveHTML(?DOMNode $node = null): false
+        {
+            return false;
+        }
+    };
+    $document->loadXML('<root><!-- wp:table --><figure class="wp-block-table"><p>no table</p></figure></root>');
+
+    $node = $document->documentElement?->firstChild;
+    if (! $node instanceof DOMComment) {
+        throw new RuntimeException('Fixture has no opening comment.');
+    }
+
+    // Assert the public failure result and the exact warning context.
+    expect(processTable($node, [], 'about'))->toBeNull()
+        ->and($warnings->getArrayCopy())->toBe([[
+            'TableProcessor::process: No table found in wp:table block',
+            ['site' => 'default', 'pageSlug' => 'about', 'node_html' => '...'],
+        ]]);
+});
+
 it('names the page when no wp-block-table figure follows the comment', function (): void {
     $warnings = tableWarnings();
 
@@ -373,7 +522,7 @@ it('warns and returns null when no wp-block-table figure follows the comment', f
     'a figure of another block' => ['<!-- wp:table --><figure class="wp-block-image"><table><tbody><tr><td>A</td></tr></tbody></table></figure>'],
 ]);
 
-it('takes no figure from past the block\'s closing comment or from the block after it', function (string $html): void {
+it("takes no figure from past the block's closing comment or from the block after it", function (string $html): void {
     $warnings = tableWarnings();
 
     // #197: the figure lookup stops where the block ends
@@ -384,7 +533,7 @@ it('takes no figure from past the block\'s closing comment or from the block aft
     'a figure in the block after an unclosed one' => ['<!-- wp:table --><!-- wp:group --><div><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure></div><!-- /wp:group --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>'],
 ]);
 
-it('skips the block\'s own nodes, counting neither whitespace nor what follows the closing comment', function (string $html, int $skipCount): void {
+it("skips the block's own nodes, counting neither whitespace nor what follows the closing comment", function (string $html, int $skipCount): void {
     tableWarnings();
 
     expect(processTable(tableOpeningNode($html))['skipCount'] ?? null)->toBe($skipCount);

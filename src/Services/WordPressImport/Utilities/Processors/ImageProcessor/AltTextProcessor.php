@@ -38,15 +38,10 @@ class AltTextProcessor implements ImageProcessingStepInterface
         array $attachments = [],
         ?string $pageSlug = null
     ): array {
-        // Another default changes the result only for an image alt equal to it, and
-        // the one a mutant could use is the mutation tool's own marker text (#1314)
-        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        // Compare arbitrary image text against an empty alt when no attachment supplies one.
         $attachmentAlt = '';
         $imgAlt = $context['imgAlt'] ?? '';
-        // Another default for a missing id is looked up and matches only an attachment
-        // whose post ID is that text; export post IDs are numeric, so it finds none
-        // and leaves the attachment alt empty, as skipping the lookup does (#1314)
-        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        // Keep missing or invalid IDs empty instead of looking up an invented textual ID.
         $attachmentId = (\is_string($context['attachmentId'] ?? null) || \is_int($context['attachmentId'] ?? null))
             ? (string) $context['attachmentId']
             : '';

@@ -212,8 +212,6 @@ class ContentParser
 
         // Process content_content (WYSIWYG) into Bard format
         $bodyContent = [];
-        // Empty content parses to an empty body either way; the check only saves the work.
-        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if ($contentContent !== '') {
             // Convert iframes to video embed sets before processing
             $decodedContent = $this->convertIframesToVideoEmbeds(
@@ -298,7 +296,7 @@ class ContentParser
                 continue;
             }
 
-            // Leave an unroutable iframe alone rather than emitting a set type the
+            // Leave an unsupported iframe alone rather than emitting a set type the
             // Bard field does not define, or a URL its validation rejects
             $resolved = VideoSetType::resolve($videoUrl);
             if ($resolved === null) {

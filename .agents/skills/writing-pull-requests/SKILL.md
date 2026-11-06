@@ -137,14 +137,21 @@ green checks panel.
   while you know the branch is unfinished.
 - **In a public repository, the draft's remote checks are the pre-PR check.** Its `ci.yml` runs on
   every pull request, drafts included (the `RUN_REMOTE_CI` switch reaches private repositories
-  only), and the local runner's jobs mirror it. So run nothing locally as a pre-PR check: push the
-  branch and open the pull request as a draft, docs-only ones included, and flip it to ready only
-  when every remote check on its head is green. When a check is red, fix it and push to the same
+  only), and the local runner's jobs mirror it. So the full chain is not run locally as a pre-PR
+  check: push the branch and open the pull request as a draft, docs-only ones included, and flip
+  it to ready only when every remote check on its head is green. **Before each push, run the
+  three static tools on the changed files** with the commands in the
+  `code-quality` skill's job table (where the repository carries it): Pint (`vendor/bin/pint --test`) and
+  Rector (`vendor/bin/rector --dry-run`), each given the changed PHP files, and PHPStan
+  (`composer stan`). They take seconds to about
+  a minute, and a style failure caught here saves a push and a wait. A repository without one of
+  the tools skips it. When a check is red, fix it and push to the same
   branch; the draft re-runs, and a new pull request for the same change is never the answer. Keep
   running a test locally while writing it, and keep a local run for the four cases remote CI
   cannot cover:
   - a change whose acceptance criteria name Windows or another platform remote CI does not run
-    (it runs on Ubuntu only);
+    (read the `os` matrix in its `ci.yml`: `aether-wordpress-importer`, `uams-statamic` and
+    `aether-wordpress-migration-api` run Ubuntu and Windows);
   - the full mutation run a test-coverage ticket records (remote CI runs one smoke path);
   - a run that needs a loaded WordPress install or the importer's host application;
   - any repository with no remote CI workflow, including a private one.

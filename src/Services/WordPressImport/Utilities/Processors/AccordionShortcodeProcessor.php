@@ -389,6 +389,9 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
                 }
 
                 // A close with nothing to close is dropped
+                // Both operands contain only the strings ul, ol and li, so loose
+                // and strict membership have identical results for every match.
+                // @pest-mutate-ignore:TrueToFalse
                 if (! \in_array($tag, $open, true)) {
                     return '';
                 }

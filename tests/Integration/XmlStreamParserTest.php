@@ -149,7 +149,7 @@ it('yields only items of the requested type whose status is not skipped', functi
         xmlStreamItem('Draft post', 'post', 'draft'),
     ]));
 
-    [$titles, $warnings] = xmlStreamTitles((new XmlStreamParser($path))->streamItems('post'));
+    [$titles, $warnings] = xmlStreamTitles(new XmlStreamParser($path)->streamItems('post'));
 
     expect($titles)->toBe(['Published post', 'Draft post'])
         ->and($warnings)->toBe([]);
@@ -164,7 +164,7 @@ it('yields every item whose status is not skipped from the unfiltered stream', f
         xmlStreamItem('Draft attachment', 'attachment', 'draft'),
     ]));
 
-    [$titles, $warnings] = xmlStreamTitles((new XmlStreamParser($path))->streamAllItems());
+    [$titles, $warnings] = xmlStreamTitles(new XmlStreamParser($path)->streamAllItems());
 
     expect($titles)->toBe(['Published post', 'A page', 'Draft attachment'])
         ->and($warnings)->toBe([]);
@@ -254,6 +254,24 @@ it('stops a part at a malformed item without failing either stream', function ()
     $spy->shouldNotHaveReceived('warning');
 });
 
+it('recovers a later buffered item after an earlier item cannot expand', function (): void {
+    // Keep the malformed closing tag in the chunk read while expanding the first item.
+    $path = $this->streamDirectory.DIRECTORY_SEPARATOR.'buffered.xml';
+    file_put_contents($path, '<rss><channel><item><pad>'.str_repeat('x', 500)
+        .'</pad></item><item><post_type>post</post_type><status>publish</status>'
+        .'<title>later</title></item><broken></channel></rss>');
+    $parser = new XmlStreamParser($path);
+
+    // Exercise both public streams, preserving the later sibling rather than stopping.
+    [$filtered, $filteredWarnings] = xmlStreamTitles($parser->streamItems('post'));
+    [$all, $allWarnings] = xmlStreamTitles($parser->streamAllItems());
+
+    expect($filtered)->toBe(['later'])
+        ->and($all)->toBe(['later'])
+        ->and($filteredWarnings)->not->toBe([])
+        ->and($allWarnings)->not->toBe([]);
+});
+
 it('drops items the reader cannot expand past a late error, without recovering any', function (): void {
     $spy = Log::spy();
 
@@ -309,7 +327,7 @@ it('logs and skips an item that cannot be parsed, then yields the next', functio
     $itemXml = '<item xmlns:wp="http://wordpress.org/export/1.2/"><title>'.$longTitle.'&e;</title>'
         .'<wp:post_type>post</wp:post_type><wp:status>publish</wp:status></item>';
 
-    [$titles] = xmlStreamTitles((new XmlStreamParser($path))->streamItems('post'));
+    [$titles] = xmlStreamTitles(new XmlStreamParser($path)->streamItems('post'));
 
     expect($titles)->toBe(['Parsed item']);
     $spy->shouldHaveReceived('warning', [
@@ -334,7 +352,7 @@ it('names the entry being processed when it logs a skipped item', function (): v
     $itemXml = '<item xmlns:wp="http://wordpress.org/export/1.2/"><title>Bad &e;</title>'
         .'<wp:post_type>post</wp:post_type><wp:status>publish</wp:status></item>';
 
-    xmlStreamTitles((new XmlStreamParser($path))->streamItems('post'));
+    xmlStreamTitles(new XmlStreamParser($path)->streamItems('post'));
 
     $spy->shouldHaveReceived('warning', [
         'XmlStreamParser: Skipping malformed XML item (from entry: https://example.org/a-page/)',
@@ -417,9 +435,43 @@ it('ends the unfiltered stream with an exception on an item that cannot be parse
         '<!DOCTYPE rss [<!ENTITY e "x">]>'
     );
 
-    expect(fn (): array => xmlStreamTitles((new XmlStreamParser($path))->streamAllItems()))
+    expect(fn (): array => xmlStreamTitles(new XmlStreamParser($path)->streamAllItems()))
         ->toThrow(Exception::class, 'String could not be parsed as XML');
 });
+
+it('reclaims cycles retained by a stream consumer when a part ends', function (bool $all): void {
+    // Disable automatic collection so only the part's explicit cleanup releases the cycle.
+    $automaticCollection = gc_enabled();
+    gc_disable();
+
+    try {
+        // Retain no strong reference after the consumer processes its single item.
+        $path = xmlStreamWrite($this->streamDirectory, 'cycles.xml', xmlStreamItem('One item'));
+        $parser = new XmlStreamParser($path);
+        $stream = $all ? $parser->streamAllItems() : $parser->streamItems('post');
+        $reference = null;
+
+        foreach ($stream as $item) {
+            expect((string) $item->title)->toBe('One item');
+            $cycle = new stdClass;
+            $cycle->self = $cycle;
+            $reference = WeakReference::create($cycle);
+            unset($cycle);
+            expect($reference->get() !== null)->toBeTrue();
+        }
+
+        // Observe reclaimed memory without asserting a private collector call count.
+        expect($reference)->toBeInstanceOf(WeakReference::class);
+        \assert($reference instanceof WeakReference);
+        expect($reference->get())->toBeNull();
+    } finally {
+        // Restore the caller's collection mode even when the assertion fails.
+        gc_collect_cycles();
+        if ($automaticCollection) {
+            gc_enable();
+        }
+    }
+})->with(['filtered' => false, 'unfiltered' => true]);
 
 it('keeps CDATA sections only in items that carry block comments', function (): void {
     $path = xmlStreamWrite(

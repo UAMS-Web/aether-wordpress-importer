@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+export DEBIAN_FRONTEND=noninteractive
+export COMPOSER_NO_INTERACTION=1
+SECONDS=0
+trap 'printf "Orb setup finished after %ss (exit %s)\n" "$SECONDS" "$?"' EXIT
+
+echo 'Preparing PHP 8.4 and system dependencies'
+packages=(ca-certificates curl git unzip python3 php8.4-cli php8.4-curl
+    php8.4-gd php8.4-intl php8.4-mbstring php8.4-sqlite3 php8.4-xml
+    php8.4-zip php8.4-pcov)
+missing=()
+for package in "${packages[@]}"; do
+    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then
+        missing+=("$package")
+    fi
+done
+if ((${#missing[@]})); then
+    if [[ ! -f /usr/share/keyrings/debsuryorg-archive-keyring.gpg ]]; then
+        scratch=$(mktemp -d)
+        curl --fail --silent --show-error --location --retry 3 \
+            https://packages.sury.org/debsuryorg-archive-keyring.deb -o "$scratch/keyring.deb"
+        sudo env DEBIAN_FRONTEND=noninteractive dpkg -i "$scratch/keyring.deb"
+        rm -rf "$scratch"
+    fi
+    echo 'deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ bookworm main' \
+        | sudo tee /etc/apt/sources.list.d/php.list >/dev/null
+    sudo apt-get update -qq
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+fi
+sudo update-alternatives --set php /usr/bin/php8.4
+
+echo "[$SECONDS s] Preparing Composer 2"
+if ! command -v composer >/dev/null || [[ $(composer --version --no-ansi) != 'Composer version 2.'* ]]; then
+    scratch=$(mktemp -d)
+    curl --fail --silent --show-error --location --retry 3 https://getcomposer.org/installer -o "$scratch/installer.php"
+    expected=$(curl --fail --silent --show-error --location --retry 3 https://composer.github.io/installer.sig)
+    actual=$(php -r 'echo hash_file("sha384", $argv[1]);' "$scratch/installer.php")
+    [[ "$actual" == "$expected" ]] || { echo 'Composer installer checksum mismatch' >&2; exit 1; }
+    php "$scratch/installer.php" --2 --install-dir="$scratch" --filename=composer
+    sudo install -m 0755 "$scratch/composer" /usr/local/bin/composer
+    rm -rf "$scratch"
+fi
+
+echo "[$SECONDS s] Preparing Node 22 (CI toolchain)"
+if ! command -v node >/dev/null || [[ $(node --version) != v22.* ]]; then
+    case "$(uname -m)" in
+        x86_64) arch=x64 ;;
+        aarch64) arch=arm64 ;;
+        *) echo 'Unsupported Node architecture' >&2; exit 1 ;;
+    esac
+    scratch=$(mktemp -d)
+    archive="node-v22.22.3-linux-$arch.tar.xz"
+    curl --fail --silent --show-error --location --retry 3 "https://nodejs.org/dist/v22.22.3/$archive" -o "$scratch/$archive"
+    curl --fail --silent --show-error --location --retry 3 https://nodejs.org/dist/v22.22.3/SHASUMS256.txt -o "$scratch/SHASUMS256.txt"
+    (cd "$scratch"; grep "  $archive\$" SHASUMS256.txt | sha256sum --check)
+    sudo tar -xJf "$scratch/$archive" -C /usr/local --strip-components=1
+    rm -rf "$scratch"
+fi
+
+echo "[$SECONDS s] Installing locked dependencies"
+if [[ $(git rev-parse --git-dir) == .git ]]; then
+    # Keep the repository's install record and vendor patches current too.
+    node scripts/worktree-slots.mjs refresh primary
+else
+    composer install --no-interaction --no-progress --prefer-dist
+    npm ci --no-audit --no-fund
+fi
+composer check-platform-reqs
+
+# Prepare one independent branch-work slot when running in the primary checkout.
+if [[ $(git rev-parse --git-dir) == .git && ! -e "$(pwd)-a" ]]; then
+    echo "[$SECONDS s] Preparing worktree slot a"
+    node scripts/worktree-slots.mjs provision a
+fi
+
+echo "[$SECONDS s] Toolchain ready"
+php --version | head -1
+composer --version --no-ansi
+node --version
+npm --version

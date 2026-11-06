@@ -2,6 +2,22 @@
 
 declare(strict_types=1);
 
+/**
+ * Pin shortcode dispatch, warning payloads, and replacement boundaries through
+ * the processor's public methods.
+ *
+ * On Linux/PHP 8.4.27 with PCOV, the recorded covered-only run tested 395
+ * mutants. Direct installed-plugin controls kill the other 37 declaration
+ * mutants: registry entries, the dropped name, protected context defaults,
+ * and the default HTML body. The covered-only selection omits these
+ * declarations; they are not equivalent. Existing source annotations explain
+ * the accepted equivalents; every killable default-set mutant is dead.
+ *
+ * cspell:ignore noblock Zhan
+ *
+ * @command  php vendor/bin/pest tests/Integration/ShortcodeProcessorTest.php
+ */
+
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -9,8 +25,18 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImport
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\AccordionShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\AudioShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlogrollShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\CaptionShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\FormidableFormsShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\GalleryShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessorInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
@@ -302,10 +328,43 @@ describe('toTiptapHtml', function (): void {
 });
 
 describe('registerHandler', function (): void {
+    it('exposes the built-in handlers and set types to registry consumers', function (): void {
+        expect((new ShortcodeProcessor)->getHandlers())->toBe([
+            'show-people' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
+            'show-team' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
+            'gravityform' => ['set' => 'form', 'class' => GravityFormsShortcodeProcessor::class],
+            'formidable' => ['set' => 'form', 'class' => FormidableFormsShortcodeProcessor::class],
+            'ninja_form' => ['set' => 'form', 'class' => NinjaFormsShortcodeProcessor::class],
+            'table' => ['set' => 'table', 'class' => TablePressShortcodeProcessor::class],
+            'caption' => ['set' => 'image', 'class' => CaptionShortcodeProcessor::class],
+            'audio' => ['set' => 'audio', 'class' => AudioShortcodeProcessor::class],
+            'accordion' => ['set' => 'accordion', 'class' => AccordionShortcodeProcessor::class],
+            'gallery' => ['set' => 'gallery', 'class' => GalleryShortcodeProcessor::class],
+            'blogroll' => ['set' => 'news', 'class' => BlogrollShortcodeProcessor::class],
+        ]);
+    });
+
     it('records the set type and class under the shortcode name', function (): void {
         expect(shortcodeProcessor()->getHandlers()['probe'] ?? null)
             ->toBe(['set' => 'probe-set', 'class' => ShortcodeProbeHandler::class]);
     });
+});
+
+it('provides empty initial page context to extending processors', function (): void {
+    $processor = new class extends ShortcodeProcessor
+    {
+        /**
+         * Read the inherited context before any processing method sets it.
+         *
+         * @return array{id: string, link: string} The initial page context
+         */
+        public function initialPageContext(): array
+        {
+            return ['id' => $this->pageId, 'link' => $this->pageLink];
+        }
+    };
+
+    expect($processor->initialPageContext())->toBe(['id' => '', 'link' => '']);
 });
 
 describe('generateTiptapHtml', function (): void {
@@ -488,12 +547,12 @@ describe('process', function (): void {
     it('builds each people shortcode for its own WordPress taxonomy', function (string $name, array $expectedOutput): void {
         $warnings = shortcodeWarnings();
         $output = new BufferedOutput;
-        $found = (new SimpleXMLElement(
+        $found = new SimpleXMLElement(
             '<rss xmlns:wp="http://wordpress.org/export/1.2/"><channel><wp:term>'
             .'<wp:term_id>5</wp:term_id><wp:term_taxonomy>uamspeople-categories</wp:term_taxonomy>'
             .'<wp:term_slug>known</wp:term_slug><wp:term_name>Known</wp:term_name>'
             .'</wp:term></channel></rss>'
-        ))->xpath('//wp:term');
+        )->xpath('//wp:term');
         $terms = is_array($found) ? $found : [];
 
         shortcodeProcessor()->process(['name' => $name, 'attributes' => ['category' => 'missing']], 'site-a', new AssetImporter, $output, $terms, 'bard');
@@ -687,6 +746,11 @@ describe('replaceShortcode', function (): void {
     it('takes both sides, for every occurrence, with regex characters in the shortcode', function (): void {
         expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x a=\"(1)*\"]<br />\nb [x a=\"(1)*\"]\nc</p>", '[x a="(1)*"]', '</p><h3>y</h3><p>'))
             ->toBe('<p>a</p><h3>y</h3><p>b</p><h3>y</h3><p>c</p>');
+    });
+
+    it('preserves breaks outside the first and last replacement boundaries', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("\n lead<br />\n[x]<br />\ntrail<br />\n", '[x]', '</p><h3>y</h3><p>'))
+            ->toBe("\n lead</p><h3>y</h3><p>trail<br />\n");
     });
 
     it('replaces a shortcode too long for a pattern to hold', function (): void {

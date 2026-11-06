@@ -205,8 +205,8 @@ it('canonicalizes a Vimeo URL into the shape the set accepts', function (
 
 it('refuses a platform URL that carries no embeddable video', function (string $url): void {
     // A Vimeo `event/` link is a live-event page, not a video — the set's rule
-    // rejects it, so it must fall back to a plain link rather than ship an
-    // unsaveable block. Five of these are in the corpus. wordpress-importer-archive#298
+    // rejects it, so it must fall back to a plain link rather than ship a block
+    // that cannot be saved. Five of these are in the corpus. wordpress-importer-archive#298
     expect(VideoSetType::resolve($url))->toBeNull();
 })->with([
     'vimeo event' => ['https://vimeo.com/event/3590954'],
@@ -252,7 +252,7 @@ it('cannot be tricked into embedding an attribute break through YouTube or Vimeo
     string $url
 ): void {
     // These branches rebuild from a strict id charset, so even without the gate the
-    // hostile tail could not survive. Both defences are asserted so removing either
+    // hostile tail could not survive. Both defenses are asserted so removing either
     // one shows up here.
     $resolved = VideoSetType::resolve($url);
 
@@ -272,7 +272,8 @@ it('never returns the retired video set handle', function (string $url): void {
     // #589 deleted the `video` set from `uamsweb_common.yaml`, so emitting it puts
     // content on a set type the Bard field does not define.
     expect(VideoSetType::forUrl($url))->not->toBe('video');
-    expect(VideoSetType::SET_TYPES)->not->toContain('video');
+    expect(VideoSetType::SET_TYPES)->toContain('youtube', 'vimeo', 'box')
+        ->not->toContain('video');
 })->with([
     'https://www.youtube.com/watch?v=x',
     'https://vimeo.com/1',
