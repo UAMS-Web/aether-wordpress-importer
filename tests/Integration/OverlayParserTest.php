@@ -17,6 +17,10 @@ use UAMSWeb\Aether\WordPressImporter\Tests\Support\FakeAssetImporter;
  * the whole set when no section survives.
  *
  * Both entry points share one mapping, so each case runs through both.
+ * The invalid-row ContinueToBreak mutant is equivalent: both public paths
+ * create every row through private normalizeSections(), which always builds
+ * arrays, so the defensive non-array branch cannot run through either path.
+ * Every killable mutant is dead.
  *
  * @command  php vendor/bin/pest tests/Integration/OverlayParserTest.php
  */
@@ -267,9 +271,7 @@ it('stays quiet about a missing image while uploads are disabled', function (str
         ->and($items[0]['background_image'] ?? null)->toBeNull()
         ->and($assetImporter->importedImages)->toBe([]);
 
-    $logSpy->shouldNotHaveReceived('warning', function (string $message): bool {
-        return str_starts_with($message, 'OverlayParser::');
-    });
+    $logSpy->shouldNotHaveReceived('warning', fn (string $message): bool => str_starts_with($message, 'OverlayParser::'));
 })->with('overlayEntries');
 
 it('skips a section with no text and no link, with a warning', function (string $entry, ?string $imported, bool $hasImage): void {

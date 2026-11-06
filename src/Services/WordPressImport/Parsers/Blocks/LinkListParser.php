@@ -165,6 +165,8 @@ class LinkListParser
         foreach ($sections as $section) {
             // Skip malformed section rows that are not arrays
             if (! \is_array($section)) {
+                // Both public callers build every section as an array before delegation.
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -181,6 +183,8 @@ class LinkListParser
             }
 
             // Extract and process the body text (plain text, not HTML)
+            // Both callers always supply a non-null body field, so the fallback is unused.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $body = isset($section['link_list_section_body'])
                 ? HtmlTagStripper::strip(
                     $this->normalizeTextValue(

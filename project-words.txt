@@ -313,3 +313,22 @@ sortpriority
 wardteams
 # Composer vendor name already cited in this dictionary's package documentation.
 spatie
+# Existing parser identifiers, WordPress classes, libxml flags, and fixture data.
+aligncenter
+alignfull
+alignleft
+alignwide
+autop
+lwcwx
+NOCDATA
+NOERROR
+PARSEHUGE
+rssfeed
+topicsx
+unrenderable
+unserialization
+unserialized
+userinfo
+wistia
+xuamswp
+youtu

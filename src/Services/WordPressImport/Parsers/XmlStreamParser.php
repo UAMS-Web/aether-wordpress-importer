@@ -26,7 +26,7 @@ use XMLReader;
  * Each part is opened through WxrSanitizedStream, which repairs the
  * XML-illegal bytes WordPress writes into `wp:postmeta` CDATA as the file
  * streams. That repair is what keeps this parser's contract honest: XMLReader
- * stops iterating at such a byte and reports nothing, so an unsanitized export
+ * stops iterating at such a byte and reports nothing, so an unfiltered export
  * yields a partial item sequence that is indistinguishable from a short export.
  * The filter is itself streaming, so it does not weaken the memory bound above.
  */
@@ -162,10 +162,7 @@ class XmlStreamParser
 
                     // An item the reader cannot expand comes back as an empty string
                     if ($xml === '') {
-                        // Skip this item and continue to the next one. A fatal
-                        // error lies within reach, so no later item of the part
-                        // can be read and stopping here would end it the same way.
-                        // @pest-mutate-ignore: ContinueToBreak
+                        // Later buffered items can remain readable after an expansion failure.
                         continue;
                     }
 
@@ -254,8 +251,7 @@ class XmlStreamParser
                 $reader
             );
 
-            // Reclaim circular references between parts; no output depends on it.
-            // @pest-mutate-ignore: RemoveFunctionCall
+            // Reclaim circular references before processing the next part.
             gc_collect_cycles();
         }
     }
@@ -306,10 +302,7 @@ class XmlStreamParser
                     $xml = $reader->readOuterXml();
                     // An item the reader cannot expand comes back as an empty string
                     if ($xml === '') {
-                        // Skip this item and continue to the next one. A fatal
-                        // error lies within reach, so no later item of the part
-                        // can be read and stopping here would end it the same way.
-                        // @pest-mutate-ignore: ContinueToBreak
+                        // Later buffered items can remain readable after an expansion failure.
                         continue;
                     }
 
@@ -353,8 +346,7 @@ class XmlStreamParser
                 $reader
             );
 
-            // Reclaim circular references between parts; no output depends on it.
-            // @pest-mutate-ignore: RemoveFunctionCall
+            // Reclaim circular references before processing the next part.
             gc_collect_cycles();
         }
     }

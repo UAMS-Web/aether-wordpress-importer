@@ -482,8 +482,6 @@ class GalleryParser
         // Adding zero preserves that split — `'1'` yields int 1, `'1.7778'` float —
         // where an explicit (int) or (float) cast would flatten one of them.
         // ---
-        // Subtracting zero gives the same key as adding it, so PlusToMinus cannot be killed.
-        // @pest-mutate-ignore: PlusToMinus
         return $cropValue + 0;
     }
 
@@ -957,7 +955,9 @@ class GalleryParser
             $missing[] = 'block_description';
         }
 
-        // An image count the block's 2-6 rule rejects
+        // An image count the block's 2-6 rule rejects. The only caller builds
+        // images from its array parameter, so the fallback is unreachable.
+        // @pest-mutate-ignore:DecrementInteger,IncrementInteger
         $imageCount = \is_array($result['images'] ?? null)
             ? \count($result['images'])
             : 0;
