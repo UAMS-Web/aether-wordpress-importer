@@ -20,6 +20,15 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * and choose the set that comes back. The imageless case and the Tiptap output of an
  * image are `CaptionShortcodeProcessorTest`.
  *
+ * The serialization guard's RemoveEarlyReturn mutation is equivalent under the
+ * native DOM construction path: the selected image belongs to the document that
+ * serializes it, anchor unwrapping preserves ownership, and no collaborator can
+ * replace that serializer. The defensive return remains; these tests do not claim
+ * coverage of a serialization failure. Reconsider the annotation if document
+ * creation or serialization becomes customizable.
+ *
+ * cspell:ignore imageless alignalignleft alignleft
+ *
  * @command  php vendor/bin/pest tests/Integration/CaptionShortcodeParseTest.php
  */
 uses(StatamicTestCase::class);
