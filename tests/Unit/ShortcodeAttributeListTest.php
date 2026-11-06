@@ -29,7 +29,15 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processo
  */
 function attributeListLooksLikeShortcode(string $name, string $attributes): bool
 {
-    $result = (new ReflectionMethod(ShortcodeProcessor::class, 'looksLikeShortcode'))->invoke(null, $name, $attributes, false);
+    // Bound a backward character walk as well as checking its parsed answer.
+    $limit = (int) ini_get('max_execution_time');
+    set_time_limit(3);
+
+    try {
+        $result = new ReflectionMethod(ShortcodeProcessor::class, 'looksLikeShortcode')->invoke(null, $name, $attributes, false);
+    } finally {
+        set_time_limit($limit);
+    }
 
     if (! is_bool($result)) {
         throw new LogicException('looksLikeShortcode() returned no bool.');
@@ -42,7 +50,7 @@ it('rejects a long attribute string the list cannot hold, with no PCRE error', f
     expect(attributeListLooksLikeShortcode('mystery', $attributes))->toBeFalse()
         ->and(preg_last_error())->toBe(PREG_NO_ERROR);
 })->with([
-    'the issue\'s input, N=25' => ['a=b '.str_repeat('x', 25).'!'],
+    "the issue's input, N=25" => ['a=b '.str_repeat('x', 25).'!'],
     'a long run, N=200' => ['a=b '.str_repeat('x', 200).'!'],
     'bare names, then a stray character' => [str_repeat('ab ', 40).'a=b !'],
     'a long word run, then a quote' => ['a='.str_repeat('x', 20000).'"'],
