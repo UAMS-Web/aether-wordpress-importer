@@ -326,6 +326,8 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
             // The expression selects only img elements; the guard narrows the type.
             // @pest-mutate-ignore: InstanceOfToTrue
             if (! $imgNode instanceof DOMElement) {
+                // Native XPath selects only elements, so this exit is unreachable.
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 

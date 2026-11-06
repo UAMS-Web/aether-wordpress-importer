@@ -260,6 +260,8 @@ class TableProcessor implements BlockProcessorInterface
         }
 
         // Read the classes the figure carries, when there is one
+        // The empty fallback and mutation sentinel both mean centered and unstriped.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $figureClass = $figure?->getAttribute('class') ?? '';
 
         // Alignment
@@ -329,6 +331,9 @@ class TableProcessor implements BlockProcessorInterface
                 ! \is_string($value)
                 && ! \is_bool($value)
             ) {
+                // This private values list contains only strings, booleans and
+                // table_data, which the preceding branch has already handled.
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -435,6 +440,8 @@ class TableProcessor implements BlockProcessorInterface
         }
 
         // Bring every row to the width of the widest
+        // An empty grid invokes no padding callback, so its width is never used.
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
         $width = $grid === [] ? 0 : \max(\array_map(\count(...), $grid));
 
         return [
@@ -456,6 +463,9 @@ class TableProcessor implements BlockProcessorInterface
     private function groupsGrid(
         array $groups
     ): array {
+        // The private callers build sequential numeric groups, so resetting keys
+        // cannot change their keys or the order passed to cellGrid().
+        // @pest-mutate-ignore: UnwrapArrayValues
         return \array_merge(
             ...\array_map($this->cellGrid(...), \array_values($groups))
         );
@@ -493,6 +503,9 @@ class TableProcessor implements BlockProcessorInterface
 
                 // A row is full at the limit
                 if ($column >= self::MAX_COLUMNS) {
+                    // Continuing only rechecks this limit for the remaining cells;
+                    // it cannot serialize them or change the row or held columns.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
                 }
 
@@ -550,6 +563,9 @@ class TableProcessor implements BlockProcessorInterface
     ): int {
         $rowspan = $cell->getAttribute('rowspan');
 
+        // Both zero and one holds are cleared in the current row. Literal '0'
+        // keeps its separate whole-group meaning on either side of this clamp.
+        // @pest-mutate-ignore: DecrementInteger
         return $rowspan === '0' ? PHP_INT_MAX : \max(1, (int) $rowspan);
     }
 
@@ -568,6 +584,9 @@ class TableProcessor implements BlockProcessorInterface
         $children = [];
 
         foreach ($element->childNodes as $child) {
+            // Every private caller supplies only nonnumeric tag-name strings;
+            // strict and loose membership therefore select the same elements.
+            // @pest-mutate-ignore: TrueToFalse
             if ($child instanceof DOMElement && \in_array($child->tagName, $names, true)) {
                 $children[] = $child;
             }
@@ -654,6 +673,9 @@ class TableProcessor implements BlockProcessorInterface
         // Build the inner HTML by rendering each child node.
         $innerHTML = '';
         foreach ($element->childNodes as $child) {
+            // Cells reached through the native table tree retain their document.
+            // An ownerless cell cannot have children to enter this loop.
+            // @pest-mutate-ignore: RemoveNullSafeOperator
             $childHtml = $element->ownerDocument?->saveHTML($child);
             if (! \is_string($childHtml)) {
                 continue;

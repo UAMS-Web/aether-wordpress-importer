@@ -26,6 +26,12 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  * two images import. A missing figure, no ids and too few images each log a warning
  * and return null.
  *
+ * Synthetic comment, document, and importer fixtures exercise the nullable value,
+ * failed serialization, and invalid UTF-8 boundaries through public methods.
+ * Native fixed XPath selects only img elements, so the defensive non-element
+ * loop exit is equivalent when changed to break. Linux/PHP 8.4.27/PCOV generated
+ * and tested 122 mutants; every killable mutant is dead.
+ *
  * @command  php vendor/bin/pest tests/Integration/WpGalleryBlockProcessorTest.php
  */
 uses(StatamicTestCase::class);
@@ -178,6 +184,34 @@ it('accepts only a one-line wp:gallery comment carrying a JSON object', function
     'text after the object' => ['<!-- wp:gallery {"ids":[1]} x -->', false],
     'element, not comment' => ['<p>wp:gallery {"ids":[1]}</p>', false],
 ]);
+
+it('rejects a comment subclass exposing no text', function (): void {
+    // Exercise the nullable public boundary, not ordinary parsed comment text.
+    $node = new class extends DOMComment
+    {
+        /** @var ?string Override the native comment value for this boundary fixture. */
+        public ?string $nodeValue = null;
+    };
+
+    // Require both prerequisites so an earlier node-type guard cannot pass the test.
+    expect($node->nodeType)->toBe(XML_COMMENT_NODE)
+        ->and($node->nodeValue)->toBeNull()
+        ->and((new WpGalleryBlockProcessor)->canProcess($node, 'default', null))->toBeFalse();
+});
+
+it('uses empty array JSON when an imported image path cannot be encoded', function (): void {
+    // Supply synthetic invalid UTF-8 through the caller-provided importer.
+    $output = new BufferedOutput;
+    $result = processGallery(
+        galleryOpeningNode('<!-- wp:gallery {} --><figure></figure>'),
+        ['ids' => [1, 2]],
+        galleryImporter(['1' => "\xB1", '2' => 'second.jpg'], [], $output),
+        $output
+    );
+
+    // Assert the actual stored attribute, not merely a successful processor return.
+    expect($result['html'] ?? null)->toBe(gallerySet('[]'));
+});
 
 it('imports the ids from the attributes and writes a gallery set', function (): void {
     $attachments = ['attachment list'];
@@ -334,6 +368,44 @@ it('warns with a snippet of the next sibling when no figure follows the comment'
         '<p>'.str_repeat('x', 94).'</p...',
     ],
 ]);
+
+it('warns with an empty snippet when the supplied document cannot serialize the sibling', function (): void {
+    // Keep the native tree while making caller-supplied serialization fail.
+    $document = new class extends DOMDocument
+    {
+        /**
+         * Report serialization failure for the public document boundary fixture.
+         *
+         * @param  ?DOMNode  $node  The node requested by the processor.
+         * @return false The synthetic serialization failure.
+         */
+        public function saveHTML(?DOMNode $node = null): string|false
+        {
+            return false;
+        }
+    };
+    $document->loadXML('<root><!-- wp:gallery {} --><p>Caption</p></root>');
+
+    $node = $document->documentElement?->firstChild;
+    if (! $node instanceof DOMComment) {
+        throw new RuntimeException('Fixture has no gallery comment.');
+    }
+
+    // Capture the observable warning without allowing an image import.
+    $warnings = galleryWarnings();
+    /** @var AssetImporter&MockInterface $importer */
+    $importer = Mockery::mock(AssetImporter::class);
+    $importer->shouldNotReceive('importImage');
+
+    $result = processGallery($node, [], $importer, new BufferedOutput);
+
+    // Distinguish a missing serialization result from an arbitrary replacement string.
+    expect($result)->toBeNull()
+        ->and($warnings->getArrayCopy())->toBe([[
+            'WpGalleryBlockProcessor::process: No valid wp:gallery figure found after comment',
+            ['site' => 'default', 'pageSlug' => 'none', 'attributes' => [], 'next_sibling_snippet' => ''],
+        ]]);
+});
 
 it('names the page when no figure follows the comment', function (): void {
     $warnings = galleryWarnings();
