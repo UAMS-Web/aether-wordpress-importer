@@ -136,6 +136,8 @@ class QuoteProcessor implements BlockProcessorInterface
         // so it never answers false.
         // @pest-mutate-ignore: FalseToTrue
         if ($childNodes === false) {
+            // The native XPath uses a valid fixed expression and element context.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -143,6 +145,8 @@ class QuoteProcessor implements BlockProcessorInterface
             // A `.//p` query matches only elements
             // @pest-mutate-ignore: InstanceOfToTrue
             if (! $childNode instanceof DOMElement) {
+                // Changing the exit cannot affect an element-only result set.
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -248,6 +252,8 @@ class QuoteProcessor implements BlockProcessorInterface
             $parsed = $bardParser->parse(self::saveNodeHtml($p));
             foreach ($parsed as $parsedNode) {
                 if (! \is_array($parsedNode)) {
+                    // This internally constructed parser emits arrays from HTML.
+                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -325,6 +331,8 @@ class QuoteProcessor implements BlockProcessorInterface
                 $stringValue = self::extractNullableString($value);
 
                 if ($stringValue === null) {
+                    // Alignment and the optional author are already nonempty strings.
+                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -378,17 +386,18 @@ class QuoteProcessor implements BlockProcessorInterface
     private static function saveNodeHtml(
         DOMNode $node
     ): string {
-        // Every caller passes a node of the document being processed, and such a node
-        // always serializes, so both empty answers only type the result.
+        // XPath and sibling traversal retain the supplied document's native ownership.
         $ownerDocument = $node->ownerDocument;
         // @pest-mutate-ignore: InstanceOfToTrue
         if (! $ownerDocument instanceof DOMDocument) {
+            // These attached nodes cannot lose their native owning document here.
+            // @pest-mutate-ignore: RemoveEarlyReturn,EmptyStringToNotEmpty
             return '';
         }
 
+        // A caller-supplied document may override serialization and report failure.
         $nodeHtml = $ownerDocument->saveHTML($node);
 
-        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($nodeHtml) ? $nodeHtml : '';
     }
 }
