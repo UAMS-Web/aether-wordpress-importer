@@ -19,11 +19,16 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
  *
  * The shared unwrapping trait retains equivalent mutants: its DOMComment type
  * tests duplicate trimmedCommentText()'s rejection of non-comments, whose own
- * callers already narrow to comments. DOM text and comment values cannot reach
- * their non-string fallback. Trimming a class list changes only empty tokens, which
- * cannot change whether a class prefix matches. Traversed elements already
- * have an owner document, and the non-wrapper serialization branch appends
- * only to an empty string. Every killable mutant is dead.
+ * traversal callers narrow to comments; canProcess checks native comment type.
+ * Those paths cannot enter the helper's defensive non-comment return.
+ * The empty comment fallback and mutation sentinel both fail the block patterns.
+ * Native text values are strings; stable null subclasses append no bytes with
+ * either fallback. Trimming class lists changes only empty tokens: nonempty
+ * prefixes reject those, while an empty prefix matches with or without trimming.
+ * Continuing class comparisons after a match cannot reset the wrapper flag.
+ * Traversed elements already have an owner document. Serialization failure is
+ * not equivalent to assignment: concatenation converts false to an empty string.
+ * Every killable mutant is dead.
  *
  * cspell:ignore alignwide aligncenter NOIMPLIED NODEFDTD
  *
@@ -265,6 +270,39 @@ it('keeps the opening node identity in the processed block result', function ():
     );
 
     expect($result['processedNode'] ?? null)->toBe($node);
+});
+
+it('returns no group content when the supplied document cannot serialize', function (): void {
+    // Preserve the public document boundary while reporting serialization failure.
+    $document = new class extends DOMDocument
+    {
+        /**
+         * Report serialization failure for the supplied node.
+         *
+         * @param  ?DOMNode  $node  The node to serialize
+         * @return false Serialization is unavailable
+         */
+        public function saveHTML(?DOMNode $node = null): string|false
+        {
+            return false;
+        }
+    };
+
+    // Attach non-wrapper content so extraction reaches the supplied serializer.
+    $root = $document->appendChild($document->createElement('root'));
+    $node = $root->appendChild($document->createComment(' wp:group '));
+    $root->appendChild($document->createElement('p', 'Inside'));
+    $root->appendChild($document->createComment(' /wp:group '));
+
+    // A failed serialization contributes no content rather than a non-string result.
+    expect($node->nextSibling?->ownerDocument)->toBe($document)
+        ->and((new WpGroupBlockProcessor)->process(
+            $node,
+            [],
+            'default',
+            $this::createStub(AssetImporter::class),
+            new BufferedOutput
+        ))->toBeNull();
 });
 
 it('unwraps only matching elements and class prefixes while preserving child text', function (string $inner, string $expected): void {
