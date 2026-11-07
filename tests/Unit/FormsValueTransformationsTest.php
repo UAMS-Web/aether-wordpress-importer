@@ -12,8 +12,9 @@ declare(strict_types=1);
  * `check_against_list` keys. No standalone test reached any of them before
  * this file. The two mapping keys are driven through the public
  * `mapFieldAttributes()` with the Gravity Forms attributes that use them
- * (`maxFileSize` and `visibility`); the rest call the protected methods on the
- * Gravity Forms mapping class, which uses the trait.
+ * (`maxFileSize`, `rcwdupload_sizelimit` and `visibility`); the rest call the
+ * protected methods on the Gravity Forms mapping class, which uses the trait.
+ * A file size that cannot be read as a size maps no `max_file_size` (#421).
  *
  * @command  php vendor/bin/pest tests/Unit/FormsValueTransformationsTest.php
  */
@@ -95,15 +96,43 @@ it('converts a Gravity Forms maximum file size to megabytes', function (
 })->with([
     'a bare number' => ['2', '2'],
     'kilobytes' => ['512kb', '0.512'],
+    'explicit megabytes' => ['2mb', '2'],
     'fractional megabytes' => ['1.5mb', '1.5'],
     'a space before the unit' => ['10 MB', '10'],
-    'no recognizable size' => ['abc', '0'],
+    'no recognizable size' => ['abc', 'absent'],
+    'a blank size' => ['', 'absent'],
+]);
+
+it('converts a Gravity Forms upload size limit and its unit to megabytes', function (
+    string $limit,
+    ?string $unit,
+    string $expected
+): void {
+    $field = [
+        'id' => 5,
+        'type' => 'rcwdupload',
+        'label' => 'Upload',
+        'rcwdupload_sizelimit' => $limit,
+    ];
+
+    // Leave the unit attribute out entirely when the case has none
+    if ($unit !== null) {
+        $field['rcwdupload_sizelimit_type'] = $unit;
+    }
+
+    expect(mapGravityFormsField($field)['max_file_size'] ?? 'absent')->toBe($expected);
+})->with([
+    'megabytes' => ['2', 'mb', '2'],
+    'kilobytes' => ['500', 'kb', '0.5'],
+    'a blank unit' => ['3', '', 'absent'],
+    'no unit' => ['3', null, 'absent'],
+    'a blank limit with a unit' => ['', 'mb', 'absent'],
 ]);
 
 it('converts a file size between units', function (
     string $fileSize,
     string $targetUnit,
-    string $expected
+    ?string $expected
 ): void {
     expect(invokeFormsMappingMethod('convertFileSize', $fileSize, $targetUnit))
         ->toBe($expected);
@@ -115,7 +144,8 @@ it('converts a file size between units', function (
     'bytes to kilobytes' => ['1B', 'KB', '0.001'],
     'whole bytes only' => ['1.0005KB', 'B', '1000'],
     'an unknown target unit stays in bytes' => ['1KB', 'PB', '1000'],
-    'an unknown source unit' => ['5XB', 'MB', '0'],
+    'an unknown source unit' => ['5XB', 'MB', null],
+    'no unit' => ['3', 'MB', null],
 ]);
 
 it('keeps a Gravity Forms visibility only when it is in the validation list', function (
