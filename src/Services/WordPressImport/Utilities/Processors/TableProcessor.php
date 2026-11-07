@@ -447,14 +447,20 @@ class TableProcessor implements BlockProcessorInterface
      * Such a table is a table of data by `isDataTable()`, since its captions are
      * text, but its cells hold photos rather than data, and a `table` set's cell
      * cannot render an image (#396). A table is one when it is a table of data,
-     * every cell with text in it also holds an image, and no image's caption is
-     * longer than `MAX_PHOTO_CAPTION_LENGTH` characters. An image's caption is the
-     * text after it in its cell, up to the next image; text ahead of a cell's first
-     * image belongs to that image (#489).
+     * every cell with text in it also holds an image, no image's caption is longer
+     * than `MAX_PHOTO_CAPTION_LENGTH` characters, no text sits outside its cells,
+     * and no link in it has text. An image's caption is the text after it in its
+     * cell, up to the next image; text ahead of a cell's first image belongs to
+     * that image. A caption is kept as text, so a table whose text links anywhere,
+     * as the exports' lists of articles under a heading graphic do, keeps its
+     * links as a table of data instead (#489).
      *
      * @param  DOMElement  $table  The table element
-     * @return ?list<string> One figure per image, in the order the table holds them,
-     *                       or null for a table that is not one of photos
+     * @return ?list<array{figure: string, caption: string}> One figure per image, in
+     *                                                       the order the table holds
+     *                                                       them, with its caption,
+     *                                                       or null for a table that
+     *                                                       is not one of photos
      */
     public function photoFigures(
         DOMElement $table
@@ -466,8 +472,16 @@ class TableProcessor implements BlockProcessorInterface
             ! $document instanceof DOMDocument
             || $table->getElementsByTagName('img')->length === 0
             || ! $this->isDataTable($table)
+            || self::hasTextOutsideCells($table)
         ) {
             return null;
+        }
+
+        // A link with text would be lost from a caption kept as text
+        foreach ($table->getElementsByTagName('a') as $link) {
+            if (self::normalizeText($link->textContent) !== '') {
+                return null;
+            }
         }
 
         // A table of data has no nested table, so every cell in it is its own
@@ -516,10 +530,44 @@ class TableProcessor implements BlockProcessorInterface
                 $figure->appendChild($figcaption);
             }
 
-            $figures[] = (string) $document->saveHTML($figure);
+            $figures[] = [
+                'figure' => (string) $document->saveHTML($figure),
+                'caption' => $photo['caption'],
+            ];
         }
 
         return $figures;
+    }
+
+    /**
+     * Whether a table holds text outside its cells, such as in a `<caption>`.
+     *
+     * @param  DOMNode  $node  The table, or a part of it outside its cells
+     * @return bool True when any text that is not blank sits outside the cells
+     */
+    private static function hasTextOutsideCells(
+        DOMNode $node
+    ): bool {
+        foreach ($node->childNodes as $child) {
+            // A cell's text is a caption, read with its photos
+            if ($child instanceof DOMElement && \in_array($child->tagName, ['td', 'th'], true)) {
+                continue;
+            }
+
+            if ($child instanceof DOMText) {
+                if (self::normalizeText($child->textContent) !== '') {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (self::hasTextOutsideCells($child)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

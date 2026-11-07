@@ -635,12 +635,12 @@ it('warns of no image for a table without one, or one with no rows to import', f
 ]);
 
 /**
- * The figures TableProcessor::photoFigures() makes of a table, or null.
+ * The photos TableProcessor::photoFigures() finds in a table, or null.
  *
  * @param  string  $html  A fragment whose first node is the table
- * @return ?list<string> The figures, or null for a table that is not one of photos
+ * @return ?list<array{figure: string, caption: string}> The photos, or null for a table that is not one of photos
  */
-function photoFigures(string $html): ?array
+function tablePhotos(string $html): ?array
 {
     $table = tableOpeningNode($html);
 
@@ -649,6 +649,19 @@ function photoFigures(string $html): ?array
     }
 
     return (new TableProcessor)->photoFigures($table);
+}
+
+/**
+ * The figures TableProcessor::photoFigures() makes of a table, or null.
+ *
+ * @param  string  $html  A fragment whose first node is the table
+ * @return ?list<string> The figures, or null for a table that is not one of photos
+ */
+function photoFigures(string $html): ?array
+{
+    $photos = tablePhotos($html);
+
+    return $photos === null ? null : array_column($photos, 'figure');
 }
 
 it('makes a figure of each photo in a table of photos, with the text after it as its caption', function (): void {
@@ -665,6 +678,18 @@ it('makes a figure of each photo in a table of photos, with the text after it as
         '<figure><img src="c.jpg"><figcaption>Lead text after c</figcaption></figure>',
         '<figure><img src="d.jpg"><figcaption>after d</figcaption></figure>',
     ]);
+});
+
+it('gives each photo its caption as text beside its figure', function (): void {
+    expect(tablePhotos('<table><tr><td><img src="a.jpg">  Dr.&nbsp;Smith  </td><td><img src="b.jpg"></td></tr></table>'))->toBe([
+        ['figure' => '<figure><img src="a.jpg"><figcaption>Dr. Smith</figcaption></figure>', 'caption' => 'Dr. Smith'],
+        ['figure' => '<figure><img src="b.jpg"></figure>', 'caption' => ''],
+    ]);
+});
+
+it('takes a photo whose link holds only the image', function (): void {
+    expect(photoFigures('<table><tr><td><a href="big.jpg"><img src="a.jpg"></a> Cap</td></tr></table>'))
+        ->toBe(['<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>']);
 });
 
 it('escapes a caption as text in its figure', function (): void {
@@ -690,4 +715,8 @@ it('reads no table as one of photos unless it is a table of data whose every cel
     'no text at all' => ['<table><tr><td><img src="a.jpg"></td></tr></table>'],
     'a nested table' => ['<table><tr><td><img src="a.jpg"> A<table><tr><td>B</td></tr></table></td></tr></table>'],
     'a converted shortcode' => ['<table><tr><td><img src="a.jpg"> A<div data-set-type="video"></div></td></tr></table>'],
+    'a link with text' => ['<table><tr><td><img src="a.jpg"> A <a href="/story">Full Story</a></td></tr></table>'],
+    'a link with text around the image' => ['<table><tr><td><a href="/mail"><img src="m.jpg"> E-mail This Article</a></td></tr></table>'],
+    'a caption element' => ['<table><caption>Gala</caption><tr><td><img src="a.jpg"> A</td></tr></table>'],
+    'a caption element, and cells of images only' => ['<table><caption>Gala</caption><tr><td><img src="a.jpg"></td></tr></table>'],
 ]);

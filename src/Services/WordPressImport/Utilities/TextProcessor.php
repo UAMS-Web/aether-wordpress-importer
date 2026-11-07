@@ -1973,7 +1973,8 @@ class TextProcessor
      * the table and resumed after it (#394). A table in a quote stays as it was: its
      * wrapper is structure that a set could not sit inside. A table that holds only
      * photos and their captions is added as one image set per photo, since a set's
-     * cell cannot render an image (#489).
+     * cell cannot render an image; a photo that does not import keeps its caption
+     * as a paragraph (#489).
      *
      * @param  DOMNode  $node  The node to add
      * @param  DOMDocument  $doc  The document the node belongs to
@@ -2007,10 +2008,20 @@ class TextProcessor
                 );
 
                 foreach ($photos as $photo) {
-                    $imageSet = $importImage($photo);
+                    $imageSet = $importImage($photo['figure']);
 
                     if ($imageSet !== null && $imageSet !== []) {
                         $bardContent[] = $imageSet;
+
+                        continue;
+                    }
+
+                    // A photo that does not import leaves its caption as a paragraph
+                    if ($photo['caption'] !== '') {
+                        $bardContent = \array_merge(
+                            $bardContent,
+                            $bardParser->parse('<p>'.\htmlspecialchars($photo['caption'], ENT_QUOTES | ENT_HTML5).'</p>')
+                        );
                     }
                 }
 
@@ -2325,17 +2336,24 @@ class TextProcessor
     /**
      * Whether a figure holds a table of data directly.
      *
+     * A table of photos is not one: its photos become image sets rather than a
+     * `table` set, so the figure has no set to lend its caption to, and the caption
+     * is read as content after the photos (#489).
+     *
      * @param  DOMElement  $figure  The figure element
      * @return bool True when one of the figure's children is a table of data
      */
     private static function holdsDataTable(
         DOMElement $figure
     ): bool {
+        $tableProcessor = new TableProcessor;
+
         foreach ($figure->childNodes as $child) {
             if (
                 $child instanceof DOMElement
                 && $child->tagName === 'table'
-                && (new TableProcessor)->isDataTable($child)
+                && $tableProcessor->isDataTable($child)
+                && $tableProcessor->photoFigures($child) === null
             ) {
                 return true;
             }

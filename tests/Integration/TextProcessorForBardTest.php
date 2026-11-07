@@ -1574,14 +1574,33 @@ it('imports each photo of a table of photos with its caption, in place among the
         ->and(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([]);
 });
 
-it('leaves out only the photo of a table of photos that does not import', function (): void {
+it('keeps the caption of a photo that does not import as a paragraph, in its place', function (): void {
     textProcessorForBardFakes();
 
     $content = textProcessorForBard(
-        '<table><tr><td><img src="none.jpg"> A</td></tr><tr><td><img src="empty.jpg"> B</td></tr><tr><td><img src="c.jpg"> C</td></tr></table>'
+        '<table><tr><td><img src="none.jpg"> A &amp; "B"</td></tr><tr><td><img src="empty.jpg"> C</td></tr>'
+        .'<tr><td><img src="none.jpg"></td></tr><tr><td><img src="d.jpg"> D</td></tr></table>'
     );
 
-    expect($content)->toBe([textProcessorForBardImage('c.jpg')]);
+    expect($content)->toBe([
+        textProcessorForBardParagraph('A & "B"'),
+        textProcessorForBardParagraph('C'),
+        textProcessorForBardImage('d.jpg'),
+    ]);
+});
+
+it('reads the caption of a figure around a table of photos as content after the photos', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    $content = textProcessorForBard(
+        '<table><tr><td><figure><table><tr><td><img src="a.jpg"> Cap</td></tr></table><figcaption>Gala photos</figcaption></figure></td></tr></table>'
+    );
+
+    expect($fakes['image']->calls)->toBe([['html' => '<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>', 'attributes' => []]])
+        ->and($content)->toBe([
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('Gala photos'),
+        ]);
 });
 
 it('imports the photos of a table of photos in a list, ending the list ahead of the table', function (): void {
