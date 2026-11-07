@@ -31,6 +31,12 @@ class TableProcessor implements BlockProcessorInterface
     private const int MAX_COLUMNS = 1000;
 
     /**
+     * The longest caption a photo in a table of photos takes, in characters. A
+     * longer run of text after a photo is an article, not a caption (#489).
+     */
+    private const int MAX_PHOTO_CAPTION_LENGTH = 500;
+
+    /**
      * Determines if the processor can handle the given DOM node.
      *
      * @param  DOMNode  $node  The DOM node to check
@@ -432,6 +438,196 @@ class TableProcessor implements BlockProcessorInterface
 
         // A non-breaking space is what a blank cell holds
         return \trim(\str_replace("\u{A0}", ' ', $table->textContent)) !== '';
+    }
+
+    /**
+     * The photos of a table that holds only photos and their captions, each as a
+     * `<figure>` with its caption.
+     *
+     * Such a table is a table of data by `isDataTable()`, since its captions are
+     * text, but its cells hold photos rather than data, and a `table` set's cell
+     * cannot render an image (#396). A table is one when it is a table of data,
+     * every cell with text in it also holds an image, no image's caption is longer
+     * than `MAX_PHOTO_CAPTION_LENGTH` characters, no text sits outside its cells,
+     * and no link in it has text. An image's caption is the text after it in its
+     * cell, up to the next image; text ahead of a cell's first image belongs to
+     * that image. A caption is kept as text, so a table whose text links anywhere,
+     * as the exports' lists of articles under a heading graphic do, keeps its
+     * links as a table of data instead (#489).
+     *
+     * @param  DOMElement  $table  The table element
+     * @return ?list<array{figure: string, caption: string}> One figure per image, in
+     *                                                       the order the table holds
+     *                                                       them, with its caption,
+     *                                                       or null for a table that
+     *                                                       is not one of photos
+     */
+    public function photoFigures(
+        DOMElement $table
+    ): ?array {
+        // Only a table of data that holds an image can be one of photos
+        $document = $table->ownerDocument;
+
+        if (
+            ! $document instanceof DOMDocument
+            || $table->getElementsByTagName('img')->length === 0
+            || ! $this->isDataTable($table)
+            || self::hasTextOutsideCells($table)
+        ) {
+            return null;
+        }
+
+        // A link with text would be lost from a caption kept as text
+        foreach ($table->getElementsByTagName('a') as $link) {
+            if (self::normalizeText($link->textContent) !== '') {
+                return null;
+            }
+        }
+
+        // A table of data has no nested table, so every cell in it is its own
+        $photos = [];
+
+        foreach ($table->getElementsByTagName('*') as $cell) {
+            if ($cell->tagName !== 'td' && $cell->tagName !== 'th') {
+                continue;
+            }
+
+            // Each image takes the text after it, and a cell's first the text ahead of it
+            $cellPhotos = [];
+            $lead = '';
+            self::collectPhotos($cell, $cellPhotos, $lead);
+
+            // A cell with text and no image holds data
+            if ($cellPhotos === [] && self::normalizeText($lead) !== '') {
+                return null;
+            }
+
+            // A caption too long to be one is an article, so the table holds data
+            foreach ($cellPhotos as $photo) {
+                $caption = self::normalizeText($photo['caption']);
+
+                if (\mb_strlen($caption) > self::MAX_PHOTO_CAPTION_LENGTH) {
+                    return null;
+                }
+
+                $photos[] = [
+                    'image' => $photo['image'],
+                    'caption' => $caption,
+                ];
+            }
+        }
+
+        // Each photo becomes a figure, its caption a figcaption when it has one
+        $figures = [];
+
+        foreach ($photos as $photo) {
+            $figure = $document->createElement('figure');
+            $figure->appendChild($photo['image']->cloneNode(false));
+
+            if ($photo['caption'] !== '') {
+                $figcaption = $document->createElement('figcaption');
+                $figcaption->appendChild($document->createTextNode($photo['caption']));
+                $figure->appendChild($figcaption);
+            }
+
+            $figures[] = [
+                'figure' => (string) $document->saveHTML($figure),
+                'caption' => $photo['caption'],
+            ];
+        }
+
+        return $figures;
+    }
+
+    /**
+     * Whether a table holds text outside its cells, such as in a `<caption>`.
+     *
+     * @param  DOMNode  $node  The table, or a part of it outside its cells
+     * @return bool True when any text that is not blank sits outside the cells
+     */
+    private static function hasTextOutsideCells(
+        DOMNode $node
+    ): bool {
+        foreach ($node->childNodes as $child) {
+            // A cell's text is a caption, read with its photos
+            if ($child instanceof DOMElement && \in_array($child->tagName, ['td', 'th'], true)) {
+                continue;
+            }
+
+            if ($child instanceof DOMText) {
+                if (self::normalizeText($child->textContent) !== '') {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (self::hasTextOutsideCells($child)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Collects the images under a node in document order, each with the text after
+     * it up to the next image. Text ahead of the first image is collected apart.
+     *
+     * @param  DOMNode  $node  The node to read
+     * @param  list<array{image: DOMElement, caption: string}>  $photos  The images so far, each with its text
+     * @param  string  $lead  The text ahead of the first image
+     */
+    private static function collectPhotos(
+        DOMNode $node,
+        array &$photos,
+        string &$lead
+    ): void {
+        foreach ($node->childNodes as $child) {
+            // An image starts a photo, the first taking the text ahead of it
+            if ($child instanceof DOMElement && $child->tagName === 'img') {
+                $photos[] = [
+                    'image' => $child,
+                    'caption' => $photos === [] ? $lead : '',
+                ];
+
+                continue;
+            }
+
+            // Text belongs to the image before it
+            if ($child instanceof DOMText) {
+                $last = \array_key_last($photos);
+
+                if ($last === null) {
+                    $lead .= ' '.$child->textContent;
+                } else {
+                    $photos[$last]['caption'] .= ' '.$child->textContent;
+                }
+
+                continue;
+            }
+
+            self::collectPhotos($child, $photos, $lead);
+        }
+    }
+
+    /**
+     * Collapses each run of white space in a text to one space, reading a
+     * non-breaking space as white space.
+     *
+     * @param  string  $text  The text
+     * @return string The text, trimmed, with each run of white space as one space
+     */
+    private static function normalizeText(
+        string $text
+    ): string {
+        return \trim(
+            (string) \preg_replace(
+                '/\s+/u',
+                ' ',
+                \str_replace("\u{A0}", ' ', $text)
+            )
+        );
     }
 
     /**
