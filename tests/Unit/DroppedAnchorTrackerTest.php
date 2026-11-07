@@ -122,6 +122,32 @@ it('reports the same link on the same page once, and on two pages twice', functi
     ]);
 });
 
+it('reads ids and links past libxml\'s default nesting depth, as real pages nest unclosed tags hundreds deep', function (): void {
+    droppedAnchorRecord('https://example.edu/a/', str_repeat('<a><strong>', 300).'<blockquote id="anchor"><p>Q</p></blockquote><p><a href="#anchor">x</a></p>');
+
+    expect(array_column(droppedAnchorWarnings(), 'element'))->toBe(['<blockquote id="anchor">']);
+});
+
+it('raises no warning for an id kept inside a set\'s nested Bard content', function (): void {
+    droppedAnchorRecord('https://example.edu/a/', '<div><p id="inner">In</p></div><p><a href="#inner">x</a></p>', [
+        ['type' => 'set', 'attrs' => ['id' => 'row-1', 'values' => ['content' => [
+            ['type' => 'paragraph', 'attrs' => ['id' => 'inner']],
+        ]]]],
+    ]);
+
+    expect(droppedAnchorWarnings())->toBe([]);
+});
+
+it('keeps one record of a link an outer call and a nested call both carry', function (): void {
+    droppedAnchorRecord('https://example.edu/a/', '<blockquote id="anchor"><p>Q</p></blockquote><a href="#anchor">One</a><a href="#anchor">Two</a>');
+    droppedAnchorRecord('https://example.edu/a/', '<a href="#anchor">Two</a>');
+
+    $links = (new ReflectionProperty(DroppedAnchorTracker::class, 'links'))->getValue();
+
+    expect($links)->toHaveCount(1)
+        ->and(droppedAnchorWarnings())->toHaveCount(1);
+});
+
 it('decodes an escaped fragment before matching it', function (): void {
     droppedAnchorRecord('https://example.edu/a/', '<blockquote id="a b"><p>Q</p></blockquote><a href="#a%20b">x</a>');
 

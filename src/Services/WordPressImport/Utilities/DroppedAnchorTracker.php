@@ -47,10 +47,10 @@ class DroppedAnchorTracker
     private static array $pageLinks = [];
 
     /**
-     * Every link with a fragment: the page holding it, its href, the target page key
-     * and the fragment.
+     * Every link with a fragment, once per page and href: the page holding it, its
+     * href, the target page key and the fragment.
      *
-     * @var list<array{page_link: string, link: string, target: string, fragment: string}>
+     * @var array<string, array{page_link: string, link: string, target: string, fragment: string}>
      */
     private static array $links = [];
 
@@ -98,12 +98,15 @@ class DroppedAnchorTracker
             self::$keptIds[$pageKey][$id] = true;
         }
 
-        // Parse the source HTML for its ids and links
+        // Parse the source HTML for its ids and links. LIBXML_PARSEHUGE is needed as
+        // in ContentProcessor (wordpress-importer-archive#1273): past libxml's default
+        // depth of 256 the parser stops reading, still reports success, and every id
+        // and link after that point would go unrecorded
         $doc = new DOMDocument;
         $previous = \libxml_use_internal_errors(true);
         $loaded = $doc->loadHTML(
             '<?xml encoding="utf-8"?><div>'.$html.'</div>',
-            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET | LIBXML_PARSEHUGE
         );
         \libxml_clear_errors();
         \libxml_use_internal_errors($previous);
@@ -145,7 +148,9 @@ class DroppedAnchorTracker
                 continue;
             }
 
-            self::$links[] = [
+            // An outer call's HTML holds its nested calls' HTML, so the same link on
+            // the same page arrives more than once and is kept once
+            self::$links[$pageLink."\0".$href] ??= [
                 'page_link' => $pageLink,
                 'link' => $href,
                 'target' => $target,
