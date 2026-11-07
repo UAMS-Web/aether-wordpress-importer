@@ -31,13 +31,24 @@
         "classes, or the run refuses.",
         "",
         "REMOVAL CRITERION: drop each patch once a tagged pestphp/pest-plugin-mutate release",
-        "on the 5.x line ships its fix. Tracked in #355."
+        "on the 5.x line ships its fix. Tracked in #355.",
+        "",
+        "pest-plugin-mutate-mutant-process-launch.patch is byte-identical to the patch of the",
+        "same name in UAMS-Web/uams-statamic (#356), so a check is a plain sha256 compare.",
+        "A mutant child reuses argv[0] as typed, and on Windows a forward-slashed",
+        "`vendor/bin/pest` cannot be launched by cmd.exe, so every mutant scored as a kill",
+        "without running. The patch normalizes argv[0] to the platform separator and probes",
+        "it once with --version, aborting the run when the child still cannot start.",
+        "",
+        "REMOVAL CRITERION: drop it once a tagged pestphp/pest-plugin-mutate release on the",
+        "5.x line ships the fix, or when uams-statamic retires its copy. Tracked in #355."
     ],
     "patches": {
         "pestphp/pest-plugin-mutate": {
             "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)": "patches/pest-plugin-mutate-ignore-annotated-statement.patch",
             "Let a mutant child on Windows run its tests and write files, so its failure is a real kill (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)": "patches/pest-plugin-mutate-windows-mutant-child.patch",
-            "Widen or refuse a mutant child's filter that cannot launch or compile, so it cannot score a kill without running a test (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)": "patches/pest-plugin-mutate-windows-filter-length.patch"
+            "Widen or refuse a mutant child's filter that cannot launch or compile, so it cannot score a kill without running a test (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)": "patches/pest-plugin-mutate-windows-filter-length.patch",
+            "Launch each mutant child process so a run cannot score every mutant killed without executing one (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)": "patches/pest-plugin-mutate-mutant-process-launch.patch"
         }
     }
 }
