@@ -6465,6 +6465,14 @@ trait FieldtypeMappingTrait
      * This is DRY and generic: it finds the attribute mapped to 'preset' and applies
      * value_translation if present.
      *
+     * The attribute counts as mapped to 'preset' when its 'statamic_attribute' is
+     * the string 'preset' or an array whose 'default' is 'preset' (the form every
+     * shipped preset mapping uses). A 'based_on_attribute_value' exclusion in that
+     * array (Gravity Forms `addressType` 'us' mapped to null) does not suppress the
+     * value returned here: the exclusion only keeps the preset out of the field's
+     * config because it equals the fieldtype's default, while this value picks the
+     * preset-specific subfield handle, which still needs the address type (#429).
+     *
      * @param  array<int|string, mixed>  $parentField  The parent field data
      * @param  array<int|string, mixed>  $mappingConfig  The fieldtype mapping config
      */
@@ -6475,8 +6483,15 @@ trait FieldtypeMappingTrait
         // Iterate through the mapping config to find the attribute mapped to 'preset'
         foreach ($mappingConfig as $attr => $config) {
             $configArray = self::mappingConfig($config);
+            $statamicAttr = self::mappingValue($configArray, 'statamic_attribute');
+
+            // Read the target from either the plain string or the array's 'default'
+            $statamicTarget = \is_array($statamicAttr)
+                ? self::stringValue(self::mappingValue(self::asArray($statamicAttr), 'default'))
+                : self::stringValue($statamicAttr);
+
             // Check if this attribute is mapped to Statamic's 'preset' attribute
-            if (self::stringValue(self::mappingValue($configArray, 'statamic_attribute')) === 'preset') {
+            if ($statamicTarget === 'preset') {
                 $normalizedAttr = self::normalizeArrayKey($attr);
                 if ($normalizedAttr === null) {
                     continue;
@@ -6488,9 +6503,9 @@ trait FieldtypeMappingTrait
                     $normalizedAttr
                 );
 
-                // If the value is not set, return null (no preset to translate)
+                // If the field does not carry this attribute, try the next one mapped to 'preset'
                 if ($value === null) {
-                    return null;
+                    continue;
                 }
 
                 // If a value_translation array exists, translate the value accordingly
@@ -6511,7 +6526,7 @@ trait FieldtypeMappingTrait
             }
         }
 
-        // No attribute mapped to 'preset' found in the mapping config
+        // No attribute mapped to 'preset' is set on the parent field
         return null;
     }
 
