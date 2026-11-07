@@ -583,6 +583,64 @@ class TextProcessor
         array $preProcessedNodes = [],
         ?string $xmlPath = null
     ): array {
+        // Build the Bard content
+        $bardContent = self::buildBardContent(
+            $html,
+            $site,
+            $assetImporter,
+            $output,
+            $applyWpAutoP,
+            $isInnerBlocks,
+            $attachments,
+            $terms,
+            $pageSlug,
+            $statamicEntryId,
+            $collectionHandle,
+            $preProcessedNodes,
+            $xmlPath
+        );
+
+        // Record the ids this content dropped and the fragment links it holds, so the
+        // run can report a link that lands on a dropped id (#502)
+        DroppedAnchorTracker::record($html, $bardContent);
+
+        return $bardContent;
+    }
+
+    /**
+     * Build the Bard content {@see self::processForBard()} returns; that method
+     * documents the processing.
+     *
+     * @param  string  $html  The input HTML content
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  bool  $applyWpAutoP  Apply WpAutoP formatting
+     * @param  bool  $isInnerBlocks  Is InnerBlocks content
+     * @param  array<int|string, mixed>  $attachments  Array of attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of terms for processing
+     * @param  ?string  $pageSlug  Page slug for logging
+     * @param  ?string  $statamicEntryId  The Statamic entry ID being processed (for deferred processing)
+     * @param  ?string  $collectionHandle  The Statamic collection handle (optional)
+     * @param  array<int|string, mixed>  $preProcessedNodes  Pre-processed DOM nodes keyed by index
+     * @param  ?string  $xmlPath  Optional XML file path for link resolution
+     * @return array<int|string, mixed> The Bard-compatible ProseMirror JSON
+     */
+    private static function buildBardContent(
+        string $html,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        bool $applyWpAutoP = false,
+        bool $isInnerBlocks = false,
+        array $attachments = [],
+        array $terms = [],
+        ?string $pageSlug = null,
+        ?string $statamicEntryId = null,
+        ?string $collectionHandle = null,
+        array $preProcessedNodes = [],
+        ?string $xmlPath = null
+    ): array {
         // Check if processors are already cached to avoid repeated instantiation
         if (! isset(self::$cachedProcessors['bardParser'])) {
             // Initialize the Bard parser for converting HTML to ProseMirror JSON
