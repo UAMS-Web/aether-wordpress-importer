@@ -1739,6 +1739,14 @@ describe('an image nested in content', function (): void {
         ]);
     });
 
+    it('leaves the id of an earlier paragraph with the same text as the first part to that paragraph (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p id="a">Note</p><p id="intro">Note <img src="a.jpg"> rest</p>');
+
+        expect(textProcessorForBardPath($content, [0, 'attrs', 'id']))->toBe('a');
+    });
+
     it('carries no split paragraph\'s id into the next content processed (#500)', function (): void {
         textProcessorForBardFakes();
 

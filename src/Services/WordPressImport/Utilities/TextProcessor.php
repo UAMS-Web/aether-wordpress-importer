@@ -167,12 +167,6 @@ class TextProcessor
     private static string $splitIdParts = '';
 
     /**
-     * How many calls to {@see self::processForBard()} are building content, one inside
-     * another, so {@see self::$splitIdParts} is cleared when the outermost ends.
-     */
-    private static int $buildDepth = 0;
-
-    /**
      * Decodes HTML entities in a string to ensure proper UTF-8 character rendering.
      *
      * Uses ENT_QUOTES | ENT_HTML5 flags to decode both single and double quotes, as
@@ -597,9 +591,12 @@ class TextProcessor
         ?string $xmlPath = null
     ): array {
         // Build the Bard content. A call made while another is building, as for the
-        // blocks in a group, shares its split parts, since the outer call maps the
-        // nodes it returns again; they are forgotten once the outermost call ends
-        self::$buildDepth++;
+        // blocks in a group, matches only its own split parts, and hands the outer
+        // call's back when it ends. The outer call maps the nodes an inner call
+        // returns again, so the reset changes only nodes it does not reach, such as
+        // those inside a set
+        $outerSplitIdParts = self::$splitIdParts;
+        self::$splitIdParts = '';
 
         try {
             $bardContent = self::buildBardContent(
@@ -618,9 +615,7 @@ class TextProcessor
                 $xmlPath
             );
         } finally {
-            if (--self::$buildDepth === 0) {
-                self::$splitIdParts = '';
-            }
+            self::$splitIdParts = $outerSplitIdParts;
         }
 
         // Record the ids this content dropped and the fragment links it holds, so the
@@ -1676,10 +1671,12 @@ class TextProcessor
         // (clearboth, id, start, reversed, list_style) for applicable node types.
         // ---
         // The first part of an element split around an image holds less than the
-        // element's text, so its HTML is added for its `id` to be matched (#500)
+        // element's text, so its HTML is added for its `id` to be matched (#500).
+        // The mapper keeps the last element of a given text, so the parts go first and
+        // an element of the source with the same text keeps its own `id`
         $mappedContent = BardTexstyleAttributeMapper::mapAttributes(
             \array_values($filteredContent),
-            $formattedContent.self::$splitIdParts
+            self::$splitIdParts.$formattedContent
         );
 
         // Clean up variables to free up memory
