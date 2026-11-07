@@ -4583,14 +4583,20 @@ trait FieldtypeMappingTrait
      * Input format should be like "800MB" or "1.5GB".
      * Normalizes whitespace in the input (e.g., "800 MB" becomes "800MB").
      *
+     * An input that cannot be read as a size (a blank limit, a limit with no
+     * unit, or text such as "abc") returns null, so the mapped attribute is
+     * left out rather than written as a limit of zero. The host app's Assets
+     * fieldtype reads a numeric `max_file_size` as a `max` validation rule, so
+     * a zero would refuse every upload, while an absent value adds no rule.
+     *
      * @param  string  $fileSize  The file size string (e.g., "800MB" or "800 MB")
      * @param  string  $targetUnit  The target unit (e.g., "KB")
-     * @return string The converted file size as a numeric string
+     * @return string|null The converted file size as a numeric string, or null when the input cannot be read as a size
      */
     protected static function convertFileSize(
         string $fileSize,
         string $targetUnit
-    ): string {
+    ): ?string {
         // Normalize the input by removing all whitespace
         $normalizedFileSize = \preg_replace(
             '/\s+/',
@@ -4606,8 +4612,8 @@ trait FieldtypeMappingTrait
                 $matches
             ) !== 1
         ) {
-            // Return zero if the format is invalid
-            return '0';
+            // Return null if the format is invalid, so the attribute is left out
+            return null;
         }
 
         $size = (float) $matches[1];
