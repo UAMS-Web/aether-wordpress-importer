@@ -1908,3 +1908,16 @@ describe('an image nested in content, split around its wrappers', function (): v
         'an image block\'s figure' => ['<!-- wp:image {"id":5} --><figure><img src="none.jpg"><figcaption>Cap</figcaption></figure>', '<figure><img src="none.jpg"><figcaption>Cap</figcaption></figure>', ['Cap']],
     ]);
 });
+
+it('carries no id from a quote, while a paragraph keeps its own (#374)', function (string $html): void {
+    textProcessorForBardFakes();
+
+    $content = textProcessorForBard('<p id="paragraph-anchor">Before</p>'.$html);
+
+    expect(textProcessorForBardPath($content, [0, 'attrs', 'id']))->toBe('paragraph-anchor')
+        ->and(json_encode(array_slice($content, 1)))->not->toContain('quote-anchor')
+        ->and(count($content))->toBe(2);
+})->with([
+    'a wp:quote block' => ['<!-- wp:quote --><blockquote id="quote-anchor" class="wp-block-quote"><p>Quoted</p><cite>Who</cite></blockquote><!-- /wp:quote -->'],
+    'a bare blockquote' => ['<blockquote id="quote-anchor"><p>Quoted</p></blockquote>'],
+]);

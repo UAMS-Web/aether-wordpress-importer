@@ -239,3 +239,41 @@ it('imports through the importer, with no fallback url, when uploads are enabled
     ))->toBe('images/a.jpg')
         ->and($output->fetch())->toBe('');
 });
+
+it('carries neither the image\'s nor its figure\'s id into the image set (#374)', function (): void {
+    $importer = $this->createMock(AssetImporter::class);
+    $importer->method('getUploadImages')->willReturn(true);
+    $importer->method('importImage')->willReturn('images/a.jpg');
+
+    $set = (new ImageProcessor)->processImage(
+        '<figure id="figure-anchor" class="wp-block-image"><img id="image-anchor" src="https://example.edu/wp-content/uploads/a.jpg" class="wp-image-42" alt="A"></figure>',
+        'default',
+        $importer,
+        new BufferedOutput,
+    );
+
+    expect($set)->toBeArray()
+        ->and(textProcessorForImageSetPath($set, ['attrs', 'values', 'image']))->toBe('images/a.jpg')
+        ->and(json_encode($set))->not->toContain('anchor');
+});
+
+/**
+ * Read a nested value from an image set, or null where the path is absent.
+ *
+ * @param  mixed  $set  The image set, or what was returned in its place
+ * @param  list<string>  $path  Keys to follow
+ */
+function textProcessorForImageSetPath(mixed $set, array $path): mixed
+{
+    $value = $set;
+
+    foreach ($path as $key) {
+        if (! is_array($value) || ! array_key_exists($key, $value)) {
+            return null;
+        }
+
+        $value = $value[$key];
+    }
+
+    return $value;
+}

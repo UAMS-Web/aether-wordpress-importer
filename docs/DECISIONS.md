@@ -1550,3 +1550,11 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: matching on the source fieldtype handle**, as the shipped comments documented. The table is already chosen by fieldtype, so a `specific` entry keyed by that same type can only repeat `default`.
 
 **Rejected: matching on the field's own key or id**, as the code did, with integer Gravity Forms ids fixed. That keeps a per-field override nobody has used, in a mapping every form shares, where one form's field key or id means nothing in another.
+
+## A quote or an image does not keep the element's `id` on import (#374)
+
+**Decided 2026-11-07, on #374.** The importer carries no `id` from a `wp:quote` block, a bare `<blockquote>`, an `<img>` or an image's `<figure>`. A `wp:quote` becomes a `pull_quote` set with `align`, `quote` and `author` only; a bare blockquote becomes a paragraph with no `id`; the image set holds `type`, `image`, `align`, `caption` and `alt_override`, and its `attrs.id` is a generated row id. Tests in `ImageProcessorPipelineTest` and `TextProcessorForBardTest` pin this.
+
+**Why.** No link in the exports would land on such an `id`. Counted over the 259 exports at `UAMS-Web/wordpress-importer-exports` `2dc5f67`: none of 808 `<blockquote>` elements carries one, the 45 image ids are Word paste artifacts, the one image block's `id` is a generated block UUID, and none of 2,554 links with a fragment points at any of them. The measurement and its control are on #374.
+
+**Rejected: carrying the `id`.** It needs an `id` field on the host's `pull_quote` and image sets in `uams-statamic`, and the importer mapping to fill it, for anchors nothing links to. It stays open if one appears; the follow-up that reports a fragment link aimed at a dropped `id` is what would show one.
