@@ -1,5 +1,5 @@
 {
-    "_hash": "2b2ecfb1558e9a3650e1436a0fa8efba10f29d74ab048aee0dfc7456c2443d73",
+    "_hash": "85914caeeff9c7dfedc61af6582026d5aa9438ba9600ce2bad6549e066e415bc",
     "patches": {
         "pestphp/pest-plugin-mutate": [
             {
@@ -27,6 +27,16 @@
                 "description": "Widen or refuse a mutant child's filter that cannot launch or compile, so it cannot score a kill without running a test (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)",
                 "url": "patches/pest-plugin-mutate-windows-filter-length.patch",
                 "sha256": "ea282babd9d1af72e45957610b00d7ef1e3428d1c4f06ea16199c963fe1fffe0",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Launch each mutant child process so a run cannot score every mutant killed without executing one (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)",
+                "url": "patches/pest-plugin-mutate-mutant-process-launch.patch",
+                "sha256": "7a6c762ea7a0eaf0043f251a76fec8bb48f2bf6dd062e684a989b592e670ebbc",
                 "depth": 1,
                 "extra": {
                     "provenance": "patches-file:patches.json"
