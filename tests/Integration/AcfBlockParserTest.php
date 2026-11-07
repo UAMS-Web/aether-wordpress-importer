@@ -383,6 +383,23 @@ function acfBlockObject(array $properties): stdClass
 }
 
 /**
+ * The message this PHP gives for a payload that does not decode.
+ *
+ * PHP 8.6 adds a location to the message ("Syntax error near location 1:2"),
+ * so a test that names the decode error reads it from the running PHP (#494).
+ *
+ * @param  string  $json  The payload
+ * @return string The decode error message
+ */
+function acfBlockJsonError(string $json): string
+{
+    // Decode only to set the error the parser reads.
+    json_decode($json);
+
+    return json_last_error_msg();
+}
+
+/**
  * The body child nodes of an HTML fragment.
  *
  * @param  string  $html  The fragment
@@ -1093,14 +1110,17 @@ describe('an undecodable block payload', function (): void {
         /** @var MockInterface $logSpy */
         $logSpy = Log::spy();
 
+        $error = acfBlockJsonError('{not json}');
+        expect($error)->toStartWith('Syntax error');
+
         acfBlockParse(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, '<!-- wp:acf/cta {not json} /-->');
 
         $logSpy->shouldHaveReceived('warning', [
-            'AcfBlockParser: failed to json_decode wp:acf/cta block comment (Syntax error); block attributes are empty',
+            "AcfBlockParser: failed to json_decode wp:acf/cta block comment ({$error}); block attributes are empty",
             [
                 'block_type' => 'wp:acf/cta',
                 'page_slug' => 'a-page',
-                'json_error' => 'Syntax error',
+                'json_error' => $error,
                 'json_snippet' => '{not json}',
             ],
         ]);
@@ -1110,15 +1130,17 @@ describe('an undecodable block payload', function (): void {
         /** @var MockInterface $logSpy */
         $logSpy = Log::spy();
         ProcessingContext::setWordPressPageLink('https://example.edu/page/');
+        $error = acfBlockJsonError('{not json}');
+        expect($error)->toStartWith('Syntax error');
 
         acfBlockParse(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, '<!-- wp:acf/uams-news {not json} -->');
 
         $logSpy->shouldHaveReceived('warning', [
-            'AcfBlockParser: failed to json_decode wp:acf/uams-news block comment (Syntax error); block attributes are empty (from entry: https://example.edu/page/)',
+            "AcfBlockParser: failed to json_decode wp:acf/uams-news block comment ({$error}); block attributes are empty (from entry: https://example.edu/page/)",
             [
                 'block_type' => 'wp:acf/uams-news',
                 'page_slug' => 'a-page',
-                'json_error' => 'Syntax error',
+                'json_error' => $error,
                 'json_snippet' => '{not json}',
                 'entry_url' => 'https://example.edu/page/',
             ],
