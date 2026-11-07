@@ -153,6 +153,18 @@ class ImportWarningManager
                     return;
                 }
             }
+        } elseif ($category === 'content' && $type === 'links_to_dropped_ids') {
+            // A link reaches the report once per pass that recorded it, so the same
+            // link on the same page is reported once (#502)
+            foreach ($existingWarnings as $existingWarning) {
+                if (
+                    ($existingWarning['link'] ?? '') === ($data['link'] ?? '')
+                    && ($existingWarning['page_link'] ?? '') === ($data['page_link'] ?? '')
+                ) {
+                    // Duplicate found, don't add this warning
+                    return;
+                }
+            }
         } elseif ($category === 'content' && $type === 'images_in_table_cells') {
             // For images_in_table_cells, check for duplicates before adding
             // Content reaches more than one processing pass, so the same table on
