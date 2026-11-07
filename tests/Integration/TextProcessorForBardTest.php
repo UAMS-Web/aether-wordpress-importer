@@ -1684,16 +1684,67 @@ describe('an image nested in content', function (): void {
         'a table that holds a table' => ['<table><tr><td><p>Story</p><p><img src="a.jpg"></p><table><tr><td>x</td></tr></table></td></tr></table>', ['paragraph:Story', 'set:image', 'set:table']],
     ]);
 
-    it('gives no part of a split paragraph its id, which is found by the whole paragraph text', function (): void {
+    it('gives the first part of a paragraph split around an image the paragraph\'s id, and no later part (#500)', function (string $html, array $expected): void {
         textProcessorForBardFakes();
 
-        $content = textProcessorForBard('<p id="intro">A <img src="a.jpg"> B</p>');
+        expect(textProcessorForBard($html))->toBe($expected);
+    })->with([
+        'text on both sides' => ['<p id="intro">A <img src="a.jpg"> B</p>', [
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+        ]],
+        'the image first' => ['<p id="intro"><img src="a.jpg">B</p>', [
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('B', 'intro'),
+        ]],
+        'two images' => ['<p id="intro">A<img src="a.jpg">B<img src="b.jpg">C</p>', [
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('B'),
+            textProcessorForBardImage('b.jpg'),
+            textProcessorForBardParagraph('C'),
+        ]],
+        'the paragraph in a wrapper' => ['<div><p id="intro">A <img src="a.jpg"> B</p></div>', [
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+        ]],
+    ]);
 
-        expect($content)->toBe([
-            textProcessorForBardParagraph('A'),
+    it('keeps the id of a paragraph without an image beside a split one (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        expect(textProcessorForBard('<p id="plain">Plain</p><p id="intro">A <img src="a.jpg"> B</p>'))->toBe([
+            textProcessorForBardParagraph('Plain', 'plain'),
+            textProcessorForBardParagraph('A', 'intro'),
             textProcessorForBardImage('a.jpg'),
             textProcessorForBardParagraph(' B'),
         ]);
+    });
+
+    it('keeps the id of a paragraph split in a group block, and of one split ahead of it (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p id="intro">A <img src="a.jpg"> B</p>'
+            .'<!-- wp:group --><div class="wp-block-group"><p id="inner">X <img src="b.jpg"> Y</p></div><!-- /wp:group -->');
+
+        expect($content)->toBe([
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+            textProcessorForBardParagraph('X', 'inner'),
+            textProcessorForBardImage('b.jpg'),
+            textProcessorForBardParagraph(' Y'),
+        ]);
+    });
+
+    it('carries no split paragraph\'s id into the next content processed (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        textProcessorForBard('<p id="intro">A <img src="a.jpg"> B</p>');
+
+        expect(textProcessorForBard('<p>A</p>'))->toBe([textProcessorForBardParagraph('A')]);
     });
 
     it('imports an image in a link or an inline element, without the link', function (string $html): void {
