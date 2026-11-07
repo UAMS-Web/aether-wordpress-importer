@@ -14,7 +14,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Processes WordPress wp:table blocks into Tiptap-compatible HTML for Statamic
@@ -259,6 +261,9 @@ class TableProcessor implements BlockProcessorInterface
             return null;
         }
 
+        // A cell keeps its image as HTML that the host does not render (#396)
+        self::reportImages($table);
+
         // Read the classes the figure carries, when there is one
         // The empty fallback and mutation sentinel both mean centered and unstriped.
         // @pest-mutate-ignore: EmptyStringToNotEmpty
@@ -359,6 +364,44 @@ class TableProcessor implements BlockProcessorInterface
             '<div data-set-type="table"%s%s></div>',
             SetMarkupNonce::attribute(),
             $attrs
+        );
+    }
+
+    /**
+     * Records the images a table set holds for the run summary.
+     *
+     * A cell's image stays in `table_data` as HTML with its WordPress `src`, is not
+     * imported as an asset, and the host's table cell sanitizer removes it when the
+     * cell renders, so the image does not reach the page (#396).
+     *
+     * @param  DOMElement  $table  The table element
+     */
+    private static function reportImages(
+        DOMElement $table
+    ): void {
+        $images = $table->getElementsByTagName('img');
+        $first = $images->item(0);
+
+        if ($first === null) {
+            return;
+        }
+
+        // saveHTML() returns false only for a node of another document, and the
+        // image belongs to the table's own document
+        // @pest-mutate-ignore: RemoveStringCast
+        $image = (string) $table->ownerDocument?->saveHTML($first);
+
+        ImportWarningManager::addWarning(
+            'content',
+            'images_in_table_cells',
+            [
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'image_count' => $images->length,
+                'content_snippet' => \mb_substr($image, 0, 100)
+                    .(\mb_strlen($image) > 100 ? '...' : ''),
+                'reason' => 'An image in a table cell is kept as HTML in the table '
+                    .'set, is not imported as an asset, and does not render.',
+            ]
         );
     }
 

@@ -140,6 +140,19 @@ class ImportWarningManager
                     return;
                 }
             }
+        } elseif ($category === 'content' && $type === 'images_in_table_cells') {
+            // For images_in_table_cells, check for duplicates before adding
+            // Content reaches more than one processing pass, so the same table on
+            // the same page is reported once (#396)
+            foreach ($existingWarnings as $existingWarning) {
+                if (
+                    ($existingWarning['content_snippet'] ?? '') === ($data['content_snippet'] ?? '')
+                    && ($existingWarning['page_link'] ?? '') === ($data['page_link'] ?? '')
+                ) {
+                    // Duplicate found, don't add this warning
+                    return;
+                }
+            }
         }
 
         // Add the warning data to the appropriate category and type

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
@@ -41,6 +42,7 @@ uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
     ProcessingContext::clearWordPressPageLink();
+    ImportWarningManager::clearWarnings();
     ProcessingContext::clearFormConfigContext();
 });
 
@@ -571,3 +573,62 @@ it('returns null for a comment that belongs to no document', function (): void {
     expect(processTable(new DOMComment(' wp:table ')))->toBeNull()
         ->and($warnings->getArrayCopy())->toBe([]);
 });
+
+it('warns once, naming the page, of the images a wp:table block holds', function (): void {
+    ProcessingContext::setWordPressPageLink('https://example.test/news/photo-story/');
+    $node = tableOpeningNode(
+        '<!-- wp:table -->'
+        .'<figure class="wp-block-table"><table><tbody>'
+        .'<tr><td><img src="https://example.test/a.jpg" alt="A">Caption A</td></tr>'
+        .'<tr><td><img src="https://example.test/b.jpg" alt="B">Caption B</td></tr>'
+        .'</tbody></table></figure>'
+    );
+
+    expect(processTable($node))->toBeArray();
+    expect(processTable($node))->toBeArray();
+
+    expect(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([[
+        'page_link' => 'https://example.test/news/photo-story/',
+        'image_count' => 2,
+        'content_snippet' => '<img src="https://example.test/a.jpg" alt="A">',
+        'reason' => 'An image in a table cell is kept as HTML in the table set, is not imported as an asset, and does not render.',
+    ]]);
+});
+
+it('warns of the image a plain table of data holds, as content reaches it', function (): void {
+    ProcessingContext::setWordPressPageLink('https://example.test/about/');
+
+    TextProcessor::processForBard(
+        '<table align="right"><tbody><tr><td><img class="img_style_1" src="https://example.test/c.jpg" alt=""> A cutline</td></tr></tbody></table>',
+        'default',
+        app(AssetImporter::class),
+        new BufferedOutput
+    );
+
+    expect(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([[
+        'page_link' => 'https://example.test/about/',
+        'image_count' => 1,
+        'content_snippet' => '<img class="img_style_1" src="https://example.test/c.jpg" alt="">',
+        'reason' => 'An image in a table cell is kept as HTML in the table set, is not imported as an asset, and does not render.',
+    ]]);
+});
+
+it('cuts the image snippet to 100 characters and reports a page with no link as empty', function (): void {
+    $src = 'https://example.test/'.str_repeat('a', 120).'.jpg';
+    renderedTable('<table><tbody><tr><td><img src="'.$src.'"> text</td></tr></tbody></table>');
+
+    $warnings = ImportWarningManager::getWarnings('content', 'images_in_table_cells');
+
+    expect($warnings)->toHaveCount(1)
+        ->and(data_get($warnings, '0.page_link'))->toBe('')
+        ->and(data_get($warnings, '0.content_snippet'))->toBe(mb_substr('<img src="'.$src.'">', 0, 100).'...');
+});
+
+it('warns of no image for a table without one, or one with no rows to import', function (string $html): void {
+    renderedTable($html);
+
+    expect(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([]);
+})->with([
+    'text only' => ['<table><tbody><tr><td>1</td></tr></tbody></table>'],
+    'no rows' => ['<table><caption><img src="a.jpg"></caption><tfoot><tr></tr></tfoot></table>'],
+]);
