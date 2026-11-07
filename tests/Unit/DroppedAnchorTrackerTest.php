@@ -88,6 +88,31 @@ it('warns for a link from another imported page, however the URL names the targe
     'percent-encoding in another case' => ['https://example.edu/caf%c3%a9/', 'https://example.edu/caf%C3%A9/#anchor'],
     'the default port named' => ['https://example.edu/a/', 'https://example.edu:443/a/#anchor'],
     'a root-relative URL on a page with a port' => ['https://example.edu:8443/a/', '/a/#anchor', 'https://example.edu:8443/b/'],
+    'the default http port named' => ['http://example.edu/a/', 'http://example.edu:80/a/#anchor'],
+    'percent-encoding in another case, the other way' => ['https://example.edu/caf%C3%A9/', 'https://example.edu/caf%c3%a9/#anchor'],
+]);
+
+it('strips www. only from the start of a host (#505)', function (): void {
+    droppedAnchorRecord('https://a.example.edu/a/', '<blockquote id="anchor"><p>Q</p></blockquote>');
+    droppedAnchorRecord('https://example.edu/b/', '<p><a href="https://a.www.example.edu/a/#anchor">See</a></p>');
+
+    expect(droppedAnchorWarnings())->toBe([]);
+});
+
+it('names the element with the id when an <a name> carries the same value, as a browser scrolls to the id (#505)', function (): void {
+    droppedAnchorRecord('https://example.edu/a/', '<a name="anchor"></a><blockquote id="anchor"><p>Q</p></blockquote><a href="#anchor">Up</a>');
+
+    expect(array_column(droppedAnchorWarnings(), 'element'))->toBe(['<blockquote id="anchor">']);
+});
+
+it('matches an anchor\'s value as a browser does, without trimming it (#505)', function (string $html, int $warnings): void {
+    droppedAnchorRecord('https://example.edu/a/', $html);
+
+    expect(droppedAnchorWarnings())->toHaveCount($warnings);
+})->with([
+    'a padded name and a bare fragment' => ['<a name=" anchor "></a><a href="#anchor">Up</a>', 0],
+    'a padded name and a padded fragment' => ['<a name=" anchor "></a><a href="#%20anchor%20">Up</a>', 1],
+    'an <a> with an id and another name, linked by the name' => ['<a id="first" name="anchor"></a><a href="#anchor">Up</a>', 1],
 ]);
 
 it('warns for a link to an <a name> anchor, which the import keeps no trace of (#505)', function (string $html): void {
@@ -139,6 +164,7 @@ it('raises no warning for a fragment that names nothing on its target, a page th
     'another page' => ['https://example.edu/other/#anchor'],
     'another host' => ['https://elsewhere.example/a/#anchor'],
     'another port' => ['https://example.edu:8443/a/#anchor'],
+    'the http port on an https URL' => ['https://example.edu:80/a/#anchor'],
     'a mailto link' => ['mailto:a@example.edu#anchor'],
 ]);
 

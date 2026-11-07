@@ -120,17 +120,18 @@ class DroppedAnchorTracker
 
         $xpath = new DOMXPath($doc);
 
-        // Record each id in the source, and each `name` of an `<a>`, keeping the first
-        // element seen for a value
-        $elements = $xpath->query('//*[@id] | //a[@name]');
-        foreach ($elements === false ? [] : $elements as $element) {
-            if (! $element instanceof DOMElement) {
-                continue;
-            }
+        // Record each id in the source, then each `name` of an `<a>`, keeping the first
+        // element seen for a value. A browser scrolls to an id ahead of a name, and
+        // matches the value as written, without trimming it
+        foreach (['id' => '//*[@id]', 'name' => '//a[@name]'] as $attribute => $query) {
+            $elements = $xpath->query($query);
+            foreach ($elements === false ? [] : $elements as $element) {
+                if (! $element instanceof DOMElement) {
+                    continue;
+                }
 
-            foreach (['id', 'name'] as $attribute) {
-                $value = \trim($element->getAttribute($attribute));
-                if ($value !== '' && ($attribute === 'id' || $element->tagName === 'a')) {
+                $value = $element->getAttribute($attribute);
+                if ($value !== '') {
                     self::$sourceIds[$pageKey][$value] ??= '<'.$element->tagName.' '.$attribute.'="'.$value.'">';
                 }
             }
@@ -222,9 +223,9 @@ class DroppedAnchorTracker
     }
 
     /**
-     * The key a page is matched on: host without `www.`, any port other than 80 or
-     * 443, path without a trailing slash, and query, with percent-encoding in upper
-     * case.
+     * The key a page is matched on: host without `www.`, any port other than its
+     * scheme's default (80 for http, 443 for https), path without a trailing slash,
+     * and query, with percent-encoding in upper case.
      *
      * An empty URL is the base page itself, as for a same-page `#fragment` link, and a
      * relative one is resolved against the base page's host and directory. A URL with
@@ -259,7 +260,8 @@ class DroppedAnchorTracker
         $hostParts = isset($parts['host']) ? $parts : $baseParts;
         $host = \preg_replace('/^www\./', '', \strtolower($hostParts['host'] ?? '')) ?? '';
         $port = $hostParts['port'] ?? null;
-        if (! \in_array($port, [null, 80, 443], true)) {
+        $defaultPort = \strtolower($hostParts['scheme'] ?? 'http') === 'https' ? 443 : 80;
+        if ($port !== null && $port !== $defaultPort) {
             $host .= ':'.$port;
         }
 
