@@ -1470,24 +1470,37 @@ class FieldtypeMapping
      * stored.
      *
      * Provide a mathematical expression, referencing the original value using
-     * `[value]`.
+     * `[value]`. The expression is applied only when the mapped value is numeric.
      *
      * Can be:
      *   - A string: Direct calculation of the value
      *   - An array with 'default' and 'specific' keys for fieldtype-specific
-     *     calculation
-     *   - An array with 'based_on_other_attribute_value' for conditional calculation
-     *       - Can be a direct mapping or use 'default' and 'specific' structure
+     *     calculation, where 'specific' is keyed by Gravity Forms fieldtype
+     *       - When the array holds only 'default' and 'specific', a 'specific'
+     *         entry for the fieldtype replaces 'default', and a null 'specific'
+     *         entry turns the calculation off for that fieldtype
+     *   - An array with 'based_on_other_attribute_value' for a calculation chosen
+     *     by the value of another attribute
+     *       - Keys are exact values of the other attribute
+     *       - Can be a direct mapping or use 'default' and 'specific' structure,
+     *         where 'specific' is keyed by Gravity Forms fieldtype
+     *       - In the 'default' and 'specific' structure, 'default' is read first,
+     *         and 'specific' only when no 'default' entry matched
      *       - Special keys include:
-     *           - '#not_set': Used when the attribute is not set in the JSON export
-     *           - '#not_empty': Used when the attribute is set and is not empty in
-     *             the JSON export
+     *           - '#not_set': Used when the other attribute is not set, or is
+     *             null, in the JSON export
      *   - An array with 'specific_based_on_attribute_value' for fieldtype-specific
-     *     calculation based on the value of the attribute
+     *     calculation based on the value of the attribute itself
+     *       - Keys are patterns matched against the attribute's own value, with
+     *         `*` as a wildcard ('1*' matches 10)
      *       - Special keys include:
      *           - '#not_set': Used when the attribute is not set in the JSON export
-     *           - '#not_empty': Used when the attribute is set and is not empty in
-     *             the JSON export
+     *
+     * When the array holds 'based_on_other_attribute_value' or
+     * 'specific_based_on_attribute_value', the first match wins, in this order:
+     * 'specific_based_on_attribute_value', 'based_on_other_attribute_value',
+     * 'specific', then 'default'. A null 'specific' entry then falls through to
+     * 'default' instead of turning the calculation off.
      *
      * Example: '[value] * 2.5'
      *
@@ -1499,14 +1512,40 @@ class FieldtypeMapping
      *         'value_calculation' => [
      *             'default' => '<calculation>',
      *             'specific' => [
-     *                 '<gravity_forms_attribute_name>' => '<calculation>',
+     *                 '<gravity_forms_fieldtype>' => '<calculation>',
+     *                 '<gravity_forms_fieldtype>' => null,
      *             ],
+     *         ],
+     *     ],
+     *
+     *     '<gravity_forms_attribute_name>' => [
+     *         'value_calculation' => [
+     *             'default' => '<calculation>',
+     *             'specific' => [
+     *                 '<gravity_forms_fieldtype>' => '<calculation>',
+     *             ],
+     *             'based_on_other_attribute_value' => [
+     *                 '<gravity_forms_attribute_name>' => [
+     *                     '<gravity_forms_attribute_value>' => '<calculation>',
+     *                     '#not_set' => '<calculation>',
+     *                 ],
+     *             ],
+     *             'specific_based_on_attribute_value' => [
+     *                 '<gravity_forms_fieldtype>' => [
+     *                     '<gravity_forms_attribute_value_pattern>' => '<calculation>',
+     *                     '#not_set' => '<calculation>',
+     *                 ],
+     *             ],
+     *         ],
+     *     ],
+     *
+     *     '<gravity_forms_attribute_name>' => [
+     *         'value_calculation' => [
      *             'based_on_other_attribute_value' => [
      *                 'default' => [
      *                     '<gravity_forms_attribute_name>' => [
      *                         '<gravity_forms_attribute_value>' => '<calculation>',
      *                         '#not_set' => '<calculation>',
-     *                         '#not_empty' => '<calculation>',
      *                     ],
      *                 ],
      *                 'specific' => [
@@ -1514,16 +1553,8 @@ class FieldtypeMapping
      *                         '<gravity_forms_attribute_name>' => [
      *                             '<gravity_forms_attribute_value>' => '<calculation>',
      *                             '#not_set' => '<calculation>',
-     *                             '#not_empty' => '<calculation>',
      *                         ],
      *                     ],
-     *                 ],
-     *             ],
-     *             'specific_based_on_attribute_value' => [
-     *                 '<gravity_forms_fieldtype>' => [
-     *                     '<gravity_forms_attribute_value>' => '<calculation>',
-     *                     '#not_set' => '<calculation>',
-     *                     '#not_empty' => '<calculation>',
      *                 ],
      *             ],
      *         ],
