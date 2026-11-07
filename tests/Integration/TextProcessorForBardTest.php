@@ -1623,3 +1623,16 @@ it('keeps a table of data that holds a photo as a table set', function (): void 
         ->and(textProcessorForBardPath($content, [0, 'attrs', 'values', 'type']))->toBe('table')
         ->and(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toHaveCount(1);
 });
+
+it('carries no id from a quote, while a paragraph keeps its own (#374)', function (string $html): void {
+    textProcessorForBardFakes();
+
+    $content = textProcessorForBard('<p id="paragraph-anchor">Before</p>'.$html);
+
+    expect(textProcessorForBardPath($content, [0, 'attrs', 'id']))->toBe('paragraph-anchor')
+        ->and(json_encode(array_slice($content, 1)))->not->toContain('quote-anchor')
+        ->and(count($content))->toBe(2);
+})->with([
+    'a wp:quote block' => ['<!-- wp:quote --><blockquote id="quote-anchor" class="wp-block-quote"><p>Quoted</p><cite>Who</cite></blockquote><!-- /wp:quote -->'],
+    'a bare blockquote' => ['<blockquote id="quote-anchor"><p>Quoted</p></blockquote>'],
+]);
