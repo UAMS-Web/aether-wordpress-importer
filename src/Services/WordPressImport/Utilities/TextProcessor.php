@@ -160,6 +160,13 @@ class TextProcessor
     private static array $cachedProcessors = [];
 
     /**
+     * The HTML of the first part of each element with an `id` that the content being
+     * built was split into around an image, for `BardTexstyleAttributeMapper` to
+     * match the `id` against (#500). See {@see self::imageParts()}.
+     */
+    private static string $splitIdParts = '';
+
+    /**
      * Decodes HTML entities in a string to ensure proper UTF-8 character rendering.
      *
      * Uses ENT_QUOTES | ENT_HTML5 flags to decode both single and double quotes, as
@@ -583,22 +590,33 @@ class TextProcessor
         array $preProcessedNodes = [],
         ?string $xmlPath = null
     ): array {
-        // Build the Bard content
-        $bardContent = self::buildBardContent(
-            $html,
-            $site,
-            $assetImporter,
-            $output,
-            $applyWpAutoP,
-            $isInnerBlocks,
-            $attachments,
-            $terms,
-            $pageSlug,
-            $statamicEntryId,
-            $collectionHandle,
-            $preProcessedNodes,
-            $xmlPath
-        );
+        // Build the Bard content. A call made while another is building, as for the
+        // blocks in a group, matches only its own split parts, and hands the outer
+        // call's back when it ends. The outer call maps the nodes an inner call
+        // returns again, so the reset changes only nodes it does not reach, such as
+        // those inside a set
+        $outerSplitIdParts = self::$splitIdParts;
+        self::$splitIdParts = '';
+
+        try {
+            $bardContent = self::buildBardContent(
+                $html,
+                $site,
+                $assetImporter,
+                $output,
+                $applyWpAutoP,
+                $isInnerBlocks,
+                $attachments,
+                $terms,
+                $pageSlug,
+                $statamicEntryId,
+                $collectionHandle,
+                $preProcessedNodes,
+                $xmlPath
+            );
+        } finally {
+            self::$splitIdParts = $outerSplitIdParts;
+        }
 
         // Record the ids this content dropped and the fragment links it holds, so the
         // run can report a link that lands on a dropped id (#502)
@@ -1652,9 +1670,13 @@ class TextProcessor
         // formatted content and map them to Bard Texstyle attributes
         // (clearboth, id, start, reversed, list_style) for applicable node types.
         // ---
+        // The first part of an element split around an image holds less than the
+        // element's text, so its HTML is added for its `id` to be matched (#500).
+        // The mapper keeps the last element of a given text, so the parts go first and
+        // an element of the source with the same text keeps its own `id`
         $mappedContent = BardTexstyleAttributeMapper::mapAttributes(
             \array_values($filteredContent),
-            $formattedContent
+            self::$splitIdParts.$formattedContent
         );
 
         // Clean up variables to free up memory
@@ -2352,8 +2374,10 @@ class TextProcessor
      * keeps its images, and each of them is reported, since a set cannot be lifted
      * out of it.
      *
-     * No part keeps the element's `id`: `BardTexstyleAttributeMapper` finds an
-     * element's `id` by the element's whole text, which no part holds. A link around
+     * The element's first content part keeps its `id`, and no later part, so an anchor
+     * to the element lands at its start. `BardTexstyleAttributeMapper` finds an `id` by
+     * its element's whole text, which no part holds, so the first part's HTML is kept
+     * in {@see self::$splitIdParts} for it to match (#500). A link around
      * an image is not kept. A nested image is imported wherever it appears, without
      * the de-duplication `processForBard()` applies to images at the top of the
      * content.
@@ -2418,6 +2442,18 @@ class TextProcessor
             $parts,
             $part
         );
+
+        // Keep the HTML of the element's first content part, so its `id` is matched to
+        // that part's Bard node and to no later part's (#500)
+        if ($element->hasAttribute('id')) {
+            foreach ($parts as [$isImage, $contentPart]) {
+                if (! $isImage) {
+                    self::$splitIdParts .= self::nodeHtml($doc, $contentPart);
+
+                    break;
+                }
+            }
+        }
 
         return $parts;
     }
