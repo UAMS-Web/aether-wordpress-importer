@@ -21,12 +21,16 @@ use DOMXPath;
  * {@see self::reportLinksToDroppedIds()}, and an `id` counts as dropped only when no
  * call on its page kept it.
  *
+ * An `<a name="...">` anchor counts as an `id` too, since a browser scrolls to one,
+ * and the import keeps no `name` (#505).
+ *
  * A link to a page this run did not import cannot be checked, and is skipped.
  */
 class DroppedAnchorTracker
 {
     /**
-     * The tag of each `id` seen in a page's source HTML, by page key, then `id`.
+     * Each anchor seen in a page's source HTML, as the element the warning names, by
+     * page key, then the `id` or `name` it carries.
      *
      * @var array<string, array<string, string>>
      */
@@ -87,7 +91,7 @@ class DroppedAnchorTracker
 
         // Most content carries neither an id nor a link with a fragment, so skip
         // parsing it. A bare `#` is no sign of one, since every numeric entity has it
-        if (\preg_match('/\sid\s*=|\shref\s*=\s*["\']?[^"\'\s>]*#/i', $html) !== 1) {
+        if (\preg_match('/\s(?:id|name)\s*=|\shref\s*=\s*["\']?[^"\'\s>]*#/i', $html) !== 1) {
             return;
         }
 
@@ -116,16 +120,19 @@ class DroppedAnchorTracker
 
         $xpath = new DOMXPath($doc);
 
-        // Record the tag of each id in the source, keeping the first tag seen
-        $elements = $xpath->query('//*[@id]');
+        // Record each id in the source, and each `name` of an `<a>`, keeping the first
+        // element seen for a value
+        $elements = $xpath->query('//*[@id] | //a[@name]');
         foreach ($elements === false ? [] : $elements as $element) {
             if (! $element instanceof DOMElement) {
                 continue;
             }
 
-            $id = \trim($element->getAttribute('id'));
-            if ($id !== '') {
-                self::$sourceIds[$pageKey][$id] ??= $element->tagName;
+            foreach (['id', 'name'] as $attribute) {
+                $value = \trim($element->getAttribute($attribute));
+                if ($value !== '' && ($attribute === 'id' || $element->tagName === 'a')) {
+                    self::$sourceIds[$pageKey][$value] ??= '<'.$element->tagName.' '.$attribute.'="'.$value.'">';
+                }
             }
         }
 
@@ -173,10 +180,10 @@ class DroppedAnchorTracker
         foreach (self::$links as $link) {
             $target = $link['target'];
             $fragment = $link['fragment'];
-            $tag = self::$sourceIds[$target][$fragment] ?? null;
+            $element = self::$sourceIds[$target][$fragment] ?? null;
 
             // An id the target never carried, or kept somewhere, is not dropped
-            if ($tag === null || isset(self::$keptIds[$target][$fragment])) {
+            if ($element === null || isset(self::$keptIds[$target][$fragment])) {
                 continue;
             }
 
@@ -184,7 +191,7 @@ class DroppedAnchorTracker
                 'page_link' => $link['page_link'],
                 'link' => $link['link'],
                 'target_page' => self::$pageLinks[$target] ?? $target,
-                'element' => '<'.$tag.' id="'.$fragment.'">',
+                'element' => $element,
                 'reason' => 'The link names an id the import dropped, so it lands at the top of the page.',
             ]);
         }
@@ -215,7 +222,9 @@ class DroppedAnchorTracker
     }
 
     /**
-     * The key a page is matched on: host, path without a trailing slash, and query.
+     * The key a page is matched on: host without `www.`, any port other than 80 or
+     * 443, path without a trailing slash, and query, with percent-encoding in upper
+     * case.
      *
      * An empty URL is the base page itself, as for a same-page `#fragment` link, and a
      * relative one is resolved against the base page's host and directory. A URL with
@@ -244,9 +253,16 @@ class DroppedAnchorTracker
             return null;
         }
 
-        // A relative URL takes the base page's host, and its directory when the
-        // path does not start at the root
-        $host = \strtolower($parts['host'] ?? ($baseParts['host'] ?? ''));
+        // A relative URL takes the base page's host and port, and its directory when
+        // the path does not start at the root. A leading `www.` names the same site,
+        // and a port other than the default names another (#505)
+        $hostParts = isset($parts['host']) ? $parts : $baseParts;
+        $host = \preg_replace('/^www\./', '', \strtolower($hostParts['host'] ?? '')) ?? '';
+        $port = $hostParts['port'] ?? null;
+        if (! \in_array($port, [null, 80, 443], true)) {
+            $host .= ':'.$port;
+        }
+
         $path = $parts['path'] ?? '';
         if (! isset($parts['host']) && $path !== '' && ! \str_starts_with($path, '/')) {
             $basePath = $baseParts['path'] ?? '/';
@@ -272,6 +288,12 @@ class DroppedAnchorTracker
 
         $query = isset($parts['query']) ? '?'.$parts['query'] : '';
 
-        return $host.\rtrim($path, '/').$query;
+        // Percent-encoding that differs only in case names the same page, as
+        // WordPress stores a slug's in lower case and a browser copies it in upper
+        return \preg_replace_callback(
+            '/%[0-9a-f]{2}/i',
+            static fn (array $match): string => \strtoupper($match[0]),
+            $host.\rtrim($path, '/').$query
+        ) ?? '';
     }
 }
