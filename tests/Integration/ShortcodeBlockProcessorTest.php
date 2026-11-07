@@ -791,7 +791,10 @@ it('process returns what is on each side of a shortcode beside its page builder 
 ]);
 
 it('process returns nothing around a shortcode that is all the block holds', function (): void {
-    $comment = shortcodeBlockRequireCommentNode($this->doc, '<!-- wp:shortcode -->[show-people ids="1"]<!-- /wp:shortcode -->');
+    // The block sits in a body, as AcfBlockParser and ContentProcessor load content.
+    // Loaded bare with LIBXML_HTML_NOIMPLIED, libxml 2.14 and later drop text at the
+    // top of the document, so the block would hold nothing (#405)
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<!DOCTYPE html><html><body><!-- wp:shortcode -->[show-people ids="1"]<!-- /wp:shortcode --></body></html>');
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
