@@ -97,6 +97,45 @@ class TextProcessor
     ];
 
     /**
+     * The elements an image in content is lifted out of, ending the element ahead of
+     * the image and resuming it after, since a set is valid only at the top of the
+     * document (#492). They are the table wrappers and the inline elements around
+     * text. An image in any other element, such as a list or a heading, stays where
+     * it is and is reported.
+     *
+     * @var list<string>
+     */
+    private const array IMAGE_WRAPPER_TAGS = [
+        'a',
+        'abbr',
+        'article',
+        'aside',
+        'b',
+        'center',
+        'cite',
+        'del',
+        'details',
+        'div',
+        'em',
+        'font',
+        'i',
+        'ins',
+        'label',
+        'main',
+        'mark',
+        'p',
+        's',
+        'section',
+        'small',
+        'span',
+        'strike',
+        'strong',
+        'sub',
+        'sup',
+        'u',
+    ];
+
+    /**
      * Matches a `wp:shortcode` block, whose shortcodes ShortcodeBlockProcessor
      * converts.
      */
@@ -2083,6 +2122,20 @@ class TextProcessor
                 )
             )
         ) {
+            // An image in the content becomes an image set in its place (#492)
+            if ($node instanceof DOMElement && self::holdsImage($node)) {
+                self::accumulateImages(
+                    $node,
+                    $doc,
+                    $currentContent,
+                    $bardContent,
+                    $bardParser,
+                    $importImage
+                );
+
+                return;
+            }
+
             $currentContent .= self::nodeHtml(
                 $doc,
                 $node
@@ -2118,6 +2171,191 @@ class TextProcessor
             $currentContent,
             $bardContent,
             $bardParser
+        );
+    }
+
+    /**
+     * Whether an element is an image or holds one at any depth.
+     *
+     * @param  DOMElement  $element  The element
+     * @return bool True for an `<img>`, or an element with an `<img>` in it
+     */
+    private static function holdsImage(
+        DOMElement $element
+    ): bool {
+        return $element->tagName === 'img'
+            || $element->getElementsByTagName('img')->length > 0;
+    }
+
+    /**
+     * Adds content that holds an image, with each image as an image set in its place.
+     *
+     * Bard has no image node, so an image left in the accumulated content is dropped
+     * (#492). An image is imported as an image set after the content ahead of it,
+     * and a figure is imported whole, as a figure at the top of the content is. A
+     * paragraph, a wrapper or an inline element around an image is ended ahead of the
+     * image and resumed after it, so the text around the image keeps its order. No
+     * part keeps the element's `id`: `BardTexstyleAttributeMapper` finds an element's
+     * `id` by the element's whole text, which no part holds. A link around an image
+     * is not kept. An
+     * image in any other element stays where it is, and an image that does not import
+     * is reported, so no image is lost without a record.
+     *
+     * @param  DOMElement  $element  The image, or the element that holds one
+     * @param  DOMDocument  $doc  The document the element belongs to
+     * @param  string  $currentContent  The accumulated content
+     * @param  array<int|string, mixed>  $bardContent  The Bard content so far
+     * @param  BardParser  $bardParser  The parser for the accumulated content
+     * @param  Closure(string): (array<int|string, mixed>|null)  $importImage  Imports an image or a figure as an image set
+     */
+    private static function accumulateImages(
+        DOMElement $element,
+        DOMDocument $doc,
+        string &$currentContent,
+        array &$bardContent,
+        BardParser $bardParser,
+        Closure $importImage
+    ): void {
+        // An image or a figure is imported as an image set, after the content ahead of it
+        if ($element->tagName === 'img' || $element->tagName === 'figure') {
+            self::flushContent(
+                $currentContent,
+                $bardContent,
+                $bardParser
+            );
+
+            $html = self::nodeHtml(
+                $doc,
+                $element
+            );
+            $imageSet = $importImage($html);
+
+            if ($imageSet !== null && $imageSet !== []) {
+                $bardContent[] = $imageSet;
+
+                return;
+            }
+
+            self::reportImage(
+                $html,
+                'An image in the content did not import.'
+            );
+
+            // A figure that does not import keeps its caption as a paragraph
+            $caption = $element->getElementsByTagName('figcaption')->item(0);
+            $captionText = \trim($caption?->textContent ?? '');
+
+            if ($captionText !== '') {
+                $bardContent = \array_merge(
+                    $bardContent,
+                    $bardParser->parse('<p>'.\htmlspecialchars($captionText, ENT_QUOTES | ENT_HTML5).'</p>')
+                );
+            }
+
+            return;
+        }
+
+        // An element a set could not be lifted out of keeps its images, reported
+        if (! \in_array($element->tagName, self::IMAGE_WRAPPER_TAGS, true)) {
+            $currentContent .= self::nodeHtml(
+                $doc,
+                $element
+            );
+
+            foreach ($element->getElementsByTagName('img') as $image) {
+                self::reportImage(
+                    self::nodeHtml($doc, $image),
+                    "An image in a <{$element->tagName}> was not imported."
+                );
+            }
+
+            return;
+        }
+
+        // End the element ahead of each child that holds an image, and resume it after
+        $part = null;
+
+        foreach ($element->childNodes as $child) {
+            if ($child instanceof DOMElement && self::holdsImage($child)) {
+                self::addImagePart(
+                    $part,
+                    $doc,
+                    $currentContent
+                );
+                $part = null;
+
+                self::accumulateImages(
+                    $child,
+                    $doc,
+                    $currentContent,
+                    $bardContent,
+                    $bardParser,
+                    $importImage
+                );
+
+                continue;
+            }
+
+            // Open a part of the element, as it is without its content, to hold the child
+            if ($part === null) {
+                $part = $element->cloneNode(false);
+                \assert($part instanceof DOMElement);
+            }
+
+            $part->appendChild($child->cloneNode(true));
+        }
+
+        // Add the part of the element after the last image
+        self::addImagePart(
+            $part,
+            $doc,
+            $currentContent
+        );
+    }
+
+    /**
+     * Adds a part of an element split around an image to the accumulated content,
+     * when it holds anything but whitespace.
+     *
+     * @param  ?DOMElement  $part  The part, or null when none is open
+     * @param  DOMDocument  $doc  The document the part belongs to
+     * @param  string  $currentContent  The accumulated content
+     */
+    private static function addImagePart(
+        ?DOMElement $part,
+        DOMDocument $doc,
+        string &$currentContent
+    ): void {
+        // A part of only whitespace would add an empty element
+        if (! $part instanceof DOMElement || \trim($part->textContent) === '') {
+            return;
+        }
+
+        $currentContent .= self::nodeHtml(
+            $doc,
+            $part
+        );
+    }
+
+    /**
+     * Reports an image in the content that was not imported, naming the page.
+     *
+     * @param  string  $image  The image's HTML
+     * @param  string  $reason  Why it was not imported
+     */
+    private static function reportImage(
+        string $image,
+        string $reason
+    ): void {
+        ImportWarningManager::addWarning(
+            'content',
+            'images_not_imported',
+            [
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'content_snippet' => \mb_substr($image, 0, 100)
+                    .(\mb_strlen($image) > 100 ? '...' : ''),
+                'reason' => $reason,
+            ]
         );
     }
 
