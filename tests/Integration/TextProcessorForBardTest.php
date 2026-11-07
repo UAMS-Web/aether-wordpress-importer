@@ -26,6 +26,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImport
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
@@ -1540,4 +1541,66 @@ it('trims a NUL from the edges of a shortcode block in content that is not valid
     textProcessorForBard("<!-- wp:shortcode --> \0 [gravityform id=\"1\" title=\"\xff\"] \0 <!-- /wp:shortcode -->");
 
     expect(array_column($fakes['shortcode']->inContent, 'content'))->toBe(["[gravityform id=\"1\" title=\"\xff\"]"]);
+});
+
+it('imports each photo of a table of photos with its caption, in place among the content around the table', function (): void {
+    $fakes = textProcessorForBardFakes();
+    ImportWarningManager::clearWarnings();
+
+    // As in the news exports, the table of photos sits in a cell of the page layout
+    $content = textProcessorForBard(
+        '<p>Before</p>'
+        .'<table><tr><td>'
+        .'<table align="right"><tbody>'
+        .'<tr><td><p><img class="img_style_1" src="a.jpg" alt="A"><br><span class="cutline">First caption.</span></p></td></tr>'
+        .'<tr><td><img src="b.jpg"> Second caption.</td></tr>'
+        .'</tbody></table>'
+        .'<p>Story</p>'
+        .'</td></tr></table>'
+        .'<p>After</p>'
+    );
+
+    expect($fakes['image']->calls)->toBe([
+        ['html' => '<figure><img class="img_style_1" src="a.jpg" alt="A"><figcaption>First caption.</figcaption></figure>', 'attributes' => []],
+        ['html' => '<figure><img src="b.jpg"><figcaption>Second caption.</figcaption></figure>', 'attributes' => []],
+    ])
+        ->and($content)->toBe([
+            textProcessorForBardParagraph('Before'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardImage('b.jpg'),
+            textProcessorForBardParagraph('Story'),
+            textProcessorForBardParagraph('After'),
+        ])
+        ->and(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([]);
+});
+
+it('leaves out only the photo of a table of photos that does not import', function (): void {
+    textProcessorForBardFakes();
+
+    $content = textProcessorForBard(
+        '<table><tr><td><img src="none.jpg"> A</td></tr><tr><td><img src="empty.jpg"> B</td></tr><tr><td><img src="c.jpg"> C</td></tr></table>'
+    );
+
+    expect($content)->toBe([textProcessorForBardImage('c.jpg')]);
+});
+
+it('imports the photos of a table of photos in a list, ending the list ahead of the table', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    $content = textProcessorForBard('<ul><li>One<table><tr><td><img src="a.jpg"> Cap</td></tr></table></li></ul>');
+
+    expect($fakes['image']->calls)->toBe([['html' => '<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>', 'attributes' => []]])
+        ->and(array_column($content, 'type'))->toBe(['bulletList', 'set'])
+        ->and($content[1] ?? null)->toBe(textProcessorForBardImage('a.jpg'));
+});
+
+it('keeps a table of data that holds a photo as a table set', function (): void {
+    $fakes = textProcessorForBardFakes();
+    ImportWarningManager::clearWarnings();
+
+    $content = textProcessorForBard('<table><tr><td><img src="a.jpg"> A</td><td>Dr. Smith</td></tr></table>');
+
+    expect($fakes['image']->calls)->toBe([])
+        ->and(textProcessorForBardPath($content, [0, 'attrs', 'values', 'type']))->toBe('table')
+        ->and(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toHaveCount(1);
 });

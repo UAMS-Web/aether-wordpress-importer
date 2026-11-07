@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
+use Closure;
 use DOMComment;
 use DOMDocument;
 use DOMElement;
@@ -987,6 +988,17 @@ class TextProcessor
 
         $nodes = $rootDiv->childNodes;
 
+        // A photo in a table of photos is imported as a figure outside a block is (#489)
+        $importImage = static fn (string $figureHtml): ?array => $imageProcessor->processImage(
+            $figureHtml,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $pageSlug,
+            []
+        );
+
         // Iterate through all nodes in the document
         foreach ($nodes as $node) {
             // Convert current node to HTML string
@@ -1491,7 +1503,8 @@ class TextProcessor
                 null,
                 $currentContent,
                 $bardContent,
-                $bardParser
+                $bardParser,
+                $importImage
             );
         }
 
@@ -1958,7 +1971,9 @@ class TextProcessor
      * email newsletters, is read the same way, and its links and lists stay in Bard
      * instead of in one cell's HTML. A list around a table of data is ended ahead of
      * the table and resumed after it (#394). A table in a quote stays as it was: its
-     * wrapper is structure that a set could not sit inside.
+     * wrapper is structure that a set could not sit inside. A table that holds only
+     * photos and their captions is added as one image set per photo, since a set's
+     * cell cannot render an image (#489).
      *
      * @param  DOMNode  $node  The node to add
      * @param  DOMDocument  $doc  The document the node belongs to
@@ -1966,6 +1981,7 @@ class TextProcessor
      * @param  string  $currentContent  The accumulated content
      * @param  array<int|string, mixed>  $bardContent  The Bard content so far
      * @param  BardParser  $bardParser  The parser for the accumulated content
+     * @param  Closure(string): (array<int|string, mixed>|null)  $importImage  Imports a figure's image as an image set
      */
     private static function accumulateContent(
         DOMNode $node,
@@ -1973,11 +1989,36 @@ class TextProcessor
         ?DOMElement $figure,
         string &$currentContent,
         array &$bardContent,
-        BardParser $bardParser
+        BardParser $bardParser,
+        Closure $importImage
     ): void {
-        // A table of data is added as a set, unless it has no rows to import
         $tableProcessor = new TableProcessor;
 
+        // A table of photos is added as an image set per photo, with its caption
+        if ($node instanceof DOMElement && $node->tagName === 'table') {
+            $photos = $tableProcessor->photoFigures($node);
+
+            if ($photos !== null) {
+                // Parse the content accumulated ahead of the table first
+                self::flushContent(
+                    $currentContent,
+                    $bardContent,
+                    $bardParser
+                );
+
+                foreach ($photos as $photo) {
+                    $imageSet = $importImage($photo);
+
+                    if ($imageSet !== null && $imageSet !== []) {
+                        $bardContent[] = $imageSet;
+                    }
+                }
+
+                return;
+            }
+        }
+
+        // A table of data is added as a set, unless it has no rows to import
         if (
             $node instanceof DOMElement
             && $node->tagName === 'table'
@@ -2013,7 +2054,8 @@ class TextProcessor
                 $doc,
                 $currentContent,
                 $bardContent,
-                $bardParser
+                $bardParser,
+                $importImage
             );
 
             return;
@@ -2055,7 +2097,8 @@ class TextProcessor
                 $tableFigure,
                 $currentContent,
                 $bardContent,
-                $bardParser
+                $bardParser,
+                $importImage
             );
         }
 
@@ -2083,13 +2126,15 @@ class TextProcessor
      * @param  string  $currentContent  The accumulated content
      * @param  array<int|string, mixed>  $bardContent  The Bard content so far
      * @param  BardParser  $bardParser  The parser for the accumulated content
+     * @param  Closure(string): (array<int|string, mixed>|null)  $importImage  Imports a figure's image as an image set
      */
     private static function accumulateList(
         DOMElement $list,
         DOMDocument $doc,
         string &$currentContent,
         array &$bardContent,
-        BardParser $bardParser
+        BardParser $bardParser,
+        Closure $importImage
     ): void {
         // The number of the item being read, and the part of the list not yet added
         $number = self::listStart($list);
@@ -2148,7 +2193,8 @@ class TextProcessor
                     null,
                     $currentContent,
                     $bardContent,
-                    $bardParser
+                    $bardParser,
+                    $importImage
                 );
                 self::flushContent(
                     $currentContent,
