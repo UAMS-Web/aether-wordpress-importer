@@ -1,0 +1,72 @@
+--- a/src/Tester/MutationTestRunner.php
++++ b/src/Tester/MutationTestRunner.php
+@@ -21,6 +21,7 @@
+ use Psr\SimpleCache\CacheInterface;
+ use SebastianBergmann\CodeCoverage\CodeCoverage;
+ use SebastianBergmann\CodeCoverage\Data\ProcessedCodeCoverageData;
++use Symfony\Component\Process\Process;
+ 
+ class MutationTestRunner implements MutationTestRunnerContract
+ {
+@@ -61,6 +62,16 @@
+      */
+     public function setOriginalArguments(array $arguments): void
+     {
++        // Each mutant runs in a child process built from these arguments, with argv[0]
++        // reused verbatim as the executable. PHP sets argv[0] to the script path AS TYPED,
++        // so `php vendor/bin/pest` hands the child a forward-slashed relative path, which
++        // cmd.exe cannot launch. The child exits non-zero, and hasFinished() reads any
++        // non-zero exit as "the test failed" -- so every mutant is scored killed without
++        // being executed, and the run reports 100.00%. See uams-statamic#2322.
++        if ($arguments !== [] && DIRECTORY_SEPARATOR !== '/') {
++            $arguments[0] = str_replace('/', DIRECTORY_SEPARATOR, $arguments[0]);
++        }
++
+         $this->originalArguments = $arguments;
+     }
+ 
+@@ -92,6 +103,24 @@
+         return $this->codeCoverageRequested;
+     }
+ 
++    /**
++     * Whether the command each mutant child is spawned with can actually be launched.
++     *
++     * Runs the stored argv[0] with `--version`, which neither boots the suite nor reads the
++     * mutation environment, so the cost is one short process per mutation run.
++     */
++    private function canLaunchMutantProcess(): bool
++    {
++        if (($executable = $this->originalArguments[0] ?? null) === null) {
++            return true;
++        }
++
++        $process = new Process([$executable, '--version'], timeout: 60);
++        $process->run();
++
++        return $process->isSuccessful();
++    }
++
+     public function run(): int
+     {
+         Container::getInstance()->get(TelemetryRepository::class)->initialTestSuiteDuration( // @phpstan-ignore-line
+@@ -103,6 +132,19 @@
+ 
+             return 1;
+         }
++
++        // Safety net for the same failure: a child that cannot be launched is indistinguishable
++        // from a failing test, because both surface as a non-zero exit code. Probe the command
++        // ONCE before scoring anything, so an unlaunchable one aborts loudly instead of
++        // reporting 100.00% without executing a single mutant. See uams-statamic#2322.
++        if (! $this->canLaunchMutantProcess()) {
++            Container::getInstance()->get(Printer::class)->reportError( // @phpstan-ignore-line
++                'Cannot launch the mutant test process ('.($this->originalArguments[0] ?? '').'), aborting mutation '
++                .'testing. Every mutant would be reported as killed without being executed.'
++            );
++
++            return 1;
++        }
+ 
+         $this->clearCacheIfPluginVersionChanged();
+ 
