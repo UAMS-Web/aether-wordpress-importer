@@ -20,6 +20,7 @@ use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping as GravityFormsFieldtypeMapping;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormConfigurationManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
@@ -216,6 +217,24 @@ it('reads a subfield handle from the mapping, and nothing from a mapping it cann
     'no such field type' => [['fieldtypes' => ['name' => []]], null],
     'field types that are not a table' => [['fieldtypes' => 'x'], null],
     'no field types' => [[], null],
+]);
+
+it('finds each shipped address subfield handle by the label decoded JSON carries (#438)', function (string $json, string $handle): void {
+    // Decode the export's input the way the loaders do, then resolve input 4.4's
+    // conditional-logic handle through the shipped mapping
+    $decoded = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+    $label = is_array($decoded) ? $decoded['label'] : null;
+    $fields = [['id' => 4, 'label' => 'Home', 'type' => 'address', 'inputs' => [['id' => '4.4', 'label' => $label]]]];
+
+    expect(gfcmCall($this->manager, 'getSubfieldHandleFromMapping', 'address', $label, GravityFormsFieldtypeMapping::getSubfieldMapping()))->toBe($handle)
+        ->and(gfcmCall($this->manager, 'getSubfieldHandleById', '4.4', $fields))->toBe('home_4.'.$handle);
+})->with([
+    'State / Province' => ['{"label":"State \/ Province"}', 'state_province_region'],
+    'ZIP / Postal Code' => ['{"label":"ZIP \/ Postal Code"}', 'postal_code'],
+    'Street Address' => ['{"label":"Street Address"}', 'street_address'],
+    'Address Line 2' => ['{"label":"Address Line 2"}', 'address_line_2'],
+    'City' => ['{"label":"City"}', 'city'],
+    'Country' => ['{"label":"Country"}', 'country'],
 ]);
 
 it('converts routing rules whose field resolves, with each operator', function (): void {
