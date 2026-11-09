@@ -1428,6 +1428,12 @@ class FieldtypeMapping
         'default_value' => [
             'statamic_attribute' => [
                 'default' => 'default',
+                // An address keeps one default per subfield, as a JSON object, and those
+                // are mapped through `$subfieldMapping` (#496). Written here it would be
+                // the whole object as one string.
+                'specific' => [
+                    'address' => null,
+                ],
                 'based_on_attribute_value' => [
                     'default' => [
                         '[get param=*]' => 'calculation_formula_text',
@@ -3748,15 +3754,18 @@ class FieldtypeMapping
         //
         // It is used for the fieldtypes without subfields (e.g., `text` and `textarea`).
         //
-        // NOTE: Array field options like `"placeholder":{"first":"","middle":"","last":""}`
-        // for fieldtypes with subfields (e.g., `name`) are automatically filtered out
-        // during mapping since they represent subfield-specific configurations rather
-        // than general field attributes. The mapping system disregards these array
-        // configurations to prevent incorrect attribute mapping.
+        // NOTE: For fieldtypes with subfields (`name` and `address`), the option is an
+        // array keyed by subfield, like `"placeholder":{"first":"","middle":"","last":""}`.
+        // `shouldSkipArrayFieldOption()` drops that array only when every entry is
+        // empty. An address's placeholders are mapped per subfield through
+        // `$subfieldMapping` (#496), so the address is excluded here outright.
         // --------------------------------------------------------------------------------
         'placeholder' => [
             'statamic_attribute' => [
                 'default' => 'placeholder',
+                'specific' => [
+                    'address' => null,
+                ],
             ],
         ],
 

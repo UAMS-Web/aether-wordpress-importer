@@ -104,6 +104,29 @@ it('maps every subfield description, placeholder and default of an international
     ]);
 });
 
+it('writes an address default and placeholder per subfield, never on the field itself', function (): void {
+    // Before #496 the field-level mappings wrote the whole default JSON object as
+    // one `default` string, and a placeholder object with any non-empty entry as
+    // `placeholder`.
+    $address = [
+        'type' => 'address',
+        'name' => 'Address',
+        'default_value' => '{"line1":"D1","state":"Arkansas"}',
+        'field_options' => '{"address_type":"us","placeholder":{"line1":"P1"}}',
+    ];
+    $text = [
+        'type' => 'text',
+        'name' => 'Name',
+        'default_value' => 'hello',
+        'field_options' => '{"placeholder":"Type here"}',
+    ];
+
+    expect(FieldtypeMapping::mapFieldOptions($address))->toBe(['preset' => 'american'])
+        ->and(FieldtypeMapping::mapFieldAttributesWithContext($address, 'Form', 'Address', 1))->toBe(['display' => 'Address'])
+        ->and(FieldtypeMapping::mapFieldOptions($text))->toBe(['placeholder' => 'Type here'])
+        ->and(FieldtypeMapping::mapFieldAttributesWithContext($text, 'Form', 'Name', 1))->toBe(['display' => 'Name', 'default' => 'hello']);
+});
+
 it('maps no subfields for an address with nothing set, or for another fieldtype', function (array $field): void {
     expect(mapFormidableAddressSubfields($field))->toBe([]);
 })->with([
