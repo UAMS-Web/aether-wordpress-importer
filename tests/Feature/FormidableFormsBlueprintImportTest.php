@@ -318,7 +318,7 @@ it('maps Formidable Forms field attributes onto Statamic blueprint fields', func
     }
 })->group('field-attributes', 'field-options-mapping');
 
-it('writes a Formidable Forms address State subfield under the handle its preset selects', function (?string $addressType, string $presetHandle, string $otherHandle): void {
+it('writes a Formidable Forms address State subfield under the handle its preset selects, and its defaults as choice codes', function (?string $addressType, string $presetHandle, string $otherHandle): void {
     // The State subfield has one handle per preset, picked by the host app's
     // `Address` fieldtype from the preset `address_type` translates to (#496).
     $fieldOptions = ['state_desc' => 'State / Province', 'placeholder' => ['state' => 'Region']];
@@ -332,7 +332,7 @@ it('writes a Formidable Forms address State subfield under the handle its preset
         'name' => 'Mailing Address',
         'description' => '',
         'type' => 'address',
-        'default_value' => '{"state":"Arkansas"}',
+        'default_value' => '{"state":"Arkansas","country":"United States"}',
         'field_order' => '1',
         'form_id' => '999',
         'required' => '0',
@@ -353,14 +353,21 @@ it('writes a Formidable Forms address State subfield under the handle its preset
         ->and($fieldConfig)->not->toHaveKey($otherHandle.'_label');
 
     // Only the international State subfield is text, so only it takes a
-    // placeholder and the default state name.
+    // placeholder and the default state name. The American one is a select, so
+    // it takes the state's code (#510). The Country subfield is shown only for
+    // the international preset, which takes the country's ISO code.
     if ($presetHandle === 'state_province_region_international') {
         expect($fieldConfig[$presetHandle.'_placeholder'] ?? null)->toBe('Region')
-            ->and($fieldConfig[$presetHandle.'_default'] ?? null)->toBe('Arkansas');
+            ->and($fieldConfig[$presetHandle.'_default'] ?? null)->toBe('Arkansas')
+            ->and($fieldConfig['country_default'] ?? null)->toBe('US');
     } else {
         expect($fieldConfig)->not->toHaveKey($presetHandle.'_placeholder')
-            ->and($fieldConfig)->not->toHaveKey($presetHandle.'_default');
+            ->and($fieldConfig[$presetHandle.'_default'] ?? null)->toBe('AR')
+            ->and($fieldConfig)->not->toHaveKey('country_default');
     }
+
+    // Neither field's default lands under the other preset's handle.
+    expect($fieldConfig)->not->toHaveKey($otherHandle.'_default');
 })->with([
     'international' => ['international', 'state_province_region_international', 'state_province_region_american'],
     'europe' => ['europe', 'state_province_region_international', 'state_province_region_american'],

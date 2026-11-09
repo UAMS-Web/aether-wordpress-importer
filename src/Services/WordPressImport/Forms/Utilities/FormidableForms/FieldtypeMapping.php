@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
 
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\AddressChoiceCodes;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FieldtypeMappingTrait;
 
 /**
@@ -4321,8 +4322,8 @@ class FieldtypeMapping
                         'attributes' => [
                             // The American state subfield is a select keyed by state code, so a
                             // placeholder does not apply and a default state name (`Arkansas`)
-                            // would not match a choice. Only the international (text) subfield
-                            // takes either.
+                            // is translated to its code (`AR`). The international (text)
+                            // subfield takes either as written.
                             'subfield_placeholder' => [
                                 'statamic_attribute' => [
                                     'based_on_other_attribute_value' => [
@@ -4337,11 +4338,13 @@ class FieldtypeMapping
                             ],
                             'subfield_default' => [
                                 'statamic_attribute' => [
+                                    'default' => '[#subfield]_default',
+                                ],
+                                'value_translation' => [
                                     'based_on_other_attribute_value' => [
                                         'default' => [
                                             'preset' => [
-                                                'international' => '[#subfield]_default',
-                                                'american' => null,
+                                                'american' => AddressChoiceCodes::AMERICAN_STATES,
                                             ],
                                         ],
                                     ],
@@ -4357,7 +4360,9 @@ class FieldtypeMapping
                         'attributes' => [
                             // The country subfield is a select keyed by ISO 3166-1 code, so a
                             // placeholder does not apply and a default country name
-                            // (`United States`) would not match a choice.
+                            // (`United States`) is translated to its code (`US`). The host app
+                            // shows the subfield only for the international preset, so an
+                            // American address writes no country default.
                             'subfield_placeholder' => [
                                 'statamic_attribute' => [
                                     'default' => null,
@@ -4365,7 +4370,17 @@ class FieldtypeMapping
                             ],
                             'subfield_default' => [
                                 'statamic_attribute' => [
-                                    'default' => null,
+                                    'based_on_other_attribute_value' => [
+                                        'default' => [
+                                            'preset' => [
+                                                'international' => '[#subfield]_default',
+                                                'american' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                                'value_translation' => [
+                                    'default' => AddressChoiceCodes::COUNTRIES,
                                 ],
                             ],
                         ],

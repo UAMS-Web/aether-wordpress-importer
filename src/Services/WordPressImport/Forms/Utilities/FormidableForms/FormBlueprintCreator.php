@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
 
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\AddressChoiceCodes;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormBlueprintCreatorTrait;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 
@@ -629,6 +630,23 @@ class FormBlueprintCreator
                 $allFields
             );
 
+            // A select subfield takes its default only as one of its choice codes
+            $choiceCodes = $this->getAddressSubfieldChoiceCodes(
+                $subfieldKey,
+                $parentField['preset']
+            );
+            if ($choiceCodes !== null) {
+                $subfieldAttributes = $this->dropUnmatchedAddressDefault(
+                    $subfieldAttributes,
+                    $choiceCodes,
+                    $subfieldKey,
+                    $subfieldData['subfield_default'],
+                    $formTitle,
+                    $fieldLabel,
+                    $formId
+                );
+            }
+
             // Merge the subfield attributes into the combined result
             if ($subfieldAttributes !== []) {
                 $combinedSubfieldAttributes = \array_merge(
@@ -647,6 +665,104 @@ class FormBlueprintCreator
         );
 
         return $combinedSubfieldAttributes;
+    }
+
+    /**
+     * Get the choice codes an address subfield's default must be one of.
+     *
+     * The host app's `Address` fieldtype shows the American state subfield and the
+     * country subfield as selects keyed by code, so their defaults are translated
+     * from the name Formidable Forms stores. The other subfields are text and take
+     * any default.
+     *
+     * @param  string  $subfieldKey  The Formidable Forms subfield key
+     * @param  ?string  $preset  The Statamic address preset
+     * @return ?array<int, string> The choice codes, or null when the subfield is text
+     */
+    private function getAddressSubfieldChoiceCodes(
+        string $subfieldKey,
+        ?string $preset
+    ): ?array {
+        $translations = match (true) {
+            $subfieldKey === 'state' && $preset === 'american' => AddressChoiceCodes::AMERICAN_STATES,
+            $subfieldKey === 'country' => AddressChoiceCodes::COUNTRIES,
+            default => null,
+        };
+
+        if ($translations === null) {
+            return null;
+        }
+
+        // A name that translates to null has no choice, so it contributes no code
+        return \array_filter(
+            \array_column(
+                $translations,
+                'replace'
+            ),
+            \is_string(...)
+        );
+    }
+
+    /**
+     * Drop an address subfield default that is not one of its choice codes.
+     *
+     * The name-to-code translation passes a name it has no entry for through
+     * unchanged, and an Armed Forces region translates to null. Neither matches a
+     * choice, so the default is dropped and reported, naming the form, the field
+     * and the name.
+     *
+     * @param  array<int|string, mixed>  $subfieldAttributes  The mapped subfield attributes
+     * @param  array<int, string>  $choiceCodes  The codes the default must be one of
+     * @param  string  $subfieldKey  The Formidable Forms subfield key
+     * @param  mixed  $sourceDefault  The default Formidable Forms stores for the subfield
+     * @param  ?string  $formTitle  The form title for warning context
+     * @param  ?string  $fieldLabel  The field label for warning context
+     * @param  ?string  $formId  The form ID for warning context
+     * @return array<int|string, mixed> The subfield attributes without an unmatched default
+     */
+    private function dropUnmatchedAddressDefault(
+        array $subfieldAttributes,
+        array $choiceCodes,
+        string $subfieldKey,
+        mixed $sourceDefault,
+        ?string $formTitle,
+        ?string $fieldLabel,
+        ?string $formId
+    ): array {
+        foreach ($subfieldAttributes as $attribute => $value) {
+            // Only the default is checked against the choices
+            if (
+                ! \is_string($attribute)
+                || ! \str_ends_with(
+                    $attribute,
+                    '_default'
+                )
+                || \in_array(
+                    $value,
+                    $choiceCodes,
+                    true
+                )
+            ) {
+                continue;
+            }
+
+            unset($subfieldAttributes[$attribute]);
+
+            ImportWarningManager::addWarning(
+                'forms',
+                'unmatched_address_defaults',
+                [
+                    'form_id' => $formId,
+                    'form_title' => $formTitle,
+                    'field_label' => $fieldLabel,
+                    'subfield' => $subfieldKey,
+                    'default' => $sourceDefault,
+                    'consequence' => 'the subfield imported with no default',
+                ]
+            );
+        }
+
+        return $subfieldAttributes;
     }
 
     /**
