@@ -783,7 +783,7 @@ class TablePressEntryCreator extends BaseEntryCreator
         // Handle overwrite behavior
         $savedSlug = $entrySlug;
 
-        if ($existingById || $existingBySlug) {
+        if ($existingById !== null || $existingBySlug !== null) {
             switch ($this->overwriteBehavior) {
                 case 'Skip matching files':
                     $output->writeln("<comment>Skipped entry '$entrySlug' as it already exists.</comment>");
@@ -827,7 +827,7 @@ class TablePressEntryCreator extends BaseEntryCreator
         }
 
         // Check if the collection is dated based on configuration
-        $isCollectionDated = $collection !== null && $collection->dated();
+        $isCollectionDated = $collection !== null && $collection->dated() === true;
 
         // Determine the date to use for the entry
         $finalEntryDate = $entryDate;

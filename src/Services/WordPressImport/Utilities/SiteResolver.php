@@ -43,7 +43,7 @@ class SiteResolver
         }
 
         // Check entry's site field if provided
-        if ($entry instanceof Entry && $entry->has('site')) {
+        if ($entry instanceof Entry && $entry->has('site') === true) {
             $site = $entry->get('site');
 
             if (is_string($site)) {
