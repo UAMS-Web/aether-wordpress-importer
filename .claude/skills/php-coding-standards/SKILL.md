@@ -337,8 +337,8 @@ private const SECRET_HEADER = 'X-UAMSWP-Migration-Key';
 private const string SECRET_HEADER = 'X-UAMSWP-Migration-Key';
 ```
 
-The Laravel and Statamic applications are all on PHP 8.3 or newer (`uams-statamic` and
-`aether-wordpress-importer` on `^8.4`), so type the constants there.
+The floor in every Laravel app, PHP package and Statamic add-on is PHP 8.4 (`^8.4`, see the
+`tests` skill), so type the constants there.
 
 ## 11. Contract vs concrete types
 
