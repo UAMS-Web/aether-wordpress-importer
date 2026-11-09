@@ -498,6 +498,10 @@ class AddressChoiceCodes
             'replace' => 'KR',
         ],
         [
+            'search' => 'Kosovo',
+            'replace' => 'XK',
+        ],
+        [
             'search' => 'Kuwait',
             'replace' => 'KW',
         ],

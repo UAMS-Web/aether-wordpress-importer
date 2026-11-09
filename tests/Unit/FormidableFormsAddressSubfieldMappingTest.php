@@ -169,6 +169,7 @@ it('writes an address default state and country as their choice codes', function
     'generic state' => ['generic', '{"state":"District of Columbia"}', ['state_province_region_default' => 'DC']],
     'us state already a code' => ['us', '{"state":"AR"}', ['state_province_region_default' => 'AR']],
     'international country' => ['international', '{"country":"United States"}', ['country_default' => 'US']],
+    'international country the host offers as XK' => ['international', '{"country":"Kosovo"}', ['country_default' => 'XK']],
     'international state keeps its text' => ['international', '{"state":"Arkansas"}', ['state_province_region_default' => 'Arkansas']],
     'us country is not written' => ['us', '{"country":"United States"}', []],
     'us country with no code is not written or reported' => ['us', '{"country":"Narnia"}', []],
