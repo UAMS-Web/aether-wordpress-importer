@@ -7282,6 +7282,28 @@ trait FieldtypeMappingTrait
             );
         }
 
+        // Drop the '[#preset]' that follows '[#subfield]' when the subfield handle already
+        // ends with the preset. In the host app, `App\Fieldtypes\Address` resolves the
+        // State subfield to its preset-specific handle (`state_province_region_canadian`),
+        // so '[#subfield]_[#preset]_label' would otherwise repeat the preset (#497).
+        // Standalone, the handle is the canonical `state_province_region` and the key
+        // is unchanged.
+        if (
+            $subfieldHandle !== null
+            && $preset !== null
+            && $preset !== ''
+            && \str_ends_with(
+                $subfieldHandle,
+                '_'.$preset
+            )
+        ) {
+            $attributeName = \str_replace(
+                '[#subfield]_[#preset]',
+                '[#subfield]',
+                $attributeName
+            );
+        }
+
         // Replace '[#preset]' first, then '[#subfield]' to handle nested placeholders
         // This ensures that if subfieldHandle contains [#preset], it gets resolved before
         // being used as a replacement for [#subfield]
