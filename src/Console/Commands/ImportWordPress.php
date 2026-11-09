@@ -65,6 +65,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AssetRef
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\DatalessEntrySweeper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\DroppedAnchorTracker;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningDisplayService;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
@@ -1297,6 +1298,9 @@ class ImportWordPress extends Command
 
         // Clear all import warnings at the start of import
         ImportWarningManager::clearWarnings();
+
+        // Forget the ids and fragment links a previous run recorded (#502)
+        DroppedAnchorTracker::clear();
 
         // Clear failed asset URLs from any previous import sessions
         FailedAssetCollector::clearFailedUrls();
@@ -2550,6 +2554,10 @@ class ImportWordPress extends Command
         // Remove any dataless entry files this run materialized, before the summary is
         // rendered so the removals appear in it rather than after it (wordpress-importer-archive#1160).
         $this->sweepDatalessEntries();
+
+        // Report each link that names an id the import dropped, now that every page
+        // this run imports has recorded its ids (#502)
+        DroppedAnchorTracker::reportLinksToDroppedIds();
 
         // Display all import warnings
         ImportWarningDisplayService::displayAllWarnings($this->output);

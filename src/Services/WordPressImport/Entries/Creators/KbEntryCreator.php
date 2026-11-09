@@ -487,7 +487,7 @@ class KbEntryCreator extends BaseEntryCreator
         // Get the tree for the specific site
         $collectionTree = $structure->in($site);
 
-        if (! $collectionTree) {
+        if ($collectionTree === null) {
             // Inform user that tree is being created for the site
             $output->writeln("<comment>No tree exists for '{$collectionHandle}' in site '$site'. Creating a new one.</comment>");
 

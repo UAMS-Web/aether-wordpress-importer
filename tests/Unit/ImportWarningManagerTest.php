@@ -88,6 +88,12 @@ it('drops a duplicate of a de-duplicated type, and keeps one that differs in any
     'images beside shortcodes, site' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'site'],
     'images beside shortcodes, page slug' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'page_slug'],
     'images beside shortcodes, page link' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'page_link'],
+    'images in table cells, image' => ['content', 'images_in_table_cells', ['content_snippet' => '<img src="a.jpg">', 'page_link' => 'p', 'image_count' => 1], 'content_snippet'],
+    'images in table cells, page link' => ['content', 'images_in_table_cells', ['content_snippet' => '<img src="a.jpg">', 'page_link' => 'p', 'image_count' => 1], 'page_link'],
+    'images not imported, image' => ['content', 'images_not_imported', ['content_snippet' => '<img src="a.jpg">', 'page_link' => 'p', 'reason' => 'r'], 'content_snippet'],
+    'images not imported, page link' => ['content', 'images_not_imported', ['content_snippet' => '<img src="a.jpg">', 'page_link' => 'p', 'reason' => 'r'], 'page_link'],
+    'links to dropped ids, link' => ['content', 'links_to_dropped_ids', ['page_link' => 'p', 'link' => '#q', 'target_page' => 't', 'element' => 'e', 'reason' => 'r'], 'link'],
+    'links to dropped ids, page link' => ['content', 'links_to_dropped_ids', ['page_link' => 'p', 'link' => '#q', 'target_page' => 't', 'element' => 'e', 'reason' => 'r'], 'page_link'],
 ]);
 
 it('treats two warnings that both lack the compared keys as duplicates', function (string $category, string $type): void {
@@ -102,6 +108,9 @@ it('treats two warnings that both lack the compared keys as duplicates', functio
     ['content', 'malformed_shortcodes'],
     ['content', 'unaddressed_shortcodes'],
     ['content', 'images_beside_shortcodes'],
+    ['content', 'images_in_table_cells'],
+    ['content', 'images_not_imported'],
+    ['content', 'links_to_dropped_ids'],
 ]);
 
 it('compares a missing key with an empty or null one as the manager defaults it', function (string $category, string $type, array $explicit): void {
@@ -117,6 +126,9 @@ it('compares a missing key with an empty or null one as the manager defaults it'
     'malformed shortcodes' => ['content', 'malformed_shortcodes', ['shortcode_name' => '', 'attribute' => '', 'original' => '', 'page_url' => null]],
     'unaddressed shortcodes' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => '', 'original' => '', 'site' => '', 'page_slug' => null, 'page_link' => '']],
     'images beside shortcodes' => ['content', 'images_beside_shortcodes', ['content_snippet' => '', 'site' => '', 'page_slug' => '', 'page_link' => '']],
+    'images in table cells' => ['content', 'images_in_table_cells', ['content_snippet' => '', 'page_link' => '']],
+    'images not imported' => ['content', 'images_not_imported', ['content_snippet' => '', 'page_link' => '']],
+    'links to dropped ids' => ['content', 'links_to_dropped_ids', ['link' => '', 'page_link' => '']],
 ]);
 
 it('keeps checking past an earlier warning that differs', function (string $category, string $type, array $first, array $second): void {
@@ -134,6 +146,9 @@ it('keeps checking past an earlier warning that differs', function (string $cate
     'malformed shortcodes' => ['content', 'malformed_shortcodes', ['shortcode_name' => 'a', 'attribute' => 'x', 'original' => 'o', 'page_url' => 'p'], ['shortcode_name' => 'b', 'attribute' => 'x', 'original' => 'o', 'page_url' => 'p']],
     'unaddressed shortcodes' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => 'a', 'original' => 'o', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l'], ['shortcode_name' => 'b', 'original' => 'o', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l']],
     'images beside shortcodes' => ['content', 'images_beside_shortcodes', ['content_snippet' => 'a', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l'], ['content_snippet' => 'b', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l']],
+    'images in table cells' => ['content', 'images_in_table_cells', ['content_snippet' => 'a', 'page_link' => 'l'], ['content_snippet' => 'b', 'page_link' => 'l']],
+    'images not imported' => ['content', 'images_not_imported', ['content_snippet' => 'a', 'page_link' => 'l'], ['content_snippet' => 'b', 'page_link' => 'l']],
+    'links to dropped ids' => ['content', 'links_to_dropped_ids', ['link' => 'a', 'page_link' => 'l'], ['link' => 'b', 'page_link' => 'l']],
 ]);
 
 it('de-duplicates a type only within its own category', function (): void {

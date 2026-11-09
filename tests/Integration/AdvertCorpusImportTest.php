@@ -177,7 +177,7 @@ it('imports the classifieds export to the counts the export itself carries', fun
         static function (Entry $entry): int {
             $gallery = $entry->get('gallery');
 
-            return ($entry->has('featured_image') ? 1 : 0) + (\is_array($gallery) ? \count($gallery) : 0);
+            return ($entry->has('featured_image') === true ? 1 : 0) + (\is_array($gallery) ? \count($gallery) : 0);
         },
         $entries
     );

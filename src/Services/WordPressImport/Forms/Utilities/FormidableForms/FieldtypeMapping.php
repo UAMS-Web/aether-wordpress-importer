@@ -1212,24 +1212,37 @@ class FieldtypeMapping
      * stored.
      *
      * Provide a mathematical expression, referencing the original value using
-     * `[value]`.
+     * `[value]`. The expression is applied only when the mapped value is numeric.
      *
      * Can be:
      *   - A string: Direct calculation of the value
      *   - An array with 'default' and 'specific' keys for fieldtype-specific
-     *     calculation
-     *   - An array with 'based_on_other_attribute_value' for conditional calculation
-     *       - Can be a direct mapping or use 'default' and 'specific' structure
+     *     calculation, where 'specific' is keyed by Formidable Forms fieldtype
+     *       - When the array holds only 'default' and 'specific', a 'specific'
+     *         entry for the fieldtype replaces 'default', and a null 'specific'
+     *         entry turns the calculation off for that fieldtype
+     *   - An array with 'based_on_other_attribute_value' for a calculation chosen
+     *     by the value of another attribute
+     *       - Keys are exact values of the other attribute
+     *       - Can be a direct mapping or use 'default' and 'specific' structure,
+     *         where 'specific' is keyed by Formidable Forms fieldtype
+     *       - In the 'default' and 'specific' structure, 'default' is read first,
+     *         and 'specific' only when no 'default' entry matched
      *       - Special keys include:
-     *           - '#not_set': Used when the attribute is not set in the XML export
-     *           - '#not_empty': Used when the attribute is set and is not empty in
-     *             the XML export
+     *           - '#not_set': Used when the other attribute is not set, or is
+     *             null, in the XML export
      *   - An array with 'specific_based_on_attribute_value' for fieldtype-specific
-     *     calculation based on the value of the attribute
+     *     calculation based on the value of the attribute itself
+     *       - Keys are patterns matched against the attribute's own value, with
+     *         `*` as a wildcard ('1*' matches 10)
      *       - Special keys include:
      *           - '#not_set': Used when the attribute is not set in the XML export
-     *           - '#not_empty': Used when the attribute is set and is not empty in
-     *             the XML export
+     *
+     * When the array holds 'based_on_other_attribute_value' or
+     * 'specific_based_on_attribute_value', the first match wins, in this order:
+     * 'specific_based_on_attribute_value', 'based_on_other_attribute_value',
+     * 'specific', then 'default'. A null 'specific' entry then falls through to
+     * 'default' instead of turning the calculation off.
      *
      * Example: '[value] * 2.5'
      *
@@ -1241,21 +1254,8 @@ class FieldtypeMapping
      *         'value_calculation' => [
      *             'default' => '<calculation>',
      *             'specific' => [
-     *                 '<formidable_forms_attribute_name>' => '<calculation>',
-     *             ],
-     *             'based_on_other_attribute_value' => [
-     *                 '<formidable_forms_attribute_name>' => [
-     *                     '<formidable_forms_attribute_value>' => '<calculation>',
-     *                     '#not_set' => '<calculation>',
-     *                     '#not_empty' => '<calculation>',
-     *                 ],
-     *             ],
-     *             'specific_based_on_attribute_value' => [
-     *                 '<formidable_forms_fieldtype>' => [
-     *                     '<formidable_forms_attribute_value>' => '<calculation>',
-     *                     '#not_set' => '<calculation>',
-     *                     '#not_empty' => '<calculation>',
-     *                 ],
+     *                 '<formidable_forms_fieldtype>' => '<calculation>',
+     *                 '<formidable_forms_fieldtype>' => null,
      *             ],
      *         ],
      *     ],
@@ -1264,14 +1264,30 @@ class FieldtypeMapping
      *         'value_calculation' => [
      *             'default' => '<calculation>',
      *             'specific' => [
-     *                 '<formidable_forms_attribute_name>' => '<calculation>',
+     *                 '<formidable_forms_fieldtype>' => '<calculation>',
      *             ],
+     *             'based_on_other_attribute_value' => [
+     *                 '<formidable_forms_attribute_name>' => [
+     *                     '<formidable_forms_attribute_value>' => '<calculation>',
+     *                     '#not_set' => '<calculation>',
+     *                 ],
+     *             ],
+     *             'specific_based_on_attribute_value' => [
+     *                 '<formidable_forms_fieldtype>' => [
+     *                     '<formidable_forms_attribute_value_pattern>' => '<calculation>',
+     *                     '#not_set' => '<calculation>',
+     *                 ],
+     *             ],
+     *         ],
+     *     ],
+     *
+     *     '<formidable_forms_attribute_name>' => [
+     *         'value_calculation' => [
      *             'based_on_other_attribute_value' => [
      *                 'default' => [
      *                     '<formidable_forms_attribute_name>' => [
      *                         '<formidable_forms_attribute_value>' => '<calculation>',
      *                         '#not_set' => '<calculation>',
-     *                         '#not_empty' => '<calculation>',
      *                     ],
      *                 ],
      *                 'specific' => [
@@ -1279,16 +1295,8 @@ class FieldtypeMapping
      *                         '<formidable_forms_attribute_name>' => [
      *                             '<formidable_forms_attribute_value>' => '<calculation>',
      *                             '#not_set' => '<calculation>',
-     *                             '#not_empty' => '<calculation>',
      *                         ],
      *                     ],
-     *                 ],
-     *             ],
-     *             'specific_based_on_attribute_value' => [
-     *                 '<formidable_forms_fieldtype>' => [
-     *                     '<formidable_forms_attribute_value>' => '<calculation>',
-     *                     '#not_set' => '<calculation>',
-     *                     '#not_empty' => '<calculation>',
      *                 ],
      *             ],
      *         ],
@@ -1420,6 +1428,12 @@ class FieldtypeMapping
         'default_value' => [
             'statamic_attribute' => [
                 'default' => 'default',
+                // An address keeps one default per subfield, as a JSON object, and those
+                // are mapped through `$subfieldMapping` (#496). Written here it would be
+                // the whole object as one string.
+                'specific' => [
+                    'address' => null,
+                ],
                 'based_on_attribute_value' => [
                     'default' => [
                         '[get param=*]' => 'calculation_formula_text',
@@ -3740,15 +3754,18 @@ class FieldtypeMapping
         //
         // It is used for the fieldtypes without subfields (e.g., `text` and `textarea`).
         //
-        // NOTE: Array field options like `"placeholder":{"first":"","middle":"","last":""}`
-        // for fieldtypes with subfields (e.g., `name`) are automatically filtered out
-        // during mapping since they represent subfield-specific configurations rather
-        // than general field attributes. The mapping system disregards these array
-        // configurations to prevent incorrect attribute mapping.
+        // NOTE: For fieldtypes with subfields (`name` and `address`), the option is an
+        // array keyed by subfield, like `"placeholder":{"first":"","middle":"","last":""}`.
+        // `shouldSkipArrayFieldOption()` drops that array only when every entry is
+        // empty. An address's placeholders are mapped per subfield through
+        // `$subfieldMapping` (#496), so the address is excluded here outright.
         // --------------------------------------------------------------------------------
         'placeholder' => [
             'statamic_attribute' => [
                 'default' => 'placeholder',
+                'specific' => [
+                    'address' => null,
+                ],
             ],
         ],
 
@@ -4249,20 +4266,187 @@ class FieldtypeMapping
      *   2. Fieldtype-specific attributes (medium priority)
      *   3. General attributes (lowest priority)
      *
-     * The 'statamic_attribute' value supports '*' as a placeholder for the subfield
-     * handle, which gets replaced during mapping (e.g., '*_default' becomes
-     * 'address_line_1_default').
+     * The 'statamic_attribute' value supports '[#subfield]' as a placeholder for the
+     * resolved Statamic subfield handle (e.g., '[#subfield]_label' becomes
+     * 'state_province_region_international_label').
      *
-     * @var array{ attributes: array<string, array{ statamic_attribute: ?string, value_translation?: array<mixed, mixed>, value_prepend?: string, collapse_whitespace?: bool, as_integer?: bool }>, fieldtypes: array<string, array{ attributes?: array<string, array{ statamic_attribute: ?string, value_translation?: array<mixed, mixed>, value_prepend?: string, collapse_whitespace?: bool, as_integer?: bool }>, subfields: array<string, array{ handle: string, attributes?: array<string, array{ statamic_attribute: ?string, value_translation?: array<mixed, mixed>, value_prepend?: string, collapse_whitespace?: bool, as_integer?: bool }> }> }> }
+     * Formidable Forms keeps an address field's subfields in the parent field
+     * rather than in an `inputs` array, so `FormBlueprintCreator` builds one
+     * subfield record per subfield key (`line1`, `line2`, `city`, `state`, `zip`,
+     * `country`) with the `label` the lookup below keys on, and three attributes
+     * read from the parent field:
+     *   - `subfield_desc`: the `<key>_desc` field option, the text Formidable shows
+     *     beneath the input, which is the subfield's label
+     *   - `subfield_placeholder`: the subfield's entry in the `placeholder` field
+     *     option
+     *   - `subfield_default`: the subfield's entry in the field's `default_value`
+     *
+     * The parent field carries the translated `preset`, so the subfield mappings
+     * can depend on it.
+     *
+     * @var array<int|string, mixed>
      */
     protected static array $subfieldMapping = [
         'fieldtypes' => [
-            // Add Formidable Forms fieldtype mappings as needed
+            'address' => [
+                'attributes' => [
+                    'subfield_desc' => [
+                        'statamic_attribute' => [
+                            'default' => '[#subfield]_label',
+                        ],
+                    ],
+                    'subfield_placeholder' => [
+                        'statamic_attribute' => [
+                            'default' => '[#subfield]_placeholder',
+                        ],
+                    ],
+                    'subfield_default' => [
+                        'statamic_attribute' => [
+                            'default' => '[#subfield]_default',
+                        ],
+                    ],
+                ],
+                'subfields' => [
+                    'line1' => [
+                        'handle' => 'street_address',
+                    ],
+                    'line2' => [
+                        'handle' => 'address_line_2',
+                    ],
+                    'city' => [
+                        'handle' => 'city',
+                    ],
+                    'state' => [
+                        'handle' => 'state_province_region',
+                        'attributes' => [
+                            // The American state subfield is a select keyed by state code, so a
+                            // placeholder does not apply and a default state name (`Arkansas`)
+                            // would not match a choice. Only the international (text) subfield
+                            // takes either.
+                            'subfield_placeholder' => [
+                                'statamic_attribute' => [
+                                    'based_on_other_attribute_value' => [
+                                        'default' => [
+                                            'preset' => [
+                                                'international' => '[#subfield]_placeholder',
+                                                'american' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            'subfield_default' => [
+                                'statamic_attribute' => [
+                                    'based_on_other_attribute_value' => [
+                                        'default' => [
+                                            'preset' => [
+                                                'international' => '[#subfield]_default',
+                                                'american' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'zip' => [
+                        'handle' => 'postal_code',
+                    ],
+                    'country' => [
+                        'handle' => 'country',
+                        'attributes' => [
+                            // The country subfield is a select keyed by ISO 3166-1 code, so a
+                            // placeholder does not apply and a default country name
+                            // (`United States`) would not match a choice.
+                            'subfield_placeholder' => [
+                                'statamic_attribute' => [
+                                    'default' => null,
+                                ],
+                            ],
+                            'subfield_default' => [
+                                'statamic_attribute' => [
+                                    'default' => null,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ],
         'attributes' => [
             // Add general attribute mappings for all subfields as needed
         ],
     ];
+
+    /**
+     * The Formidable Forms address subfield keys, in the order the form shows them.
+     *
+     * @var list<string>
+     */
+    public const array ADDRESS_SUBFIELD_KEYS = [
+        'line1',
+        'line2',
+        'city',
+        'state',
+        'zip',
+        'country',
+    ];
+
+    /**
+     * Get the Statamic address preset for a Formidable Forms address field.
+     *
+     * Reads the `address_type` field option through the same mapping that writes
+     * the field's `preset`, so the preset that picks a preset-specific subfield
+     * handle is the one the blueprint field gets: `international` for
+     * `international`, `europe` or an unset `address_type`, and `american` for
+     * `us` and `generic`.
+     *
+     * @param  array<int|string, mixed>  $field  The Formidable Forms field data
+     * @return ?string The Statamic preset, or null when the mapping yields none
+     */
+    public static function getAddressPreset(
+        array $field
+    ): ?string {
+        // Parse the field options so `address_type` is readable beside the field data
+        $parsedField = $field;
+        if (
+            isset($field['field_options'])
+            && \is_string($field['field_options'])
+        ) {
+            $fieldOptions = \json_decode(
+                $field['field_options'],
+                true
+            );
+            if (\is_array($fieldOptions)) {
+                $parsedField = \array_merge(
+                    $field,
+                    $fieldOptions
+                );
+            }
+        }
+
+        // Map only the `address_type` option, which also resolves an unset one
+        $mapped = static::mapAttributesFromMapping(
+            $parsedField,
+            [
+                'address_type' => self::mappingValue(
+                    self::resolveFieldAttributeOptionsMapping(),
+                    'address_type'
+                ),
+            ],
+            [],
+            null,
+            'address',
+            $field
+        );
+
+        return self::stringValue(
+            self::mappingValue(
+                $mapped,
+                'preset'
+            )
+        );
+    }
 
     /**
      * Get the Statamic fieldtype for a given Formidable Forms field type or field

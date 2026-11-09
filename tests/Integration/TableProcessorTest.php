@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
@@ -41,6 +42,7 @@ uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
     ProcessingContext::clearWordPressPageLink();
+    ImportWarningManager::clearWarnings();
     ProcessingContext::clearFormConfigContext();
 });
 
@@ -571,3 +573,150 @@ it('returns null for a comment that belongs to no document', function (): void {
     expect(processTable(new DOMComment(' wp:table ')))->toBeNull()
         ->and($warnings->getArrayCopy())->toBe([]);
 });
+
+it('warns once, naming the page, of the images a wp:table block holds', function (): void {
+    ProcessingContext::setWordPressPageLink('https://example.test/news/photo-story/');
+    $node = tableOpeningNode(
+        '<!-- wp:table -->'
+        .'<figure class="wp-block-table"><table><tbody>'
+        .'<tr><td><img src="https://example.test/a.jpg" alt="A">Caption A</td></tr>'
+        .'<tr><td><img src="https://example.test/b.jpg" alt="B">Caption B</td></tr>'
+        .'</tbody></table></figure>'
+    );
+
+    expect(processTable($node))->toBeArray();
+    expect(processTable($node))->toBeArray();
+
+    expect(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([[
+        'page_link' => 'https://example.test/news/photo-story/',
+        'image_count' => 2,
+        'content_snippet' => '<img src="https://example.test/a.jpg" alt="A">',
+        'reason' => 'An image in a table cell is kept as HTML in the table set, is not imported as an asset, and does not render.',
+    ]]);
+});
+
+it('warns of the image a plain table of data holds, as content reaches it', function (): void {
+    ProcessingContext::setWordPressPageLink('https://example.test/about/');
+
+    // The cell of text without an image makes this a table of data, not of photos (#489)
+    TextProcessor::processForBard(
+        '<table align="right"><tbody><tr><td><img class="img_style_1" src="https://example.test/c.jpg" alt=""> A cutline</td><td>Dr. Smith</td></tr></tbody></table>',
+        'default',
+        app(AssetImporter::class),
+        new BufferedOutput
+    );
+
+    expect(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([[
+        'page_link' => 'https://example.test/about/',
+        'image_count' => 1,
+        'content_snippet' => '<img class="img_style_1" src="https://example.test/c.jpg" alt="">',
+        'reason' => 'An image in a table cell is kept as HTML in the table set, is not imported as an asset, and does not render.',
+    ]]);
+});
+
+it('cuts the image snippet to 100 characters and reports a page with no link as empty', function (): void {
+    $src = 'https://example.test/'.str_repeat('a', 120).'.jpg';
+    renderedTable('<table><tbody><tr><td><img src="'.$src.'"> text</td></tr></tbody></table>');
+
+    $warnings = ImportWarningManager::getWarnings('content', 'images_in_table_cells');
+
+    expect($warnings)->toHaveCount(1)
+        ->and(data_get($warnings, '0.page_link'))->toBe('')
+        ->and(data_get($warnings, '0.content_snippet'))->toBe(mb_substr('<img src="'.$src.'">', 0, 100).'...');
+});
+
+it('warns of no image for a table without one, or one with no rows to import', function (string $html): void {
+    renderedTable($html);
+
+    expect(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([]);
+})->with([
+    'text only' => ['<table><tbody><tr><td>1</td></tr></tbody></table>'],
+    'no rows' => ['<table><caption><img src="a.jpg"></caption><tfoot><tr></tr></tfoot></table>'],
+]);
+
+/**
+ * The photos TableProcessor::photoFigures() finds in a table, or null.
+ *
+ * @param  string  $html  A fragment whose first node is the table
+ * @return ?list<array{figure: string, caption: string}> The photos, or null for a table that is not one of photos
+ */
+function tablePhotos(string $html): ?array
+{
+    $table = tableOpeningNode($html);
+
+    if (! $table instanceof DOMElement) {
+        throw new RuntimeException('Fixture is not an element');
+    }
+
+    return (new TableProcessor)->photoFigures($table);
+}
+
+/**
+ * The figures TableProcessor::photoFigures() makes of a table, or null.
+ *
+ * @param  string  $html  A fragment whose first node is the table
+ * @return ?list<string> The figures, or null for a table that is not one of photos
+ */
+function photoFigures(string $html): ?array
+{
+    $photos = tablePhotos($html);
+
+    return $photos === null ? null : array_column($photos, 'figure');
+}
+
+it('makes a figure of each photo in a table of photos, with the text after it as its caption', function (): void {
+    expect(photoFigures(
+        '<table align="right"><tbody>'
+        .'<tr><td><p style="text-align: right;"> <img class="img_style_1" src="a.jpg" alt="A"><br>'
+        ."\n".'<span class="cutline">First   caption,&nbsp;here.</span></p></td></tr>'
+        .'<tr><td><img src="b.jpg"></td><th></th></tr>'
+        .'<tr><th>Lead text <img src="c.jpg"> after c <img src="d.jpg"> after d</th></tr>'
+        .'</tbody></table>'
+    ))->toBe([
+        '<figure><img class="img_style_1" src="a.jpg" alt="A"><figcaption>First caption, here.</figcaption></figure>',
+        '<figure><img src="b.jpg"></figure>',
+        '<figure><img src="c.jpg"><figcaption>Lead text after c</figcaption></figure>',
+        '<figure><img src="d.jpg"><figcaption>after d</figcaption></figure>',
+    ]);
+});
+
+it('gives each photo its caption as text beside its figure', function (): void {
+    expect(tablePhotos('<table><tr><td><img src="a.jpg">  Dr.&nbsp;Smith  </td><td><img src="b.jpg"></td></tr></table>'))->toBe([
+        ['figure' => '<figure><img src="a.jpg"><figcaption>Dr. Smith</figcaption></figure>', 'caption' => 'Dr. Smith'],
+        ['figure' => '<figure><img src="b.jpg"></figure>', 'caption' => ''],
+    ]);
+});
+
+it('takes a photo whose link holds only the image', function (): void {
+    expect(photoFigures('<table><tr><td><a href="big.jpg"><img src="a.jpg"></a> Cap</td></tr></table>'))
+        ->toBe(['<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>']);
+});
+
+it('escapes a caption as text in its figure', function (): void {
+    expect(photoFigures('<table><tr><td><img src="a.jpg">Smith &amp; Jones &lt;b&gt;</td></tr></table>'))
+        ->toBe(['<figure><img src="a.jpg"><figcaption>Smith &amp; Jones &lt;b&gt;</figcaption></figure>']);
+});
+
+it('takes a caption of 500 characters, and reads a longer one as an article', function (): void {
+    $caption = str_repeat('a', 500);
+
+    expect(photoFigures('<table><tr><td><img src="a.jpg"> '.$caption.' </td></tr></table>'))
+        ->toBe(['<figure><img src="a.jpg"><figcaption>'.$caption.'</figcaption></figure>'])
+        ->and(photoFigures('<table><tr><td><img src="a.jpg">'.$caption.'b</td></tr></table>'))->toBeNull()
+        ->and(photoFigures('<table><tr><td><img src="a.jpg">a</td></tr><tr><td><img src="b.jpg">'.$caption.'b</td></tr></table>'))->toBeNull();
+});
+
+it('reads no table as one of photos unless it is a table of data whose every cell with text holds an image', function (string $html): void {
+    expect(photoFigures($html))->toBeNull();
+})->with([
+    'no image' => ['<table><tr><td>Name</td></tr></table>'],
+    'a cell of text without an image' => ['<table><tr><td><img src="a.jpg"> A</td><td>Dr. Smith</td></tr></table>'],
+    'a cell of text without an image, after the photo' => ['<table><tr><td><img src="a.jpg"> A</td></tr><tr><td>Notes</td></tr></table>'],
+    'no text at all' => ['<table><tr><td><img src="a.jpg"></td></tr></table>'],
+    'a nested table' => ['<table><tr><td><img src="a.jpg"> A<table><tr><td>B</td></tr></table></td></tr></table>'],
+    'a converted shortcode' => ['<table><tr><td><img src="a.jpg"> A<div data-set-type="video"></div></td></tr></table>'],
+    'a link with text' => ['<table><tr><td><img src="a.jpg"> A <a href="/story">Full Story</a></td></tr></table>'],
+    'a link with text around the image' => ['<table><tr><td><a href="/mail"><img src="m.jpg"> E-mail This Article</a></td></tr></table>'],
+    'a caption element' => ['<table><caption>Gala</caption><tr><td><img src="a.jpg"> A</td></tr></table>'],
+    'a caption element, and cells of images only' => ['<table><caption>Gala</caption><tr><td><img src="a.jpg"></td></tr></table>'],
+]);

@@ -26,6 +26,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImport
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
@@ -1060,11 +1061,12 @@ it('gives a later figure no attributes of an image block whose processor consume
 it('gives the attributes of an unclaimed image block only to a figure', function (): void {
     $fakes = textProcessorForBardFakes();
 
-    // A paragraph holding an image is not the block's figure, so it is read as content
+    // A paragraph holding an image is not the block's figure, so its image is
+    // imported as content's is, without the block's attributes (#492)
     $content = textProcessorForBard('<!-- wp:image {"id":5} --><p>See <img src="p.jpg"></p>');
 
-    expect($fakes['image']->calls)->toBe([])
-        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:See ']);
+    expect($fakes['image']->calls)->toBe([['html' => '<img src="p.jpg">', 'attributes' => []]])
+        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:See', 'set:image']);
 });
 
 it('imports an image once, when an unclaimed image block\'s figure repeats later', function (): void {
@@ -1476,12 +1478,12 @@ it('imports an image in a shortcode block whose processor converts nothing, once
         ->and(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="c.jpg">']);
 });
 
-it('parses an image inside a paragraph as content, not as a figure', function (): void {
+it('imports an image inside a paragraph as the image alone, not as a figure', function (): void {
     $fakes = textProcessorForBardFakes();
 
     textProcessorForBard('<p>Text <img src="p.jpg"></p>');
 
-    expect($fakes['image']->calls)->toBe([]);
+    expect($fakes['image']->calls)->toBe([['html' => '<img src="p.jpg">', 'attributes' => []]]);
 });
 
 it('leaves a shortcode right after the start of a block to the block once the text ahead of it is removed', function (): void {
@@ -1541,3 +1543,440 @@ it('trims a NUL from the edges of a shortcode block in content that is not valid
 
     expect(array_column($fakes['shortcode']->inContent, 'content'))->toBe(["[gravityform id=\"1\" title=\"\xff\"]"]);
 });
+
+it('imports each photo of a table of photos with its caption, in place among the content around the table', function (): void {
+    $fakes = textProcessorForBardFakes();
+    ImportWarningManager::clearWarnings();
+
+    // As in the news exports, the table of photos sits in a cell of the page layout
+    $content = textProcessorForBard(
+        '<p>Before</p>'
+        .'<table><tr><td>'
+        .'<table align="right"><tbody>'
+        .'<tr><td><p><img class="img_style_1" src="a.jpg" alt="A"><br><span class="cutline">First caption.</span></p></td></tr>'
+        .'<tr><td><img src="b.jpg"> Second caption.</td></tr>'
+        .'</tbody></table>'
+        .'<p>Story</p>'
+        .'</td></tr></table>'
+        .'<p>After</p>'
+    );
+
+    expect($fakes['image']->calls)->toBe([
+        ['html' => '<figure><img class="img_style_1" src="a.jpg" alt="A"><figcaption>First caption.</figcaption></figure>', 'attributes' => []],
+        ['html' => '<figure><img src="b.jpg"><figcaption>Second caption.</figcaption></figure>', 'attributes' => []],
+    ])
+        ->and($content)->toBe([
+            textProcessorForBardParagraph('Before'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardImage('b.jpg'),
+            textProcessorForBardParagraph('Story'),
+            textProcessorForBardParagraph('After'),
+        ])
+        ->and(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toBe([]);
+});
+
+it('keeps the caption of a photo that does not import as a paragraph, in its place', function (): void {
+    textProcessorForBardFakes();
+
+    $content = textProcessorForBard(
+        '<table><tr><td><img src="none.jpg"> A &amp; "B"</td></tr><tr><td><img src="empty.jpg"> C</td></tr>'
+        .'<tr><td><img src="none.jpg"></td></tr><tr><td><img src="d.jpg"> D</td></tr></table>'
+    );
+
+    expect($content)->toBe([
+        textProcessorForBardParagraph('A & "B"'),
+        textProcessorForBardParagraph('C'),
+        textProcessorForBardImage('d.jpg'),
+    ]);
+});
+
+it('reads the caption of a figure around a table of photos as content after the photos', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    $content = textProcessorForBard(
+        '<table><tr><td><figure><table><tr><td><img src="a.jpg"> Cap</td></tr></table><figcaption>Gala photos</figcaption></figure></td></tr></table>'
+    );
+
+    expect($fakes['image']->calls)->toBe([['html' => '<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>', 'attributes' => []]])
+        ->and($content)->toBe([
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('Gala photos'),
+        ]);
+});
+
+it('imports the photos of a table of photos in a list, ending the list ahead of the table', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    $content = textProcessorForBard('<ul><li>One<table><tr><td><img src="a.jpg"> Cap</td></tr></table></li></ul>');
+
+    expect($fakes['image']->calls)->toBe([['html' => '<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>', 'attributes' => []]])
+        ->and(array_column($content, 'type'))->toBe(['bulletList', 'set'])
+        ->and($content[1] ?? null)->toBe(textProcessorForBardImage('a.jpg'));
+});
+
+it('keeps a table of data that holds a photo as a table set', function (): void {
+    $fakes = textProcessorForBardFakes();
+    ImportWarningManager::clearWarnings();
+
+    $content = textProcessorForBard('<table><tr><td><img src="a.jpg"> A</td><td>Dr. Smith</td></tr></table>');
+
+    expect($fakes['image']->calls)->toBe([])
+        ->and(textProcessorForBardPath($content, [0, 'attrs', 'values', 'type']))->toBe('table')
+        ->and(ImportWarningManager::getWarnings('content', 'images_in_table_cells'))->toHaveCount(1);
+});
+
+describe('an image nested in content', function (): void {
+    beforeEach(function (): void {
+        ImportWarningManager::clearWarnings();
+        ProcessingContext::setWordPressPageLink('https://example.edu/page/');
+    });
+
+    afterEach(function (): void {
+        ProcessingContext::setWordPressPageLink(null);
+    });
+
+    it('imports an image in a paragraph in its place, with the text around it in order', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p>Intro</p><p>Before <img src="a.jpg"> after</p><p>End</p>');
+
+        expect($fakes['image']->calls)->toBe([['html' => '<img src="a.jpg">', 'attributes' => []]])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe([
+                'paragraph:Intro',
+                'paragraph:Before',
+                'set:image',
+                'paragraph: after',
+                'paragraph:End',
+            ])
+            ->and(ImportWarningManager::getWarnings('content', 'images_not_imported'))->toBe([]);
+    });
+
+    it('imports an image in a wrapper in its place, keeping the cutline after it', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<div><img src="a.jpg"><span class="cutline">Cap</span></div>');
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="a.jpg">'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image', 'paragraph:Cap']);
+    });
+
+    it('imports each image in a paragraph, and the text between them, in order', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p><img src="a.jpg">Middle<img src="b.jpg"></p>');
+
+        expect($content)->toBe([
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('Middle'),
+            textProcessorForBardImage('b.jpg'),
+        ]);
+    });
+
+    it('imports an image in the cell of a layout table in its place', function (string $html, array $summary): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard($html);
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="a.jpg">'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe($summary);
+    })->with([
+        'a table with no text' => ['<p>Before</p><table><tr><td><img src="a.jpg"></td></tr></table><p>After</p>', ['paragraph:Before', 'set:image', 'paragraph:After']],
+        'a table that holds a table' => ['<table><tr><td><p>Story</p><p><img src="a.jpg"></p><table><tr><td>x</td></tr></table></td></tr></table>', ['paragraph:Story', 'set:image', 'set:table']],
+    ]);
+
+    it('gives the first part of a paragraph split around an image the paragraph\'s id, and no later part (#500)', function (string $html, array $expected): void {
+        textProcessorForBardFakes();
+
+        expect(textProcessorForBard($html))->toBe($expected);
+    })->with([
+        'text on both sides' => ['<p id="intro">A <img src="a.jpg"> B</p>', [
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+        ]],
+        'the image first' => ['<p id="intro"><img src="a.jpg">B</p>', [
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('B', 'intro'),
+        ]],
+        'two images' => ['<p id="intro">A<img src="a.jpg">B<img src="b.jpg">C</p>', [
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph('B'),
+            textProcessorForBardImage('b.jpg'),
+            textProcessorForBardParagraph('C'),
+        ]],
+        'the paragraph in a wrapper' => ['<div><p id="intro">A <img src="a.jpg"> B</p></div>', [
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+        ]],
+    ]);
+
+    it('keeps the id of a paragraph without an image beside a split one (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        expect(textProcessorForBard('<p id="plain">Plain</p><p id="intro">A <img src="a.jpg"> B</p>'))->toBe([
+            textProcessorForBardParagraph('Plain', 'plain'),
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+        ]);
+    });
+
+    it('keeps the id of a paragraph split in a group block, and of one split ahead of it (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p id="intro">A <img src="a.jpg"> B</p>'
+            .'<!-- wp:group --><div class="wp-block-group"><p id="inner">X <img src="b.jpg"> Y</p></div><!-- /wp:group -->');
+
+        expect($content)->toBe([
+            textProcessorForBardParagraph('A', 'intro'),
+            textProcessorForBardImage('a.jpg'),
+            textProcessorForBardParagraph(' B'),
+            textProcessorForBardParagraph('X', 'inner'),
+            textProcessorForBardImage('b.jpg'),
+            textProcessorForBardParagraph(' Y'),
+        ]);
+    });
+
+    it('leaves the id of an earlier paragraph with the same text as the first part to that paragraph (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p id="a">Note</p><p id="intro">Note <img src="a.jpg"> rest</p>');
+
+        expect(textProcessorForBardPath($content, [0, 'attrs', 'id']))->toBe('a');
+    });
+
+    it('carries no split paragraph\'s id into the next content processed (#500)', function (): void {
+        textProcessorForBardFakes();
+
+        textProcessorForBard('<p id="intro">A <img src="a.jpg"> B</p>');
+
+        expect(textProcessorForBard('<p>A</p>'))->toBe([textProcessorForBardParagraph('A')]);
+    });
+
+    it('imports an image in a link or an inline element, without the link', function (string $html): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard($html);
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="a.jpg">'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image', 'paragraph: Text']);
+    })->with([
+        'a link' => ['<p><a href="https://example.edu/a.jpg"><img src="a.jpg"></a> Text</p>'],
+        'strong text' => ['<p><strong><img src="a.jpg"></strong> Text</p>'],
+    ]);
+
+    it('adds no paragraph for whitespace around an image', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard("<p> <img src=\"a.jpg\">\n</p>");
+
+        expect($content)->toBe([textProcessorForBardImage('a.jpg')]);
+    });
+
+    it('imports a figure in a wrapper whole, as a figure at the top of the content is', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<div><p>Lead</p><figure><img src="a.jpg"><figcaption>Cap</figcaption></figure></div>');
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<figure><img src="a.jpg"><figcaption>Cap</figcaption></figure>'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'set:image']);
+    });
+
+    it('reports an image that does not import, naming the page and the image, and keeps the text around it', function (string $src): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard("<p>A <img src=\"{$src}\"> B</p>");
+
+        expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:A', 'paragraph: B'])
+            ->and(ImportWarningManager::getWarnings('content', 'images_not_imported'))->toBe([[
+                'page_link' => 'https://example.edu/page/',
+                'content_snippet' => "<img src=\"{$src}\">",
+                'reason' => 'An image in the content did not import.',
+            ]]);
+    })->with(['none.jpg', 'empty.jpg']);
+
+    it('keeps the caption of a figure that does not import as a paragraph, and reports it', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<div><figure><img src="none.jpg"><figcaption> A &amp; B </figcaption></figure></div>');
+
+        expect($content)->toBe([textProcessorForBardParagraph('A & B')])
+            ->and(ImportWarningManager::getWarnings('content', 'images_not_imported'))->toHaveCount(1);
+    });
+
+    it('reports an image in a list or a heading, which a set cannot be lifted out of, and keeps the element', function (string $html, string $type, string $tag): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard($html);
+
+        expect($fakes['image']->calls)->toBe([])
+            ->and(array_column($content, 'type'))->toBe([$type])
+            ->and(ImportWarningManager::getWarnings('content', 'images_not_imported'))->toBe([[
+                'page_link' => 'https://example.edu/page/',
+                'content_snippet' => '<img src="a.jpg">',
+                'reason' => "An image in a <{$tag}> was not imported.",
+            ]]);
+    })->with([
+        'a list' => ['<ul><li>One <img src="a.jpg"></li></ul>', 'bulletList', 'ul'],
+        'a heading' => ['<h2>Title <img src="a.jpg"></h2>', 'heading', 'h2'],
+    ]);
+
+    it('still imports a top-level image and figure as before', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<img src="a.jpg"><figure><img src="b.jpg"></figure>');
+
+        expect($fakes['image']->calls)->toBe([
+            ['html' => '<img src="a.jpg">', 'attributes' => []],
+            ['html' => '<figure><img src="b.jpg"></figure>', 'attributes' => []],
+        ])
+            ->and($content)->toBe([textProcessorForBardImage('a.jpg'), textProcessorForBardImage('b.jpg')]);
+    });
+});
+
+/**
+ * The text of each node of Bard content, its text nodes joined.
+ *
+ * @param  array<int|string, mixed>  $content  The Bard content
+ * @return list<string> The text of each node, or its type when it has no text
+ */
+function textProcessorForBardTexts(array $content): array
+{
+    $texts = [];
+
+    foreach ($content as $node) {
+        $parts = textProcessorForBardPath($node, ['content']);
+        $text = is_array($parts)
+            ? implode('', array_map(static function (mixed $part): string {
+                $text = textProcessorForBardPath($part, ['text']);
+
+                return is_string($text) ? $text : '';
+            }, $parts))
+            : '';
+        $type = textProcessorForBardPath($node, ['type']);
+        $texts[] = $text !== '' ? $text : (is_string($type) ? $type : '?');
+    }
+
+    return $texts;
+}
+
+describe('an image nested in content, split around its wrappers', function (): void {
+    beforeEach(function (): void {
+        ImportWarningManager::clearWarnings();
+        ProcessingContext::setWordPressPageLink('https://example.edu/page/');
+    });
+
+    afterEach(function (): void {
+        ProcessingContext::setWordPressPageLink(null);
+    });
+
+    it('keeps a part beside an image that holds an element but no text', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<div><img src="a.jpg"><hr></div>');
+
+        expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image', 'horizontalRule']);
+    });
+
+    it('keeps the markup a shortcode beside an image becomes, though it holds no text', function (): void {
+        $fakes = textProcessorForBardFakes();
+        $fakes['shortcode']->replacements = ['caption' => '<hr>'];
+
+        $content = textProcessorForBard('<div class="row"><img src="logo.png"> [caption id="x"]<img src="b.jpg"> Cap[/caption]</div>');
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="logo.png">'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image', 'horizontalRule']);
+    });
+
+    it('resumes an inline element around an image inside the paragraph after it', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<p>Hello <strong>bold <img src="a.jpg"> more</strong> end</p>');
+
+        expect(textProcessorForBardTexts($content))->toBe(['Hello bold ', 'set', ' more end'])
+            ->and(textProcessorForBardPath($content, [0, 'content', 1, 'marks', 0, 'type']))->toBe('bold')
+            ->and(textProcessorForBardPath($content, [2, 'content', 0, 'marks', 0, 'type']))->toBe('bold')
+            ->and(textProcessorForBardPath($content, [2, 'content', 1, 'marks']))->toBeNull();
+    });
+
+    it('keeps a paragraph around an image whole in the wrapper parts it is split into', function (): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<div><p>One <img src="a.jpg"> two</p><p>Three</p></div>');
+
+        expect(textProcessorForBardTexts($content))->toBe(['One', 'set', ' two', 'Three']);
+    });
+
+    it('splits each wrapper it reads through around an image', function (string $tag): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard("<div><{$tag}>Before <img src=\"a.jpg\"> after</{$tag}></div>");
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="a.jpg">'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toContain('set:image')
+            ->and(ImportWarningManager::getWarnings('content', 'images_not_imported'))->toBe([]);
+    })->with([
+        'a', 'abbr', 'article', 'aside', 'b', 'center', 'cite', 'del', 'details', 'div', 'em', 'font', 'footer',
+        'header', 'i', 'ins', 'label', 'main', 'mark', 'nav', 'p', 's', 'section', 'small', 'span', 'strike',
+        'strong', 'sub', 'sup', 'u',
+    ]);
+
+    it('reads through a whole page body an export carries', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<html><body><p>Dose</p><p><img src="a.jpg"></p></body></html>');
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="a.jpg">'])
+            ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Dose', 'set:image']);
+    });
+
+    it('reports an image in a list it finds inside a wrapper, and keeps the text and the list', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        $content = textProcessorForBard('<div>Text<ul><li><img src="a.jpg"></li></ul></div>');
+
+        expect($fakes['image']->calls)->toBe([])
+            ->and(array_column($content, 'type'))->toBe(['paragraph', 'bulletList'])
+            ->and(array_column(ImportWarningManager::getWarnings('content', 'images_not_imported'), 'reason'))->toBe(['An image in a <ul> was not imported.']);
+    });
+
+    it('imports a nested image again where the same image was imported at the top of the content', function (): void {
+        $fakes = textProcessorForBardFakes();
+
+        textProcessorForBard('<figure><img src="a.jpg"></figure><p><img src="a.jpg"></p>');
+
+        expect(array_column($fakes['image']->calls, 'html'))->toBe(['<figure><img src="a.jpg"></figure>', '<img src="a.jpg">']);
+    });
+
+    it('reports a figure or an image at the top of the content that does not import, keeping the caption', function (string $html, string $snippet, array $texts): void {
+        textProcessorForBardFakes();
+
+        $content = textProcessorForBard($html);
+
+        expect(textProcessorForBardTexts($content))->toBe($texts)
+            ->and(ImportWarningManager::getWarnings('content', 'images_not_imported'))->toBe([[
+                'page_link' => 'https://example.edu/page/',
+                'content_snippet' => $snippet,
+                'reason' => 'An image in the content did not import.',
+            ]]);
+    })->with([
+        'a figure' => ['<figure><img src="none.jpg"><figcaption>Cap</figcaption></figure>', '<figure><img src="none.jpg"><figcaption>Cap</figcaption></figure>', ['Cap']],
+        'an image' => ['<img src="none.jpg">', '<img src="none.jpg">', []],
+        'an image block\'s figure' => ['<!-- wp:image {"id":5} --><figure><img src="none.jpg"><figcaption>Cap</figcaption></figure>', '<figure><img src="none.jpg"><figcaption>Cap</figcaption></figure>', ['Cap']],
+    ]);
+});
+
+it('carries no id from a quote, while a paragraph keeps its own (#374)', function (string $html): void {
+    textProcessorForBardFakes();
+
+    $content = textProcessorForBard('<p id="paragraph-anchor">Before</p>'.$html);
+
+    expect(textProcessorForBardPath($content, [0, 'attrs', 'id']))->toBe('paragraph-anchor')
+        ->and(json_encode(array_slice($content, 1)))->not->toContain('quote-anchor')
+        ->and(count($content))->toBe(2);
+})->with([
+    'a wp:quote block' => ['<!-- wp:quote --><blockquote id="quote-anchor" class="wp-block-quote"><p>Quoted</p><cite>Who</cite></blockquote><!-- /wp:quote -->'],
+    'a bare blockquote' => ['<blockquote id="quote-anchor"><p>Quoted</p></blockquote>'],
+]);

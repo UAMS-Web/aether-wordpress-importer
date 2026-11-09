@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
+use Closure;
 use DOMComment;
 use DOMDocument;
 use DOMElement;
@@ -96,6 +97,50 @@ class TextProcessor
     ];
 
     /**
+     * The elements an image in content is lifted out of, ending the element ahead of
+     * the image and resuming it after, since a set is valid only at the top of the
+     * document (#492). They are the table wrappers other than `<figure>`, which is
+     * imported whole as an image; the page structure an export can carry, such as a
+     * whole `<body>`; and the inline elements around text. An image in any other
+     * element, such as a list or a heading, stays where it is and is reported.
+     *
+     * @var list<string>
+     */
+    private const array IMAGE_WRAPPER_TAGS = [
+        'a',
+        'abbr',
+        'article',
+        'aside',
+        'b',
+        'body',
+        'center',
+        'cite',
+        'del',
+        'details',
+        'div',
+        'em',
+        'font',
+        'footer',
+        'header',
+        'i',
+        'ins',
+        'label',
+        'main',
+        'mark',
+        'nav',
+        'p',
+        's',
+        'section',
+        'small',
+        'span',
+        'strike',
+        'strong',
+        'sub',
+        'sup',
+        'u',
+    ];
+
+    /**
      * Matches a `wp:shortcode` block, whose shortcodes ShortcodeBlockProcessor
      * converts.
      */
@@ -113,6 +158,13 @@ class TextProcessor
      * @var array<string, object>
      */
     private static array $cachedProcessors = [];
+
+    /**
+     * The HTML of the first part of each element with an `id` that the content being
+     * built was split into around an image, for `BardTexstyleAttributeMapper` to
+     * match the `id` against (#500). See {@see self::imageParts()}.
+     */
+    private static string $splitIdParts = '';
 
     /**
      * Decodes HTML entities in a string to ensure proper UTF-8 character rendering.
@@ -524,6 +576,75 @@ class TextProcessor
      * @return array<int|string, mixed> The Bard-compatible ProseMirror JSON
      */
     public static function processForBard(
+        string $html,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        bool $applyWpAutoP = false,
+        bool $isInnerBlocks = false,
+        array $attachments = [],
+        array $terms = [],
+        ?string $pageSlug = null,
+        ?string $statamicEntryId = null,
+        ?string $collectionHandle = null,
+        array $preProcessedNodes = [],
+        ?string $xmlPath = null
+    ): array {
+        // Build the Bard content. A call made while another is building, as for the
+        // blocks in a group, matches only its own split parts, and hands the outer
+        // call's back when it ends. The outer call maps the nodes an inner call
+        // returns again, so the reset changes only nodes it does not reach, such as
+        // those inside a set
+        $outerSplitIdParts = self::$splitIdParts;
+        self::$splitIdParts = '';
+
+        try {
+            $bardContent = self::buildBardContent(
+                $html,
+                $site,
+                $assetImporter,
+                $output,
+                $applyWpAutoP,
+                $isInnerBlocks,
+                $attachments,
+                $terms,
+                $pageSlug,
+                $statamicEntryId,
+                $collectionHandle,
+                $preProcessedNodes,
+                $xmlPath
+            );
+        } finally {
+            self::$splitIdParts = $outerSplitIdParts;
+        }
+
+        // Record the ids this content dropped and the fragment links it holds, so the
+        // run can report a link that lands on a dropped id (#502)
+        DroppedAnchorTracker::record($html, $bardContent);
+
+        return $bardContent;
+    }
+
+    /**
+     * Build the Bard content {@see self::processForBard()} returns; that method
+     * documents the processing.
+     *
+     * @param  string  $html  The input HTML content
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  bool  $applyWpAutoP  Apply WpAutoP formatting
+     * @param  bool  $isInnerBlocks  Is InnerBlocks content
+     * @param  array<int|string, mixed>  $attachments  Array of attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of terms for processing
+     * @param  ?string  $pageSlug  Page slug for logging
+     * @param  ?string  $statamicEntryId  The Statamic entry ID being processed (for deferred processing)
+     * @param  ?string  $collectionHandle  The Statamic collection handle (optional)
+     * @param  array<int|string, mixed>  $preProcessedNodes  Pre-processed DOM nodes keyed by index
+     * @param  ?string  $xmlPath  Optional XML file path for link resolution
+     * @return array<int|string, mixed> The Bard-compatible ProseMirror JSON
+     */
+    private static function buildBardContent(
         string $html,
         string $site,
         AssetImporter $assetImporter,
@@ -987,6 +1108,18 @@ class TextProcessor
 
         $nodes = $rootDiv->childNodes;
 
+        // A photo in a table of photos (#489), and an image nested in content (#492),
+        // is imported as a figure outside a block is
+        $importImage = static fn (string $figureHtml): ?array => $imageProcessor->processImage(
+            $figureHtml,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $pageSlug,
+            []
+        );
+
         // Iterate through all nodes in the document
         foreach ($nodes as $node) {
             // Convert current node to HTML string
@@ -1334,6 +1467,14 @@ class TextProcessor
 
                         // Track processed image to prevent duplicates
                         $processedImages[$imgHtml] = $imgHtml;
+                    } else {
+                        // Record the figure, and keep its caption (#492)
+                        self::addFailedImage(
+                            $node,
+                            $nodeHtml,
+                            $bardContent,
+                            $bardParser
+                        );
                     }
                 }
 
@@ -1388,6 +1529,14 @@ class TextProcessor
 
                         // Track processed image
                         $processedImages[$imgHtml] = $imgHtml;
+                    } else {
+                        // Record the figure, and keep its caption (#492)
+                        self::addFailedImage(
+                            $node,
+                            $nodeHtml,
+                            $bardContent,
+                            $bardParser
+                        );
                     }
                 }
 
@@ -1432,6 +1581,14 @@ class TextProcessor
 
                         // Track processed image
                         $processedImages[$nodeHtml] = $nodeHtml;
+                    } else {
+                        // Record the image (#492)
+                        self::addFailedImage(
+                            $node,
+                            $nodeHtml,
+                            $bardContent,
+                            $bardParser
+                        );
                     }
                 }
 
@@ -1491,7 +1648,8 @@ class TextProcessor
                 null,
                 $currentContent,
                 $bardContent,
-                $bardParser
+                $bardParser,
+                $importImage
             );
         }
 
@@ -1512,9 +1670,13 @@ class TextProcessor
         // formatted content and map them to Bard Texstyle attributes
         // (clearboth, id, start, reversed, list_style) for applicable node types.
         // ---
+        // The first part of an element split around an image holds less than the
+        // element's text, so its HTML is added for its `id` to be matched (#500).
+        // The mapper keeps the last element of a given text, so the parts go first and
+        // an element of the source with the same text keeps its own `id`
         $mappedContent = BardTexstyleAttributeMapper::mapAttributes(
             \array_values($filteredContent),
-            $formattedContent
+            self::$splitIdParts.$formattedContent
         );
 
         // Clean up variables to free up memory
@@ -1958,7 +2120,11 @@ class TextProcessor
      * email newsletters, is read the same way, and its links and lists stay in Bard
      * instead of in one cell's HTML. A list around a table of data is ended ahead of
      * the table and resumed after it (#394). A table in a quote stays as it was: its
-     * wrapper is structure that a set could not sit inside.
+     * wrapper is structure that a set could not sit inside. A table that holds only
+     * photos and their captions is added as one image set per photo, since a set's
+     * cell cannot render an image; a photo that does not import keeps its caption
+     * as a paragraph (#489). An image in the rest of the content is imported as an
+     * image set in its place, see {@see self::accumulateImages()} (#492).
      *
      * @param  DOMNode  $node  The node to add
      * @param  DOMDocument  $doc  The document the node belongs to
@@ -1966,6 +2132,7 @@ class TextProcessor
      * @param  string  $currentContent  The accumulated content
      * @param  array<int|string, mixed>  $bardContent  The Bard content so far
      * @param  BardParser  $bardParser  The parser for the accumulated content
+     * @param  Closure(string): (array<int|string, mixed>|null)  $importImage  Imports an image or a figure as an image set
      */
     private static function accumulateContent(
         DOMNode $node,
@@ -1973,11 +2140,46 @@ class TextProcessor
         ?DOMElement $figure,
         string &$currentContent,
         array &$bardContent,
-        BardParser $bardParser
+        BardParser $bardParser,
+        Closure $importImage
     ): void {
-        // A table of data is added as a set, unless it has no rows to import
         $tableProcessor = new TableProcessor;
 
+        // A table of photos is added as an image set per photo, with its caption
+        if ($node instanceof DOMElement && $node->tagName === 'table') {
+            $photos = $tableProcessor->photoFigures($node);
+
+            if ($photos !== null) {
+                // Parse the content accumulated ahead of the table first
+                self::flushContent(
+                    $currentContent,
+                    $bardContent,
+                    $bardParser
+                );
+
+                foreach ($photos as $photo) {
+                    $imageSet = $importImage($photo['figure']);
+
+                    if ($imageSet !== null && $imageSet !== []) {
+                        $bardContent[] = $imageSet;
+
+                        continue;
+                    }
+
+                    // A photo that does not import leaves its caption as a paragraph
+                    if ($photo['caption'] !== '') {
+                        $bardContent = \array_merge(
+                            $bardContent,
+                            $bardParser->parse('<p>'.\htmlspecialchars($photo['caption'], ENT_QUOTES | ENT_HTML5).'</p>')
+                        );
+                    }
+                }
+
+                return;
+            }
+        }
+
+        // A table of data is added as a set, unless it has no rows to import
         if (
             $node instanceof DOMElement
             && $node->tagName === 'table'
@@ -2013,7 +2215,8 @@ class TextProcessor
                 $doc,
                 $currentContent,
                 $bardContent,
-                $bardParser
+                $bardParser,
+                $importImage
             );
 
             return;
@@ -2030,6 +2233,20 @@ class TextProcessor
                 )
             )
         ) {
+            // An image in the content becomes an image set in its place (#492)
+            if ($node instanceof DOMElement && self::holdsImage($node)) {
+                self::accumulateImages(
+                    $node,
+                    $doc,
+                    $currentContent,
+                    $bardContent,
+                    $bardParser,
+                    $importImage
+                );
+
+                return;
+            }
+
             $currentContent .= self::nodeHtml(
                 $doc,
                 $node
@@ -2055,7 +2272,8 @@ class TextProcessor
                 $tableFigure,
                 $currentContent,
                 $bardContent,
-                $bardParser
+                $bardParser,
+                $importImage
             );
         }
 
@@ -2064,6 +2282,270 @@ class TextProcessor
             $currentContent,
             $bardContent,
             $bardParser
+        );
+    }
+
+    /**
+     * Whether an element is an image or holds one at any depth.
+     *
+     * @param  DOMElement  $element  The element
+     * @return bool True for an `<img>`, or an element with an `<img>` in it
+     */
+    private static function holdsImage(
+        DOMElement $element
+    ): bool {
+        return $element->tagName === 'img'
+            || $element->getElementsByTagName('img')->length > 0;
+    }
+
+    /**
+     * Adds content that holds an image, with each image as an image set in its place.
+     *
+     * Bard has no image node, so an image left in the accumulated content is dropped
+     * (#492). The content is split into parts around each image (see
+     * {@see self::imageParts()}): each part is added as content, and each image is
+     * imported as an image set after the content ahead of it.
+     *
+     * @param  DOMElement  $element  The image, or the element that holds one
+     * @param  DOMDocument  $doc  The document the element belongs to
+     * @param  string  $currentContent  The accumulated content
+     * @param  array<int|string, mixed>  $bardContent  The Bard content so far
+     * @param  BardParser  $bardParser  The parser for the accumulated content
+     * @param  Closure(string): (array<int|string, mixed>|null)  $importImage  Imports an image or a figure as an image set
+     */
+    private static function accumulateImages(
+        DOMElement $element,
+        DOMDocument $doc,
+        string &$currentContent,
+        array &$bardContent,
+        BardParser $bardParser,
+        Closure $importImage
+    ): void {
+        foreach (self::imageParts($doc, $element) as [$isImage, $part]) {
+            // A part around the images is ordinary content
+            if (! $isImage) {
+                $currentContent .= self::nodeHtml(
+                    $doc,
+                    $part
+                );
+
+                continue;
+            }
+
+            // An image or a figure is imported after the content ahead of it
+            self::flushContent(
+                $currentContent,
+                $bardContent,
+                $bardParser
+            );
+
+            $html = self::nodeHtml(
+                $doc,
+                $part
+            );
+            $imageSet = $importImage($html);
+
+            if ($imageSet !== null && $imageSet !== []) {
+                $bardContent[] = $imageSet;
+
+                continue;
+            }
+
+            self::addFailedImage(
+                $part,
+                $html,
+                $bardContent,
+                $bardParser
+            );
+        }
+    }
+
+    /**
+     * Splits an element around the images in it, in document order.
+     *
+     * An `<img>` or a `<figure>` is one image part, so a figure is imported whole, as
+     * a figure at the top of the content is. An element in {@see self::IMAGE_WRAPPER_TAGS}
+     * is ended ahead of each image in it, at any depth, and resumed after it: each
+     * part is a copy of the element holding the content between two images, so text
+     * keeps its order and stays in its paragraph, and an inline element around an
+     * image is resumed inside the paragraph after it. A part that holds an element,
+     * such as a shortcode's set or a rule, is kept; a part of only whitespace is
+     * not. Any other element, such as a list or a heading, is one content part that
+     * keeps its images, and each of them is reported, since a set cannot be lifted
+     * out of it.
+     *
+     * The element's first content part keeps its `id`, and no later part, so an anchor
+     * to the element lands at its start. `BardTexstyleAttributeMapper` finds an `id` by
+     * its element's whole text, which no part holds, so the first part's HTML is kept
+     * in {@see self::$splitIdParts} for it to match (#500). A link around
+     * an image is not kept. A nested image is imported wherever it appears, without
+     * the de-duplication `processForBard()` applies to images at the top of the
+     * content.
+     *
+     * @param  DOMDocument  $doc  The document the element belongs to
+     * @param  DOMElement  $element  The image, or the element that holds one
+     * @return list<array{bool, DOMElement}> Each part, with true for an image
+     */
+    private static function imageParts(
+        DOMDocument $doc,
+        DOMElement $element
+    ): array {
+        // An image or a figure is imported whole
+        if ($element->tagName === 'img' || $element->tagName === 'figure') {
+            return [[true, $element]];
+        }
+
+        // An element a set could not be lifted out of keeps its images, reported
+        if (! \in_array($element->tagName, self::IMAGE_WRAPPER_TAGS, true)) {
+            foreach ($element->getElementsByTagName('img') as $image) {
+                self::reportImage(
+                    self::nodeHtml($doc, $image),
+                    "An image in a <{$element->tagName}> was not imported."
+                );
+            }
+
+            return [[false, $element]];
+        }
+
+        $parts = [];
+        $part = null;
+
+        foreach ($element->childNodes as $child) {
+            // A child without an image joins the open part of this element
+            if (! $child instanceof DOMElement || ! self::holdsImage($child)) {
+                $part ??= self::emptyCopy($element);
+                $part->appendChild($child->cloneNode(true));
+
+                continue;
+            }
+
+            // A child's own content parts join this element's; its images end it
+            foreach (self::imageParts($doc, $child) as [$isImage, $childPart]) {
+                if (! $isImage) {
+                    $part ??= self::emptyCopy($element);
+                    $part->appendChild($childPart->cloneNode(true));
+
+                    continue;
+                }
+
+                self::addImagePart(
+                    $parts,
+                    $part
+                );
+                $part = null;
+                $parts[] = [true, $childPart];
+            }
+        }
+
+        // Add the part of the element after its last image
+        self::addImagePart(
+            $parts,
+            $part
+        );
+
+        // Keep the HTML of the element's first content part, so its `id` is matched to
+        // that part's Bard node and to no later part's (#500)
+        if ($element->hasAttribute('id')) {
+            foreach ($parts as [$isImage, $contentPart]) {
+                if (! $isImage) {
+                    self::$splitIdParts .= self::nodeHtml($doc, $contentPart);
+
+                    break;
+                }
+            }
+        }
+
+        return $parts;
+    }
+
+    /**
+     * A copy of an element without its content, to hold one part of it.
+     *
+     * @param  DOMElement  $element  The element
+     * @return DOMElement The copy
+     */
+    private static function emptyCopy(
+        DOMElement $element
+    ): DOMElement {
+        $copy = $element->cloneNode(false);
+        \assert($copy instanceof DOMElement);
+
+        return $copy;
+    }
+
+    /**
+     * Adds a content part of an element split around an image, when it holds an
+     * element or any text that is not whitespace.
+     *
+     * @param  list<array{bool, DOMElement}>  $parts  The parts so far
+     * @param  ?DOMElement  $part  The part, or null when none is open
+     */
+    private static function addImagePart(
+        array &$parts,
+        ?DOMElement $part
+    ): void {
+        // A part of only whitespace would add an empty element
+        if (
+            ! $part instanceof DOMElement
+            || ($part->childElementCount === 0 && \trim($part->textContent) === '')
+        ) {
+            return;
+        }
+
+        $parts[] = [false, $part];
+    }
+
+    /**
+     * Records an image or a figure that did not import, keeping a figure's caption
+     * as a paragraph so no text is lost with the image.
+     *
+     * @param  DOMElement  $image  The `<img>` or the `<figure>`
+     * @param  string  $html  Its HTML
+     * @param  array<int|string, mixed>  $bardContent  The Bard content so far
+     * @param  BardParser  $bardParser  The parser for the caption
+     */
+    private static function addFailedImage(
+        DOMElement $image,
+        string $html,
+        array &$bardContent,
+        BardParser $bardParser
+    ): void {
+        self::reportImage(
+            $html,
+            'An image in the content did not import.'
+        );
+
+        // A figure that does not import keeps its caption as a paragraph
+        $caption = $image->getElementsByTagName('figcaption')->item(0);
+        $captionText = \trim($caption->textContent ?? '');
+
+        if ($captionText !== '') {
+            $bardContent = \array_merge(
+                $bardContent,
+                $bardParser->parse('<p>'.\htmlspecialchars($captionText, ENT_QUOTES | ENT_HTML5).'</p>')
+            );
+        }
+    }
+
+    /**
+     * Reports an image in the content that was not imported, naming the page.
+     *
+     * @param  string  $image  The image's HTML
+     * @param  string  $reason  Why it was not imported
+     */
+    private static function reportImage(
+        string $image,
+        string $reason
+    ): void {
+        ImportWarningManager::addWarning(
+            'content',
+            'images_not_imported',
+            [
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'content_snippet' => \mb_substr($image, 0, 100)
+                    .(\mb_strlen($image) > 100 ? '...' : ''),
+                'reason' => $reason,
+            ]
         );
     }
 
@@ -2083,13 +2565,15 @@ class TextProcessor
      * @param  string  $currentContent  The accumulated content
      * @param  array<int|string, mixed>  $bardContent  The Bard content so far
      * @param  BardParser  $bardParser  The parser for the accumulated content
+     * @param  Closure(string): (array<int|string, mixed>|null)  $importImage  Imports an image or a figure as an image set
      */
     private static function accumulateList(
         DOMElement $list,
         DOMDocument $doc,
         string &$currentContent,
         array &$bardContent,
-        BardParser $bardParser
+        BardParser $bardParser,
+        Closure $importImage
     ): void {
         // The number of the item being read, and the part of the list not yet added
         $number = self::listStart($list);
@@ -2148,7 +2632,8 @@ class TextProcessor
                     null,
                     $currentContent,
                     $bardContent,
-                    $bardParser
+                    $bardParser,
+                    $importImage
                 );
                 self::flushContent(
                     $currentContent,
@@ -2279,17 +2764,24 @@ class TextProcessor
     /**
      * Whether a figure holds a table of data directly.
      *
+     * A table of photos is not one: its photos become image sets rather than a
+     * `table` set, so the figure has no set to lend its caption to, and the caption
+     * is read as content after the photos (#489).
+     *
      * @param  DOMElement  $figure  The figure element
      * @return bool True when one of the figure's children is a table of data
      */
     private static function holdsDataTable(
         DOMElement $figure
     ): bool {
+        $tableProcessor = new TableProcessor;
+
         foreach ($figure->childNodes as $child) {
             if (
                 $child instanceof DOMElement
                 && $child->tagName === 'table'
-                && (new TableProcessor)->isDataTable($child)
+                && $tableProcessor->isDataTable($child)
+                && $tableProcessor->photoFigures($child) === null
             ) {
                 return true;
             }

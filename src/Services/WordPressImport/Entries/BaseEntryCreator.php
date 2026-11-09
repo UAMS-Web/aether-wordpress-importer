@@ -337,7 +337,7 @@ abstract class BaseEntryCreator
 
         if (\is_object($blueprint) && \method_exists($blueprint, 'hasField')) {
             // Map wp:status to status_and_visibility
-            if ($blueprint->hasField('status_and_visibility')) {
+            if ($blueprint->hasField('status_and_visibility') === true) {
                 switch ($status) {
                     case 'draft':
                         $data['status_and_visibility'] = 'draft';
@@ -350,7 +350,7 @@ abstract class BaseEntryCreator
                         break;
                     case 'future':
                         // Schedule through publish_at where the blueprint has it, since no status holds such an entry back
-                        if ($blueprint->hasField('publish_at')) {
+                        if ($blueprint->hasField('publish_at') === true) {
                             $data['status_and_visibility'] = 'draft';
 
                             // Leave publish_at unset when no date can be read, so the entry stays a draft
@@ -400,10 +400,10 @@ abstract class BaseEntryCreator
             }
 
             // Map wp:post_password to password_protected and visibility_password
-            if ($blueprint->hasField('password_protected')) {
+            if ($blueprint->hasField('password_protected') === true) {
                 if ($postPassword !== '') {
                     $data['password_protected'] = true;
-                    if ($blueprint->hasField('visibility_password')) {
+                    if ($blueprint->hasField('visibility_password') === true) {
                         $hashedPassword = Hash::make($postPassword);
                         $data['visibility_password'] = $hashedPassword;
                         $data['is_password_hashed'] = true;
@@ -414,7 +414,7 @@ abstract class BaseEntryCreator
             }
 
             // Map wp:post_date to date for a post scheduled by status rather than by publish_at
-            if ($status === 'future' && ! $blueprint->hasField('publish_at') && $blueprint->hasField('date') && $postDate !== '') {
+            if ($status === 'future' && $blueprint->hasField('publish_at') !== true && $blueprint->hasField('date') === true && $postDate !== '') {
                 $data['date'] = $postDate;
             }
         } else {

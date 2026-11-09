@@ -141,7 +141,8 @@ it('uses the handle the host fieldtype gives for the preset', function (
         ->and(FormsSubfieldHostMapping::$requests)->toBe([['address', 'gravity-forms']])
         ->and(FormsSubfieldRecordingFieldtype::$calls)->toBe([['setConfig', $config], ['getPresetSpecificSubfieldHandle', 'city', $preset]]);
 })->with([
-    'a preset' => [['preset' => 'canadian', 'addressType' => 'us'], ['preset' => 'canadian'], 'canadian'],
+    'a raw preset' => [['preset' => 'canadian'], ['preset' => 'canadian'], 'canadian'],
+    'a raw preset beside the mapped address type, which wins (#429)' => [['preset' => 'canadian', 'addressType' => 'us'], ['preset' => 'us'], 'us'],
     'an address type' => [['addressType' => 'us'], ['preset' => 'us'], 'us'],
     'neither' => [[], [], null],
     'an empty preset' => [['preset' => ''], [], ''],

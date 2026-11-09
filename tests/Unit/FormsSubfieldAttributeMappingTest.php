@@ -15,10 +15,11 @@ declare(strict_types=1);
  * `resolveFieldAttributeOptionsMapping()` read a mapping class's optional
  * properties. No standalone test named any of these methods before this file.
  *
- * The Gravity Forms State and ZIP subfields are left out on purpose: their
- * mapping keys carry a JSON-escaped slash that decoded input never matches
- * (UAMS-Web/aether-wordpress-importer#438), and a test here would either pin
- * that or depend on its fix.
+ * The Gravity Forms State and ZIP subfields are asserted through labels taken
+ * from `json_decode()`, because that is the only form the loaders produce: the
+ * mapping once keyed them with a JSON-escaped slash (`State \/ Province`), so
+ * decoded input matched nothing and both subfields lost their configuration
+ * (UAMS-Web/aether-wordpress-importer#438).
  *
  * @command  php vendor/bin/pest tests/Unit/FormsSubfieldAttributeMappingTest.php
  */
@@ -211,6 +212,43 @@ it('maps a Gravity Forms address subfield for each address type', function (
     'a US country' => ['us', 'Country', ['country_label' => 'CL']],
     'a Canadian country' => ['canadian', 'Country', ['country_label' => 'CL']],
 ]);
+
+it('maps a Gravity Forms State or ZIP subfield whose label came from decoded JSON (#438)', function (
+    string $json,
+    string $addressType,
+    array $expected
+): void {
+    // Decode the label the way JsonFileLoader and the migration API client do, so an
+    // escaped slash reintroduced into a mapping key no longer matches it
+    $decoded = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+    $label = is_array($decoded) ? $decoded['label'] : null;
+    $subfield = ['id' => '1.4', 'label' => $label, 'customLabel' => 'CL', 'placeholder' => 'PH', 'defaultValue' => 'DV', 'isHidden' => true];
+
+    expect($label)->not->toContain('\\')
+        ->and(FieldtypeMapping::mapSubfieldAttributes('address', $subfield, ['id' => 1, 'type' => 'address', 'label' => 'Address', 'addressType' => $addressType]))->toBe($expected);
+})->with([
+    'a US state' => ['{"label":"State \/ Province"}', 'us', ['state_province_region_american_label' => 'CL', 'state_province_region_american_placeholder' => 'PH', 'state_province_region_american_include' => false]],
+    'a Canadian province' => ['{"label":"State \/ Province"}', 'canadian', ['state_province_region_canadian_label' => 'CL', 'state_province_region_canadian_placeholder' => 'PH', 'state_province_region_canadian_default' => 'DV', 'state_province_region_canadian_include' => false]],
+    'an international region' => ['{"label":"State \/ Province"}', 'international', ['state_province_region_international_label' => 'CL', 'state_province_region_international_placeholder' => 'PH', 'state_province_region_international_default' => 'DV', 'state_province_region_international_include' => false]],
+    'a US ZIP code' => ['{"label":"ZIP \/ Postal Code"}', 'us', ['postal_code_label' => 'CL', 'postal_code_placeholder' => 'PH', 'postal_code_default' => 'DV', 'postal_code_include' => false]],
+    'a Canadian postal code' => ['{"label":"ZIP \/ Postal Code"}', 'canadian', ['postal_code_label' => 'CL', 'postal_code_placeholder' => 'PH', 'postal_code_default' => 'DV', 'postal_code_include' => false]],
+    'an international postal code' => ['{"label":"ZIP \/ Postal Code"}', 'international', ['postal_code_label' => 'CL', 'postal_code_placeholder' => 'PH', 'postal_code_default' => 'DV', 'postal_code_include' => false]],
+]);
+
+it('keys no Gravity Forms subfield by a label carrying a JSON-escaped slash (#438)', function (): void {
+    // Collect every subfield label the mapping keys, across every field type
+    $labels = [];
+    $fieldtypes = FieldtypeMapping::getSubfieldMapping()['fieldtypes'] ?? [];
+    foreach (is_array($fieldtypes) ? $fieldtypes : [] as $fieldtype) {
+        $subfields = is_array($fieldtype) ? ($fieldtype['subfields'] ?? []) : [];
+        foreach (is_array($subfields) ? array_keys($subfields) : [] as $label) {
+            $labels[] = (string) $label;
+        }
+    }
+
+    expect($labels)->toContain('State / Province', 'ZIP / Postal Code', 'AM/PM')
+        ->and(array_values(array_filter($labels, static fn (string $label): bool => str_contains($label, '\\/'))))->toBe([]);
+});
 
 it('maps a Gravity Forms name subfield, inverting the hidden flag', function (
     string $label,

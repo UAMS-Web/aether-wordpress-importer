@@ -14,7 +14,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Processes WordPress wp:table blocks into Tiptap-compatible HTML for Statamic
@@ -27,6 +29,12 @@ class TableProcessor implements BlockProcessorInterface
      * can be in HTML, and it keeps hostile spans from growing a grid out of memory.
      */
     private const int MAX_COLUMNS = 1000;
+
+    /**
+     * The longest caption a photo in a table of photos takes, in characters. A
+     * longer run of text after a photo is an article, not a caption (#489).
+     */
+    private const int MAX_PHOTO_CAPTION_LENGTH = 500;
 
     /**
      * Determines if the processor can handle the given DOM node.
@@ -259,6 +267,9 @@ class TableProcessor implements BlockProcessorInterface
             return null;
         }
 
+        // A cell keeps its image as HTML that the host does not render (#396)
+        self::reportImages($table);
+
         // Read the classes the figure carries, when there is one
         // The empty fallback and mutation sentinel both mean centered and unstriped.
         // @pest-mutate-ignore: EmptyStringToNotEmpty
@@ -363,6 +374,44 @@ class TableProcessor implements BlockProcessorInterface
     }
 
     /**
+     * Records the images a table set holds for the run summary.
+     *
+     * A cell's image stays in `table_data` as HTML with its WordPress `src`, is not
+     * imported as an asset, and the host's table cell sanitizer removes it when the
+     * cell renders, so the image does not reach the page (#396).
+     *
+     * @param  DOMElement  $table  The table element
+     */
+    private static function reportImages(
+        DOMElement $table
+    ): void {
+        $images = $table->getElementsByTagName('img');
+        $first = $images->item(0);
+
+        if ($first === null) {
+            return;
+        }
+
+        // saveHTML() returns false only for a node of another document, and the
+        // image belongs to the table's own document
+        // @pest-mutate-ignore: RemoveStringCast
+        $image = (string) $table->ownerDocument?->saveHTML($first);
+
+        ImportWarningManager::addWarning(
+            'content',
+            'images_in_table_cells',
+            [
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'image_count' => $images->length,
+                'content_snippet' => \mb_substr($image, 0, 100)
+                    .(\mb_strlen($image) > 100 ? '...' : ''),
+                'reason' => 'An image in a table cell is kept as HTML in the table '
+                    .'set, is not imported as an asset, and does not render.',
+            ]
+        );
+    }
+
+    /**
      * Whether a table holds data, so that it belongs in a `table` set.
      *
      * A table that holds another table is page layout, a set in a cell could not stay
@@ -389,6 +438,196 @@ class TableProcessor implements BlockProcessorInterface
 
         // A non-breaking space is what a blank cell holds
         return \trim(\str_replace("\u{A0}", ' ', $table->textContent)) !== '';
+    }
+
+    /**
+     * The photos of a table that holds only photos and their captions, each as a
+     * `<figure>` with its caption.
+     *
+     * Such a table is a table of data by `isDataTable()`, since its captions are
+     * text, but its cells hold photos rather than data, and a `table` set's cell
+     * cannot render an image (#396). A table is one when it is a table of data,
+     * every cell with text in it also holds an image, no image's caption is longer
+     * than `MAX_PHOTO_CAPTION_LENGTH` characters, no text sits outside its cells,
+     * and no link in it has text. An image's caption is the text after it in its
+     * cell, up to the next image; text ahead of a cell's first image belongs to
+     * that image. A caption is kept as text, so a table whose text links anywhere,
+     * as the exports' lists of articles under a heading graphic do, keeps its
+     * links as a table of data instead (#489).
+     *
+     * @param  DOMElement  $table  The table element
+     * @return ?list<array{figure: string, caption: string}> One figure per image, in
+     *                                                       the order the table holds
+     *                                                       them, with its caption,
+     *                                                       or null for a table that
+     *                                                       is not one of photos
+     */
+    public function photoFigures(
+        DOMElement $table
+    ): ?array {
+        // Only a table of data that holds an image can be one of photos
+        $document = $table->ownerDocument;
+
+        if (
+            ! $document instanceof DOMDocument
+            || $table->getElementsByTagName('img')->length === 0
+            || ! $this->isDataTable($table)
+            || self::hasTextOutsideCells($table)
+        ) {
+            return null;
+        }
+
+        // A link with text would be lost from a caption kept as text
+        foreach ($table->getElementsByTagName('a') as $link) {
+            if (self::normalizeText($link->textContent) !== '') {
+                return null;
+            }
+        }
+
+        // A table of data has no nested table, so every cell in it is its own
+        $photos = [];
+
+        foreach ($table->getElementsByTagName('*') as $cell) {
+            if ($cell->tagName !== 'td' && $cell->tagName !== 'th') {
+                continue;
+            }
+
+            // Each image takes the text after it, and a cell's first the text ahead of it
+            $cellPhotos = [];
+            $lead = '';
+            self::collectPhotos($cell, $cellPhotos, $lead);
+
+            // A cell with text and no image holds data
+            if ($cellPhotos === [] && self::normalizeText($lead) !== '') {
+                return null;
+            }
+
+            // A caption too long to be one is an article, so the table holds data
+            foreach ($cellPhotos as $photo) {
+                $caption = self::normalizeText($photo['caption']);
+
+                if (\mb_strlen($caption) > self::MAX_PHOTO_CAPTION_LENGTH) {
+                    return null;
+                }
+
+                $photos[] = [
+                    'image' => $photo['image'],
+                    'caption' => $caption,
+                ];
+            }
+        }
+
+        // Each photo becomes a figure, its caption a figcaption when it has one
+        $figures = [];
+
+        foreach ($photos as $photo) {
+            $figure = $document->createElement('figure');
+            $figure->appendChild($photo['image']->cloneNode(false));
+
+            if ($photo['caption'] !== '') {
+                $figcaption = $document->createElement('figcaption');
+                $figcaption->appendChild($document->createTextNode($photo['caption']));
+                $figure->appendChild($figcaption);
+            }
+
+            $figures[] = [
+                'figure' => (string) $document->saveHTML($figure),
+                'caption' => $photo['caption'],
+            ];
+        }
+
+        return $figures;
+    }
+
+    /**
+     * Whether a table holds text outside its cells, such as in a `<caption>`.
+     *
+     * @param  DOMNode  $node  The table, or a part of it outside its cells
+     * @return bool True when any text that is not blank sits outside the cells
+     */
+    private static function hasTextOutsideCells(
+        DOMNode $node
+    ): bool {
+        foreach ($node->childNodes as $child) {
+            // A cell's text is a caption, read with its photos
+            if ($child instanceof DOMElement && \in_array($child->tagName, ['td', 'th'], true)) {
+                continue;
+            }
+
+            if ($child instanceof DOMText) {
+                if (self::normalizeText($child->textContent) !== '') {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (self::hasTextOutsideCells($child)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Collects the images under a node in document order, each with the text after
+     * it up to the next image. Text ahead of the first image is collected apart.
+     *
+     * @param  DOMNode  $node  The node to read
+     * @param  list<array{image: DOMElement, caption: string}>  $photos  The images so far, each with its text
+     * @param  string  $lead  The text ahead of the first image
+     */
+    private static function collectPhotos(
+        DOMNode $node,
+        array &$photos,
+        string &$lead
+    ): void {
+        foreach ($node->childNodes as $child) {
+            // An image starts a photo, the first taking the text ahead of it
+            if ($child instanceof DOMElement && $child->tagName === 'img') {
+                $photos[] = [
+                    'image' => $child,
+                    'caption' => $photos === [] ? $lead : '',
+                ];
+
+                continue;
+            }
+
+            // Text belongs to the image before it
+            if ($child instanceof DOMText) {
+                $last = \array_key_last($photos);
+
+                if ($last === null) {
+                    $lead .= ' '.$child->textContent;
+                } else {
+                    $photos[$last]['caption'] .= ' '.$child->textContent;
+                }
+
+                continue;
+            }
+
+            self::collectPhotos($child, $photos, $lead);
+        }
+    }
+
+    /**
+     * Collapses each run of white space in a text to one space, reading a
+     * non-breaking space as white space.
+     *
+     * @param  string  $text  The text
+     * @return string The text, trimmed, with each run of white space as one space
+     */
+    private static function normalizeText(
+        string $text
+    ): string {
+        return \trim(
+            (string) \preg_replace(
+                '/\s+/u',
+                ' ',
+                \str_replace("\u{A0}", ' ', $text)
+            )
+        );
     }
 
     /**
