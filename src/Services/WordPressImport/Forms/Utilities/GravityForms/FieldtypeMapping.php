@@ -21193,7 +21193,7 @@ class FieldtypeMapping
                     'City' => [
                         'handle' => 'city',
                     ],
-                    'State \/ Province' => [
+                    'State / Province' => [
                         'handle' => 'state_province_region',
                         'attributes' => [
                             'customLabel' => [
@@ -21268,7 +21268,7 @@ class FieldtypeMapping
                             ],
                         ],
                     ],
-                    'ZIP \/ Postal Code' => [
+                    'ZIP / Postal Code' => [
                         'handle' => 'postal_code',
                     ],
                     'Country' => [
