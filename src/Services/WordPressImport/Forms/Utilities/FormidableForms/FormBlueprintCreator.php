@@ -569,8 +569,84 @@ class FormBlueprintCreator
         ?string $fieldLabel = null,
         ?string $formId = null
     ): array {
-        // For now, return empty array as subfield mapping is not implemented for Formidable Forms
-        return [];
+        // Only the address field has subfields mapped for Formidable Forms
+        if (($field['type'] ?? null) !== 'address') {
+            return [];
+        }
+
+        // Parse the field options, which carry each subfield's description and placeholder
+        $fieldOptions = [];
+        if (
+            isset($field['field_options'])
+            && \is_string($field['field_options'])
+        ) {
+            $decodedOptions = \json_decode(
+                $field['field_options'],
+                true
+            );
+            if (\is_array($decodedOptions)) {
+                $fieldOptions = $decodedOptions;
+            }
+        }
+
+        $placeholders = \is_array($fieldOptions['placeholder'] ?? null)
+            ? $fieldOptions['placeholder']
+            : [];
+
+        // Parse the default value, which Formidable stores per subfield as a JSON object
+        $defaultValues = $field['default_value'] ?? null;
+        if (\is_string($defaultValues)) {
+            $defaultValues = \json_decode(
+                $defaultValues,
+                true
+            );
+        }
+
+        if (! \is_array($defaultValues)) {
+            $defaultValues = [];
+        }
+
+        // Carry the translated preset on the parent field for the handle lookup
+        $parentField = $field;
+        $parentField['preset'] = FieldtypeMapping::getAddressPreset($field);
+
+        $combinedSubfieldAttributes = [];
+
+        // Map each subfield from the values the parent field holds for it
+        foreach (FieldtypeMapping::ADDRESS_SUBFIELD_KEYS as $subfieldKey) {
+            $subfieldData = [
+                'label' => $subfieldKey,
+                'subfield_desc' => $fieldOptions[$subfieldKey.'_desc'] ?? null,
+                'subfield_placeholder' => $placeholders[$subfieldKey] ?? null,
+                'subfield_default' => $defaultValues[$subfieldKey] ?? null,
+            ];
+
+            $subfieldAttributes = FieldtypeMapping::mapSubfieldAttributes(
+                'address',
+                $subfieldData,
+                $parentField,
+                $pluginName,
+                $allFields
+            );
+
+            // Merge the subfield attributes into the combined result
+            if ($subfieldAttributes !== []) {
+                $combinedSubfieldAttributes = \array_merge(
+                    $combinedSubfieldAttributes,
+                    $subfieldAttributes
+                );
+            }
+        }
+
+        // Clean up variables to free up memory
+        unset(
+            $fieldOptions,
+            $placeholders,
+            $defaultValues,
+            $parentField
+        );
+
+        return $combinedSubfieldAttributes;
     }
 
     /**
