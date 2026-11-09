@@ -13,6 +13,7 @@ use Symfony\Component\Console\Input\ArrayInput;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 use UAMSWeb\Aether\WordPressImporter\Tests\Support\LfBufferedOutput;
 
@@ -27,9 +28,20 @@ uses(StatamicTestCase::class);
 beforeEach(function (): void {
     $this->workingDirectory = \sys_get_temp_dir().\DIRECTORY_SEPARATOR.\uniqid('nav_selector_', true);
     \mkdir($this->workingDirectory);
+
+    // The login check now runs through the egress guard, which resolves the export's host before
+    // sending; answer for `example.test` here so the suite never performs a DNS lookup
+    OutboundUrlGuard::resolveUsing(
+        static fn (string $host, int $type): array => $type === DNS_A
+            ? ['93.184.216.34']
+            : []
+    );
 });
 
 afterEach(function (): void {
+    // Restore the system resolver, or the fake leaks into every later test
+    OutboundUrlGuard::resolveUsing(null);
+
     app()['env'] = 'testing';
 
     $entries = \glob($this->workingDirectory.\DIRECTORY_SEPARATOR.'*');
@@ -381,6 +393,58 @@ it('asks the UAMS login page of the site whether it answers', function (): void 
     navigationMenuSelectorRun(navigationMenuSelectorConfirm($parser), null);
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://example.test/uams-login/');
+});
+
+it('does not ask a UAMS login page on a non-public host, and links to the WordPress login instead', function (string $baseBlogUrl, string $host): void {
+    // The URL comes from the export's `<wp:base_blog_url>`, so a hostile export can point the
+    // check at a host the importer can reach but the internet cannot. The load-bearing assertion
+    // is that nothing was sent: a check that fetched and then discarded the answer would still
+    // fall back to the WordPress login.
+    Http::fake(['*' => Http::response('', 200)]);
+    $parser = navigationMenuSelectorParser($this->workingDirectory, '', $baseBlogUrl);
+
+    [, $out] = navigationMenuSelectorRun(navigationMenuSelectorConfirm($parser), null);
+
+    $url = "http://{$host}/wp-login.php?redirect_to=http%3A%2F%2F{$host}%2Fwp-admin%2Fnav-menus.php%3Faction%3Dlocations&reauth=1";
+
+    expect($out)->toContain("You can check the menu locations at \e]8;;{$url}\e\\{$url}\e]8;;\e\\\n");
+
+    Http::assertNothingSent();
+})->with([
+    'cloud metadata' => ['http://169.254.169.254/', '169.254.169.254'],
+    'loopback' => ['http://127.0.0.1/', '127.0.0.1'],
+    'RFC1918' => ['http://10.0.0.8/', '10.0.0.8'],
+]);
+
+it('does not follow a redirect from the UAMS login page into a non-public address', function (): void {
+    // A public front door that redirects inward is the hole automatic redirect-following leaves
+    // open; the walk re-checks every hop, so the second request is never sent
+    Http::fake([
+        'https://example.test/uams-login/' => Http::response('', 302, ['Location' => 'http://169.254.169.254/latest/meta-data/']),
+        '*' => Http::response('', 200),
+    ]);
+    $parser = navigationMenuSelectorParser($this->workingDirectory, '');
+
+    [, $out] = navigationMenuSelectorRun(navigationMenuSelectorConfirm($parser), null);
+
+    expect($out)->toContain('https://example.test/wp-login.php?redirect_to=');
+
+    Http::assertSentCount(1);
+    Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'http://169.254.169.254/'));
+});
+
+it('follows a public redirect from the UAMS login page and treats a final 200 as answering', function (): void {
+    Http::fake([
+        'https://example.test/uams-login/' => Http::response('', 302, ['Location' => 'https://example.test/uams-login/?redirected']),
+        'https://example.test/uams-login/?redirected' => Http::response('', 200),
+    ]);
+    $parser = navigationMenuSelectorParser($this->workingDirectory, '');
+
+    [, $out] = navigationMenuSelectorRun(navigationMenuSelectorConfirm($parser), null);
+
+    expect($out)->toContain("Log in at \e]8;;https://example.test/uams-login/\e\\https://example.test/uams-login/\e]8;;\e\\.");
+
+    Http::assertSentCount(2);
 });
 
 /**
