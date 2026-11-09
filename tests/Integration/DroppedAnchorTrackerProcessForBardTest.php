@@ -52,3 +52,17 @@ it('reports a link to a quote\'s id once processForBard() has dropped it, and no
         ->and(array_column(ImportWarningManager::getWarnings('content', 'links_to_dropped_ids'), 'link'))->toBe(['#quote'])
         ->and(array_column(ImportWarningManager::getWarnings('content', 'links_to_dropped_ids'), 'element'))->toBe(['<blockquote id="quote">']);
 });
+
+it('reports a link to an <a name> anchor, which processForBard() keeps no trace of (#505)', function (): void {
+    $content = TextProcessor::processForBard(
+        '<p><a name="top"></a>Start</p><p><a href="#top">Back to the top</a></p>',
+        'default',
+        app(AssetImporter::class),
+        new BufferedOutput,
+    );
+
+    DroppedAnchorTracker::reportLinksToDroppedIds();
+
+    expect(json_encode($content))->not->toContain('"top"')
+        ->and(array_column(ImportWarningManager::getWarnings('content', 'links_to_dropped_ids'), 'element'))->toBe(['<a name="top">']);
+});
