@@ -525,7 +525,7 @@ class StructuredTermImporter
     ): void {
         $collection = CollectionFacade::findByHandle($collectionHandle);
 
-        if ($collection === null || ! $collection->hasStructure()) {
+        if ($collection === null || $collection->hasStructure() !== true) {
             $output->writeln(
                 "  - <comment>Collection '{$collectionHandle}' has no structure; term hierarchy not written.</comment>"
             );

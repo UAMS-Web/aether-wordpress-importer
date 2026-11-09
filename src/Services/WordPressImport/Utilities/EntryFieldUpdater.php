@@ -53,7 +53,7 @@ class EntryFieldUpdater
             // Save the entry if requested
             if ($save) {
                 // Restore the original date before saving to prevent duplicate files
-                if ($originalDate) {
+                if ($originalDate !== null) {
                     $entry->date($originalDate);
                 }
 

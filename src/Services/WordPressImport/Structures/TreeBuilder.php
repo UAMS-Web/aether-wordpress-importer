@@ -86,7 +86,7 @@ class TreeBuilder
         }
 
         // Skip tree-building for collections without a structure
-        if (! $collection->hasStructure()) {
+        if ($collection->hasStructure() !== true) {
             return;
         }
 
@@ -119,7 +119,7 @@ class TreeBuilder
         }
 
         $collectionTree = $structure->in($site);
-        if (! $collectionTree) {
+        if ($collectionTree === null) {
             $output->writeln("<comment>No tree exists for '$collectionHandle' in site '$site'. Creating a new one.</comment>");
             $collectionTree = $structure->makeTree(
                 $site,
@@ -592,7 +592,7 @@ class TreeBuilder
 
         // Get collection to check if it's dated
         $collection = Collection::findByHandle($collectionHandle);
-        $isDated = $collection !== null && $collection->dated();
+        $isDated = $collection !== null && $collection->dated() === true;
 
         // Get paths index to determine canonical paths
         // The entries store and its collection stores always carry these methods, so the

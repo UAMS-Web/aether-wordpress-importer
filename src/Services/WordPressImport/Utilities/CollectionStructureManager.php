@@ -38,7 +38,7 @@ class CollectionStructureManager
         // Check if collection exists and has a structure
         if (
             $collection !== null
-            && $collection->hasStructure()
+            && $collection->hasStructure() === true
         ) {
             $rawStructure = $collection->structure();
 

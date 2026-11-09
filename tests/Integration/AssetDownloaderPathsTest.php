@@ -394,9 +394,7 @@ function assetDownloaderPathsWav(): string
  */
 function assetDownloaderPathsPng(): string
 {
-    $png = \base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', true);
-
-    return \is_string($png) ? $png : '';
+    return \base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', true);
 }
 
 beforeEach(function (): void {

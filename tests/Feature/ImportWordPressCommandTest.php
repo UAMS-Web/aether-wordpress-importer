@@ -1072,7 +1072,7 @@ it('imports a page featured image onto featured_image_16_9 with uploads enabled'
     // ---
     Http::fake([
         'https://www.w3.org/*' => Http::response(
-            (string) \base64_decode(
+            \base64_decode(
                 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
                 true
             ),
