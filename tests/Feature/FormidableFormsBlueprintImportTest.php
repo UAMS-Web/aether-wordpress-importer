@@ -318,6 +318,57 @@ it('maps Formidable Forms field attributes onto Statamic blueprint fields', func
     }
 })->group('field-attributes', 'field-options-mapping');
 
+it('writes a Formidable Forms address State subfield under the handle its preset selects', function (?string $addressType, string $presetHandle, string $otherHandle): void {
+    // The State subfield has one handle per preset, picked by the host app's
+    // `Address` fieldtype from the preset `address_type` translates to (#496).
+    $fieldOptions = ['state_desc' => 'State / Province', 'placeholder' => ['state' => 'Region']];
+    if ($addressType !== null) {
+        $fieldOptions['address_type'] = $addressType;
+    }
+
+    $fieldData = [
+        'id' => '123',
+        'field_key' => 'zzz999',
+        'name' => 'Mailing Address',
+        'description' => '',
+        'type' => 'address',
+        'default_value' => '{"state":"Arkansas"}',
+        'field_order' => '1',
+        'form_id' => '999',
+        'required' => '0',
+        'options' => '',
+        'field_options' => (string) \json_encode($fieldOptions),
+    ];
+
+    $fieldConfig = formidableInvokeCreateBlueprintField(
+        new FormBlueprintCreator,
+        $fieldData,
+        [$fieldData]
+    );
+
+    // The label lands under the preset's handle, and under neither the canonical
+    // handle nor the other preset's.
+    expect($fieldConfig[$presetHandle.'_label'] ?? null)->toBe('State / Province')
+        ->and($fieldConfig)->not->toHaveKey('state_province_region_label')
+        ->and($fieldConfig)->not->toHaveKey($otherHandle.'_label');
+
+    // Only the international State subfield is text, so only it takes a
+    // placeholder and the default state name.
+    if ($presetHandle === 'state_province_region_international') {
+        expect($fieldConfig[$presetHandle.'_placeholder'] ?? null)->toBe('Region')
+            ->and($fieldConfig[$presetHandle.'_default'] ?? null)->toBe('Arkansas');
+    } else {
+        expect($fieldConfig)->not->toHaveKey($presetHandle.'_placeholder')
+            ->and($fieldConfig)->not->toHaveKey($presetHandle.'_default');
+    }
+})->with([
+    'international' => ['international', 'state_province_region_international', 'state_province_region_american'],
+    'europe' => ['europe', 'state_province_region_international', 'state_province_region_american'],
+    'no address_type' => [null, 'state_province_region_international', 'state_province_region_american'],
+    'us' => ['us', 'state_province_region_american', 'state_province_region_international'],
+    'generic' => ['generic', 'state_province_region_american', 'state_province_region_international'],
+])->group('field-attributes', 'field-options-mapping');
+
 it('structures the field options mapping array with a statamic attribute per entry', function (): void {
     // Get the field options mapping
     $fieldOptionsMapping = FieldtypeMapping::getFieldOptionsMapping();
@@ -3188,6 +3239,7 @@ function formidableAttributeMappingProvider(): array
                         'type' => 'address',
                         'display' => 'Test Field',
                         'preset' => 'international',
+                        'city_label' => 'City',
                     ],
                 ],
             ],
@@ -3211,6 +3263,7 @@ function formidableAttributeMappingProvider(): array
                         'type' => 'address',
                         'display' => 'Test Field',
                         'preset' => 'international',
+                        'country_label' => 'Country',
                     ],
                 ],
             ],
@@ -4677,6 +4730,7 @@ function formidableAttributeMappingProvider(): array
                         'type' => 'address',
                         'display' => 'Test Field',
                         'preset' => 'international',
+                        'street_address_label' => 'Street Address',
                     ],
                 ],
             ],
@@ -4700,6 +4754,7 @@ function formidableAttributeMappingProvider(): array
                         'type' => 'address',
                         'display' => 'Test Field',
                         'preset' => 'international',
+                        'address_line_2_label' => 'Apt/Unit',
                     ],
                 ],
             ],
@@ -5686,6 +5741,7 @@ function formidableAttributeMappingProvider(): array
                         'type' => 'address',
                         'display' => 'Test Field',
                         'preset' => 'international',
+                        'state_province_region_international_label' => 'State/Province',
                     ],
                 ],
             ],
@@ -5932,6 +5988,7 @@ function formidableAttributeMappingProvider(): array
                         'type' => 'address',
                         'display' => 'Test Field',
                         'preset' => 'international',
+                        'postal_code_label' => 'ZIP/Postal',
                     ],
                 ],
             ],
