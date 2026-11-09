@@ -148,6 +148,22 @@ it('uses the handle the host fieldtype gives for the preset', function (
     'an empty preset' => [['preset' => ''], [], ''],
 ]);
 
+it('writes the State subfield settings with the preset once when the host handle carries it (#497)', function (
+    string $addressType,
+    string $hostHandle,
+    array $expected
+): void {
+    FormsSubfieldRecordingFieldtype::$handle = $hostHandle;
+    $state = ['id' => '1.4', 'label' => 'State / Province', 'customLabel' => 'CL', 'placeholder' => 'PH', 'defaultValue' => 'DV', 'isHidden' => true];
+
+    expect(FormsSubfieldHostMapping::mapSubfieldAttributes('address', $state, ['id' => 1, 'type' => 'address', 'label' => 'Address', 'addressType' => $addressType], 'gravity-forms'))->toBe($expected);
+})->with([
+    'a US state' => ['us', 'state_province_region_american', ['state_province_region_american_label' => 'CL', 'state_province_region_american_placeholder' => 'PH', 'state_province_region_american_include' => false]],
+    'a Canadian province' => ['canadian', 'state_province_region_canadian', ['state_province_region_canadian_label' => 'CL', 'state_province_region_canadian_placeholder' => 'PH', 'state_province_region_canadian_default' => 'DV', 'state_province_region_canadian_include' => false]],
+    'an international region' => ['international', 'state_province_region_international', ['state_province_region_international_label' => 'CL', 'state_province_region_international_placeholder' => 'PH', 'state_province_region_international_default' => 'DV', 'state_province_region_international_include' => false]],
+    'a host handle without the preset, which keeps it' => ['canadian', 'state_province_region', ['state_province_region_canadian_label' => 'CL', 'state_province_region_canadian_placeholder' => 'PH', 'state_province_region_canadian_default' => 'DV', 'state_province_region_canadian_include' => false]],
+]);
+
 it('falls back to the mapping handle when the host fieldtype gives none', function (
     mixed $handle
 ): void {
