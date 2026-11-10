@@ -14,9 +14,9 @@ uses(TestCase::class);
  * `App\Fieldtypes\Address::getPresetSpecificSubfieldHandle()` which State subfield
  * to write to, passing the preset `getStatamicPresetValue()` reads from the
  * Gravity Forms `addressType`. That lookup runs only when the host fieldtype
- * class exists, so these cases need the booted app. They assert the handle each
- * key is written under, not the full key: the State keys repeat the preset in the
- * host app (#497), and these cases pin the handle, not that defect.
+ * class exists, so these cases need the booted app. They assert the full keys:
+ * the preset-specific handle already ends with the preset, so the mapping's
+ * `[#subfield]_[#preset]_*` keys carry it once (#497).
  *
  * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/GravityFormsAddressSubfieldHandleTest.php
  */
@@ -47,9 +47,9 @@ it('resolves the host Address fieldtype for a Gravity Forms address', function (
         ->toBe('App\\Fieldtypes\\Address');
 });
 
-it('writes the State subfield under the handle for the Gravity Forms address type', function (
+it('writes the State subfield settings under the preset handle once (#497)', function (
     string $addressType,
-    string $expectedHandle
+    array $expected
 ): void {
     $parent = [
         'id' => 67,
@@ -62,19 +62,28 @@ it('writes the State subfield under the handle for the Gravity Forms address typ
         'label' => gravityStateSubfieldLabel(),
         'customLabel' => 'Foo State',
         'placeholder' => 'Bar State',
+        'defaultValue' => 'Baz State',
+        'isHidden' => true,
     ];
 
-    $keys = \array_map(
-        strval(...),
-        \array_keys(FieldtypeMapping::mapSubfieldAttributes('address', $state, $parent, 'gravity-forms', [$parent]))
-    );
-
-    expect($keys)->not->toBeEmpty();
-    foreach ($keys as $key) {
-        expect($key)->toStartWith($expectedHandle.'_');
-    }
+    expect(FieldtypeMapping::mapSubfieldAttributes('address', $state, $parent, 'gravity-forms', [$parent]))
+        ->toBe($expected);
 })->with([
-    'us, which the mapping excludes from the field config' => ['us', 'state_province_region_american'],
-    'canadian' => ['canadian', 'state_province_region_canadian'],
-    'international' => ['international', 'state_province_region_international'],
+    'us, which the mapping excludes from the default' => ['us', [
+        'state_province_region_american_label' => 'Foo State',
+        'state_province_region_american_placeholder' => 'Bar State',
+        'state_province_region_american_include' => false,
+    ]],
+    'canadian' => ['canadian', [
+        'state_province_region_canadian_label' => 'Foo State',
+        'state_province_region_canadian_placeholder' => 'Bar State',
+        'state_province_region_canadian_default' => 'Baz State',
+        'state_province_region_canadian_include' => false,
+    ]],
+    'international' => ['international', [
+        'state_province_region_international_label' => 'Foo State',
+        'state_province_region_international_placeholder' => 'Bar State',
+        'state_province_region_international_default' => 'Baz State',
+        'state_province_region_international_include' => false,
+    ]],
 ]);

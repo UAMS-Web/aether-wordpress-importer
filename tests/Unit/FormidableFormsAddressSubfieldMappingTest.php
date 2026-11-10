@@ -17,11 +17,24 @@ declare(strict_types=1);
  * the State subfield keeps its canonical handle. The host-app half is
  * `FormidableFormsBlueprintImportTest` in `uams-statamic`.
  *
+ * The American State and the Country subfields are selects keyed by code, so
+ * their defaults are translated from the stored name through
+ * `AddressChoiceCodes`, and a name with no code is dropped and reported (#510).
+ *
  * @command  php vendor/bin/pest tests/Unit/FormidableFormsAddressSubfieldMappingTest.php
  */
 
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormBlueprintCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+
+beforeEach(function (): void {
+    ImportWarningManager::clearWarnings();
+});
+
+afterEach(function (): void {
+    ImportWarningManager::clearWarnings();
+});
 
 /**
  * Map a Formidable Forms field's subfields through the blueprint creator.
@@ -40,8 +53,41 @@ function mapFormidableAddressSubfields(
     )->invoke(
         $blueprintCreator,
         $field,
-        'formidable-forms'
+        'formidable-forms',
+        [],
+        'Contact',
+        'Mailing Address',
+        '7'
     );
+}
+
+/**
+ * Get the unmatched address default warnings recorded so far.
+ *
+ * @return mixed The recorded warnings
+ */
+function unmatchedAddressDefaultWarnings(): mixed
+{
+    return ImportWarningManager::getWarningsByCategory('forms')['unmatched_address_defaults'] ?? [];
+}
+
+/**
+ * Build a Formidable Forms address field with the given preset and defaults.
+ *
+ * @param  string  $addressType  The Formidable Forms `address_type` option
+ * @param  string  $defaultValue  The `default_value` JSON object
+ * @return array<string, string> The field data
+ */
+function formidableAddressWithDefaults(
+    string $addressType,
+    string $defaultValue
+): array {
+    return [
+        'type' => 'address',
+        'name' => 'Mailing Address',
+        'field_options' => '{"address_type":"'.$addressType.'"}',
+        'default_value' => $defaultValue,
+    ];
 }
 
 it('reads the address preset from address_type through its translation', function (array $field, string $preset): void {
@@ -65,14 +111,16 @@ it('maps an American address the way the exports carry one', function (): void {
         'default_value' => '{"line1":"","line2":"","city":"","state":"Arkansas","zip":"","country":"United States"}',
     ];
 
-    // The state name matches no state-code choice and the country name no country
-    // code, so neither default is written.
+    // The state name is written as its code. The host app hides the Country
+    // subfield on an American address, so no country default is written.
     expect(mapFormidableAddressSubfields($field))->toBe([
         'street_address_label' => 'Street Address',
         'address_line_2_label' => 'Address Line 2',
         'state_province_region_label' => 'State / Province',
+        'state_province_region_default' => 'AR',
         'postal_code_label' => 'ZIP / Postal Code',
-    ]);
+    ])
+        ->and(unmatchedAddressDefaultWarnings())->toBe([]);
 });
 
 it('maps every subfield description, placeholder and default of an international address', function (): void {
@@ -83,7 +131,8 @@ it('maps every subfield description, placeholder and default of an international
         'default_value' => '{"line1":"D1","line2":"D2","city":"D3","state":"D4","zip":"D5","country":"D6"}',
     ];
 
-    // The country subfield is a select keyed by code, so it takes its label only.
+    // The country subfield is a select keyed by code, and `D6` names no country,
+    // so it takes its label only and the dropped default is reported.
     expect(mapFormidableAddressSubfields($field))->toBe([
         'street_address_label' => 'Line 1',
         'street_address_placeholder' => 'P1',
@@ -101,8 +150,47 @@ it('maps every subfield description, placeholder and default of an international
         'postal_code_placeholder' => 'P5',
         'postal_code_default' => 'D5',
         'country_label' => 'Nation',
-    ]);
+    ])
+        ->and(unmatchedAddressDefaultWarnings())->toBe([[
+            'form_id' => '7',
+            'form_title' => 'Contact',
+            'field_label' => 'Mailing Address',
+            'subfield' => 'country',
+            'default' => 'D6',
+            'consequence' => 'the subfield imported with no default',
+        ]]);
 });
+
+it('writes an address default state and country as their choice codes', function (string $addressType, string $defaultValue, array $expected): void {
+    expect(mapFormidableAddressSubfields(formidableAddressWithDefaults($addressType, $defaultValue)))->toBe($expected)
+        ->and(unmatchedAddressDefaultWarnings())->toBe([]);
+})->with([
+    'us state' => ['us', '{"state":"Arkansas"}', ['state_province_region_default' => 'AR']],
+    'generic state' => ['generic', '{"state":"District of Columbia"}', ['state_province_region_default' => 'DC']],
+    'us state already a code' => ['us', '{"state":"AR"}', ['state_province_region_default' => 'AR']],
+    'international country' => ['international', '{"country":"United States"}', ['country_default' => 'US']],
+    'international country the host offers as XK' => ['international', '{"country":"Kosovo"}', ['country_default' => 'XK']],
+    'international state keeps its text' => ['international', '{"state":"Arkansas"}', ['state_province_region_default' => 'Arkansas']],
+    'us country is not written' => ['us', '{"country":"United States"}', []],
+    'us country with no code is not written or reported' => ['us', '{"country":"Narnia"}', []],
+]);
+
+it('drops and reports an address default with no choice code', function (string $addressType, string $defaultValue, string $subfield, mixed $name): void {
+    expect(mapFormidableAddressSubfields(formidableAddressWithDefaults($addressType, $defaultValue)))->toBe([])
+        ->and(unmatchedAddressDefaultWarnings())->toBe([[
+            'form_id' => '7',
+            'form_title' => 'Contact',
+            'field_label' => 'Mailing Address',
+            'subfield' => $subfield,
+            'default' => $name,
+            'consequence' => 'the subfield imported with no default',
+        ]]);
+})->with([
+    'unknown state' => ['us', '{"state":"Narnia"}', 'state', 'Narnia'],
+    'armed forces region' => ['us', '{"state":"Armed Forces Europe"}', 'state', 'Armed Forces Europe'],
+    'unknown country' => ['international', '{"country":"Narnia"}', 'country', 'Narnia'],
+    'state that is not a string' => ['us', '{"state":true}', 'state', true],
+]);
 
 it('writes an address default and placeholder per subfield, never on the field itself', function (): void {
     // Before #496 the field-level mappings wrote the whole default JSON object as
@@ -132,5 +220,6 @@ it('maps no subfields for an address with nothing set, or for another fieldtype'
 })->with([
     'bare address' => [['type' => 'address', 'name' => 'Address']],
     'undecodable options' => [['type' => 'address', 'name' => 'Address', 'field_options' => '{', 'default_value' => '{']],
+    'options that are not a JSON string' => [['type' => 'address', 'name' => 'Address', 'field_options' => ['line1_desc' => 'Street Address']]],
     'text field with a description option' => [['type' => 'text', 'name' => 'Name', 'field_options' => '{"line1_desc":"Street Address"}']],
 ]);
