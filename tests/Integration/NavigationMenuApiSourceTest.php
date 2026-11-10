@@ -9,6 +9,7 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
@@ -27,11 +28,22 @@ use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
+    // The file-sourced run's login check goes through the egress guard, which resolves the
+    // export's host before sending; answer for `example.test` here so no DNS lookup is made
+    OutboundUrlGuard::resolveUsing(
+        static fn (string $host, int $type): array => $type === DNS_A
+            ? ['93.184.216.34']
+            : []
+    );
+
     $this->workingDirectory = \sys_get_temp_dir().\DIRECTORY_SEPARATOR.\uniqid('nav_', true);
     \mkdir($this->workingDirectory);
 });
 
 afterEach(function (): void {
+    // Restore the system resolver, or the fake leaks into every later test
+    OutboundUrlGuard::resolveUsing(null);
+
     $entries = \glob($this->workingDirectory.\DIRECTORY_SEPARATOR.'*');
 
     foreach ($entries === false ? [] : $entries as $entry) {
@@ -256,6 +268,9 @@ it('skips when the assigned menu is absent from the export', function (): void {
 
 it('keeps the operator prompt and its guidance on a file-sourced run', function (): void {
     // The constraint the prompt exists for is real for WXR, so this path must not change.
+    // The guidance asks the export's login page whether it answers; answer here rather than
+    // let the check wait out its timeout against a host this suite never reaches
+    Http::fake(['*' => Http::response('', 404)]);
     $selector = new NavigationMenuSelector;
     $selector->clearMigrationApiSource();
 

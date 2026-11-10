@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use SimpleXMLElement;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -14,7 +13,9 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Migra
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\GuardedRedirectWalk;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
@@ -574,22 +575,28 @@ class NavigationMenuSelector
     /**
      * Check if UAMS login URL is accessible by making an HTTP request.
      *
+     * The URL is built from the export's `<wp:base_blog_url>`, which is as attacker-controllable
+     * as any asset URL in the WXR, so the request goes through the same guarded walk every other
+     * fetch of a WXR-supplied URL uses: a non-public host is refused before anything is sent, and
+     * each redirect hop is re-checked against {@see OutboundUrlGuard} instead of being followed
+     * automatically.
+     *
      * @param  string  $uamsLoginUrl  The UAMS login URL to test
      * @return bool True if the URL returns 200, false otherwise
      */
     private function isUamsLoginAccessible(
         string $uamsLoginUrl
     ): bool {
-        try {
-            // Make HTTP GET request to test UAMS login URL accessibility
-            $response = Http::timeout(10)
-                ->get($uamsLoginUrl);
+        // Ten seconds for the whole chain, as the unguarded request allowed. A refused hop, a
+        // timeout or a connection error all end the walk with null, and an unreachable login
+        // page is simply treated as inaccessible
+        $result = new GuardedRedirectWalk(
+            timeoutSeconds: 10,
+            wantsBody: true,
+        )->follow($uamsLoginUrl);
 
-            // Return true only if we get a 200 response
-            return $response->status() === 200;
-        } catch (\Exception) {
-            // If any exception occurs (timeout, connection error, etc.), consider it inaccessible
-            return false;
-        }
+        // Return true only if the terminal hop answered 200
+        return $result !== null
+            && $result['response']->status() === 200;
     }
 }
