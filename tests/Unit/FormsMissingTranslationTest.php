@@ -20,6 +20,7 @@ declare(strict_types=1);
  * without the original field, so a `#not_set` entry always matches there: the
  * data lacks the attribute. The cases that show which entry opened the pass
  * therefore carry a `#not_set` entry as well, and read `NS` when the pass ran.
+ * A `#not_set` entry writes nothing for an empty target (#458).
  *
  * The mappings here are written for each case rather than taken from the
  * shipped tables, so each case shows one rule.
@@ -148,7 +149,7 @@ it('prefers a table by another attribute and does not fall back from one', funct
 
 it('writes to the target the mapping names', function (): void {
     expect(mapFormsMissingTranslation(['#not_set' => 'NS'], [], null, null, ['default' => 'b']))->toBe(['b' => 'NS'])
-        ->and(mapFormsMissingTranslation(['#not_set' => 'NS'], [], null, null, ''))->toBe(['' => 'NS'])
+        ->and(mapFormsMissingTranslation(['#not_set' => 'NS'], [], null, null, ''))->toBe([])
         ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => ['o' => ['#not_set' => 'B']]], [], null, null, ['default' => 'b']))->toBe([])
         ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => ['o' => ['#not_set' => 'B']]], [], null, null, ''))->toBe([]);
 });
