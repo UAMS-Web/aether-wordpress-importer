@@ -897,7 +897,7 @@ describe('what it hands out', function (): void {
     it('builds a creator for each type it supports', function (string $type, string $class): void {
         $creator = entryCreatorRig()->creator->creatorFor($type);
 
-        expect($creator)->toBeInstanceOf($class)
+        expect($creator::class)->toBe($class)
             ->and($creator->hasShowPeople())->toBeFalse();
     })->with([
         'page' => ['page', PageEntryCreator::class],
