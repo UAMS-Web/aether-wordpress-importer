@@ -15,18 +15,20 @@ declare(strict_types=1);
  * attribute the original field's options do not set. A line-coverage run left
  * most of this unexecuted.
  *
- * A `#not_set` entry of `value_translation` is also written by the later pass
- * over missing attributes, which ignores the handle, `deduplicate_values` and
- * `value_transformations`; where the two write one key, the later write wins.
- * The cases that show the earlier write's handling therefore map through a
- * subfield handle, and the cases that pin both writes are replaced by #458.
+ * A `#not_set` entry of a plain `value_translation` table is written once,
+ * by the pass over the original field data, with the subfield handle,
+ * `deduplicate_values` and `value_transformations` applied (#458). The later
+ * pass over missing attributes leaves that write in place, and an empty target
+ * writes nothing in either pass.
  *
  * The mappings here are written for each case rather than taken from the
- * shipped tables, so each case shows one rule.
+ * shipped tables, so each case shows one rule, except for the cases that map
+ * through the two shipped tables with a `#not_set` translation.
  *
  * @command  php vendor/bin/pest tests/Unit/FormsMissingAttributeTest.php
  */
 
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping as FormidableFormsFieldtypeMapping;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
 
 /**
@@ -95,22 +97,23 @@ it('writes a #not_set translation for an option the original field does not set'
     'an unset option' => [['statamic_attribute' => 'a', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, null, [], ['a' => 'M']],
     'a set option' => [['statamic_attribute' => 'a', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_SET, null, [], []],
     'an empty translation' => [['statamic_attribute' => 'x_*', 'value_translation' => ['#not_set' => '']], FORMS_MA_UNSET, 'hd', [], []],
-    'a handle' => [['statamic_attribute' => 'x_*', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 'M', 'x_*' => 'M']],
+    'a handle' => [['statamic_attribute' => 'x_*', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 'M']],
     'no handle' => [['statamic_attribute' => 'x_*', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, null, [], ['x_*' => 'M']],
     'an empty handle' => [['statamic_attribute' => 'x_*', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, '', [], ['x_*' => 'M']],
-    'a default target' => [['statamic_attribute' => ['default' => 'x_*'], 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 'M', 'x_*' => 'M']],
-    'an empty target' => [['statamic_attribute' => '', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], ['' => 'M']],
-    'deduplicated' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => true, 'value_translation' => ['#not_set' => ['x', 'x', 'y']]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => ['x', 'y'], 'x_*' => ['x', 'x', 'y']]],
-    'deduplicate not true' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => 1, 'value_translation' => ['#not_set' => ['x', 'x', 'y']]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => ['x', 'x', 'y'], 'x_*' => ['x', 'x', 'y']]],
-    'deduplicating a string' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => true, 'value_translation' => ['#not_set' => 'x']], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 'x', 'x_*' => 'x']],
-    'deduplicated without a handle' => [['statamic_attribute' => 'a', 'deduplicate_values' => true, 'value_translation' => ['#not_set' => ['x', 'x', 'y']]], FORMS_MA_UNSET, null, [], ['a' => ['x', 'x', 'y']]],
-    'transformed' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => '5', 'x_*' => 5]],
-    'transformed by a nested table' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['based_on_attribute_value' => ['as_numeric_string' => true]]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => '5', 'x_*' => 5]],
-    'deduplicated then transformed' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => true, 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => [1, 1, 2]]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => ['1', '2'], 'x_*' => [1, 1, 2]]],
-    'no transformation for empty data' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => ''], ['x_hd' => 5, 'x_*' => 5]],
-    'no transformation without data' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 5, 'x_*' => 5]],
-    'a transformation that is not a table' => [['statamic_attribute' => 'x_*', 'value_transformations' => 'x', 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5, 'x_*' => 5]],
-    'a default transformation only' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['default' => ['as_numeric_string' => true]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5, 'x_*' => 5]],
+    'a default target' => [['statamic_attribute' => ['default' => 'x_*'], 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 'M']],
+    'an empty target' => [['statamic_attribute' => '', 'value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], []],
+    'deduplicated' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => true, 'value_translation' => ['#not_set' => ['x', 'x', 'y']]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => ['x', 'y']]],
+    'deduplicate not true' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => 1, 'value_translation' => ['#not_set' => ['x', 'x', 'y']]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => ['x', 'x', 'y']]],
+    'deduplicating a string' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => true, 'value_translation' => ['#not_set' => 'x']], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 'x']],
+    'deduplicated without a handle' => [['statamic_attribute' => 'a', 'deduplicate_values' => true, 'value_translation' => ['#not_set' => ['x', 'x', 'y']]], FORMS_MA_UNSET, null, [], ['a' => ['x', 'y']]],
+    'transformed' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => '5']],
+    'transformed by a nested table' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['based_on_attribute_value' => ['as_numeric_string' => true]]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => '5']],
+    'transformed without a handle' => [['statamic_attribute' => 'a', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, null, ['o' => 'v'], ['a' => '5']],
+    'deduplicated then transformed' => [['statamic_attribute' => 'x_*', 'deduplicate_values' => true, 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => [1, 1, 2]]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => ['1', '2']]],
+    'no transformation for empty data' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => ''], ['x_hd' => 5]],
+    'no transformation without data' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 5]],
+    'a transformation that is not a table' => [['statamic_attribute' => 'x_*', 'value_transformations' => 'x', 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5]],
+    'a default transformation only' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['default' => ['as_numeric_string' => true]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5]],
     'nothing to map to' => [['value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], []],
     'only other field values' => [['statamic_other_field_value' => ['f' => 1]], FORMS_MA_UNSET, 'hd', [], []],
 ]);
@@ -119,8 +122,44 @@ it('skips an excluded fieldtype when the original field is given', function (): 
     $config = ['statamic_attribute' => 'x_*', 'exclude_fieldtypes' => ['radio'], 'value_translation' => ['#not_set' => 'M']];
 
     expect(mapFormsMissingAttribute($config, 'radio', FORMS_MA_UNSET, [], 'hd'))->toBe([])
-        ->and(mapFormsMissingAttribute($config, 'select', FORMS_MA_UNSET, [], 'hd'))->toBe(['x_hd' => 'M', 'x_*' => 'M']);
+        ->and(mapFormsMissingAttribute($config, 'select', FORMS_MA_UNSET, [], 'hd'))->toBe(['x_hd' => 'M']);
 });
+
+it('writes nothing for an empty target', function (
+    array $translation,
+    ?array $original
+): void {
+    expect(mapFormsMissingAttribute(['statamic_attribute' => '', 'value_translation' => $translation], null, $original))->toBe([])
+        ->and(mapFormsMissingAttribute(['statamic_attribute' => 'a', 'value_translation' => $translation], null, $original))->not->toBe([]);
+})->with([
+    'a plain table, no original field' => [['#not_set' => 'M'], null],
+    'a default table' => [['default' => ['#not_set' => 'D']], FORMS_MA_UNSET],
+    'a default table, no original field' => [['default' => ['#not_set' => 'D']], null],
+]);
+
+/*
+ * The shipped tables with a `#not_set` translation are search-and-replace
+ * lists, which the pass over the original field data does not read, so a
+ * missing attribute maps through them as it did before #458.
+ */
+it('maps a missing attribute through the shipped #not_set translations', function (
+    string $class,
+    string $attribute,
+    mixed $config,
+    string $fieldtype,
+    ?array $original,
+    ?string $handle,
+    array $expected
+): void {
+    expect(new ReflectionMethod($class, 'mapAttributesFromMapping')->invoke(null, [], [$attribute => $config], [], $handle, $fieldtype, $original))->toBe($expected);
+})->with([
+    'Gravity Forms rcwdupload_repeater' => [FieldtypeMapping::class, 'rcwdupload_repeater', FieldtypeMapping::getFieldAttributeMapping()['rcwdupload_repeater'], 'rcwdupload', FORMS_MA_UNSET, null, ['max_files' => 1]],
+    'Gravity Forms rcwdupload_repeater, a handle' => [FieldtypeMapping::class, 'rcwdupload_repeater', FieldtypeMapping::getFieldAttributeMapping()['rcwdupload_repeater'], 'rcwdupload', FORMS_MA_UNSET, 'hd', ['max_files' => 1]],
+    'Gravity Forms rcwdupload_repeater, no original field' => [FieldtypeMapping::class, 'rcwdupload_repeater', FieldtypeMapping::getFieldAttributeMapping()['rcwdupload_repeater'], 'rcwdupload', null, null, ['max_files' => 1]],
+    'Formidable Forms address_type' => [FormidableFormsFieldtypeMapping::class, 'address_type', FormidableFormsFieldtypeMapping::getFieldOptionsMapping()['address_type'], 'address', FORMS_MA_UNSET, null, ['preset' => 'international']],
+    'Formidable Forms address_type, a handle' => [FormidableFormsFieldtypeMapping::class, 'address_type', FormidableFormsFieldtypeMapping::getFieldOptionsMapping()['address_type'], 'address', FORMS_MA_UNSET, 'hd', ['preset' => 'international']],
+    'Formidable Forms address_type, no original field' => [FormidableFormsFieldtypeMapping::class, 'address_type', FormidableFormsFieldtypeMapping::getFieldOptionsMapping()['address_type'], 'address', null, null, ['preset' => 'international']],
+]);
 
 it('writes #not_set other field values for an option the original field does not set', function (
     array $table,
