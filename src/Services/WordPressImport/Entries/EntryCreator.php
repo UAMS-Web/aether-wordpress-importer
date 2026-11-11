@@ -437,24 +437,6 @@ class EntryCreator
     }
 
     /**
-     * Checks if a new creator for the content type has seen show-people shortcodes.
-     *
-     * Delegates to the appropriate creator's hasShowPeople method based on the
-     * content type. The creator is built for this call and has imported nothing,
-     * so this says nothing about an export's content.
-     *
-     * @param  string  $contentType  The WordPress content type (e.g., 'page', 'uamspeople')
-     * @return bool True if the new creator has seen show-people shortcodes, false otherwise
-     */
-    public function hasShowPeople(
-        string $contentType
-    ): bool {
-        $creator = $this->getCreator($contentType);
-
-        return $creator->hasShowPeople();
-    }
-
-    /**
      * Imports table entries for TablePress content.
      *
      * For content types like 'page' or 'post', imports 'tablepress_table' items

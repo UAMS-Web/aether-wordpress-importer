@@ -446,11 +446,9 @@ final class EntryCreatorTestStubCreator extends BaseEntryCreator
      * Build the stub.
      *
      * @param  array<int|string, mixed>  $returns  What createEntries() returns
-     * @param  bool  $showPeople  What hasShowPeople() returns
      */
     public function __construct(
-        private readonly array $returns = [],
-        private readonly bool $showPeople = false
+        private readonly array $returns = []
     ) {}
 
     /**
@@ -496,11 +494,11 @@ final class EntryCreatorTestStubCreator extends BaseEntryCreator
     /**
      * Whether show-people was seen.
      *
-     * @return bool As built
+     * @return bool Never
      */
     public function hasShowPeople(): bool
     {
-        return $this->showPeople;
+        return false;
     }
 
     /**
@@ -576,6 +574,17 @@ final class EntryCreatorTestRouter extends EntryCreator
     protected function getCreator(string $contentType): BaseEntryCreator
     {
         return $this->stub ?? parent::getCreator($contentType);
+    }
+
+    /**
+     * Reach the creator for a type from a test.
+     *
+     * @param  string  $contentType  The content type
+     * @return BaseEntryCreator The creator
+     */
+    public function creatorFor(string $contentType): BaseEntryCreator
+    {
+        return $this->getCreator($contentType);
     }
 }
 
@@ -860,8 +869,7 @@ describe('what it hands out', function (): void {
     it('reports nothing from a creator it has just built', function (): void {
         $creator = entryCreatorRig()->creator;
 
-        expect($creator->hasShowPeople('page'))->toBeFalse()
-            ->and($creator->getPeopleGroups())->toBe([])
+        expect($creator->getPeopleGroups())->toBe([])
             ->and($creator->getPostCategories())->toBe([])
             ->and($creator->getPostTags())->toBe([])
             ->and($creator->getPageData())->toBe([]);
@@ -880,15 +888,27 @@ describe('what it hands out', function (): void {
     });
 
     it('refuses the knowledge base and an unknown type', function (string $type, string $message): void {
-        expect(fn (): bool => entryCreatorRig()->creator->hasShowPeople($type))->toThrow(Exception::class, $message);
+        expect(fn (): BaseEntryCreator => entryCreatorRig()->creator->creatorFor($type))->toThrow(Exception::class, $message);
     })->with([
         'the knowledge base' => ['kb', "KbEntryCreator should be used directly for 'kb' content type, not through EntryCreator::getCreator()"],
         'an unknown type' => ['nope', 'Unsupported content type: nope'],
     ]);
 
-    it('builds a creator for each type it supports', function (string $type): void {
-        expect(entryCreatorRig()->creator->hasShowPeople($type))->toBeFalse();
-    })->with(['page', 'post', 'uamspeople', 'tshowcase', 'tablepress_table', 'logo-list-item', 'advert', 'wp_block']);
+    it('builds a creator for each type it supports', function (string $type, string $class): void {
+        $creator = entryCreatorRig()->creator->creatorFor($type);
+
+        expect($creator)->toBeInstanceOf($class)
+            ->and($creator->hasShowPeople())->toBeFalse();
+    })->with([
+        'page' => ['page', PageEntryCreator::class],
+        'post' => ['post', PostEntryCreator::class],
+        'uamspeople' => ['uamspeople', PeopleEntryCreator::class],
+        'tshowcase' => ['tshowcase', PeopleEntryCreator::class],
+        'tablepress_table' => ['tablepress_table', TablePressEntryCreator::class],
+        'logo-list-item' => ['logo-list-item', LogoListItemEntryCreator::class],
+        'advert' => ['advert', AdvertEntryCreator::class],
+        'wp_block' => ['wp_block', ReusableBlockEntryCreator::class],
+    ]);
 });
 
 /**
@@ -1418,10 +1438,9 @@ describe('what it asks of the creator', function (): void {
 
     it('reports what the creator for each type reports', function (): void {
         $rig = entryCreatorRig();
-        $rig->creator->stub = new EntryCreatorTestStubCreator(showPeople: true);
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
 
-        expect($rig->creator->hasShowPeople('page'))->toBeTrue()
-            ->and($rig->creator->getPeopleGroups())->toBe(['faculty' => ['g']])
+        expect($rig->creator->getPeopleGroups())->toBe(['faculty' => ['g']])
             ->and($rig->creator->getPostCategories())->toBe(['news' => ['n']])
             ->and($rig->creator->getPostTags())->toBe(['fast' => ['f']]);
     });
