@@ -46,6 +46,15 @@ Two things cover the gap:
 - **A browser-driven check** against a running Control Panel (Playwright, where the repository
   declares it) for how Statamic renders its own components. The harness does not replace it.
 
+**Which stubs are read from Statamic and which are the harness's own assumption.** Only the
+`FieldtypeMixin` stand-in is read from a Statamic bundle (below). The rest are the harness's own
+assumptions about the props and events an add-on's markup relies on, written to be driven from a
+test: the `Button`, `Input`, `Textarea`, `Select`, `Switch` and `Combobox` stubs, the `Fieldtype`
+composition entry (its `use()` returns only `{ expose: {} }`) and `HasInputOptionsMixin`
+(`normalizeInputOptions()` accepts an options object, a list of strings or a list of
+`{ value, label }` or `{ key, label }`). None of them was compared with the real component, so a
+test that passes against one proves the add-on's wiring, not Statamic's rendering.
+
 The `FieldtypeMixin` stand-in was read from the `statamic/cms` v6.38.0 Control Panel bundle
 (`resources/dist/build/assets/index-*.js`, 2026-11-10). It is not the real mixin: re-read it when
 Statamic's major version changes.
@@ -61,6 +70,7 @@ pick them up. Copy each one without the suffix:
 | `statamic-harness.js.dist` | `resources/js/testing/statamic-harness.js` | Setup file: the stub registry, `FieldtypeMixin`, UI stubs, `stubCore()` and `stubUi()` |
 | `vitest.config.js.dist` | `vitest.config.js` (merge into an existing one) | `vue()` plugin, the stubs plugin, the `jsdom` environment, the setup file |
 | `likert-scale-fieldtype.test.js.dist` | beside the component, as `<Component>.test.js` | Worked test of a real fieldtype |
+| `statamic-harness-controls.test.js.dist` | `resources/js/testing/statamic-harness.test.js` | Controls for the default stubs: a click, `v-model` on `Input`, `Select`, `Switch` and `Combobox` |
 
 Then install the development dependencies:
 
@@ -86,11 +96,20 @@ npm install --save-dev vitest jsdom vue @vue/test-utils @vitejs/plugin-vue
 - **UI stubs render their attributes and slots.** Each carries `data-stub="<Name>"` and a
   `data-props` JSON attribute. `RadioGroup` and `Radio` are connected: clicking a `Radio` calls the
   group, which emits `update:modelValue`, so a test drives the DOM rather than the stub's internals.
-  `Input`, `Textarea` and `Select` forward `input` events as `update:modelValue`.
+  `Input` and `Textarea` forward `input` events, and `Select` and `Switch` forward `change` events,
+  as `update:modelValue`. `Button` forwards its click as `click`, so a parent's `@click` runs.
+- **A control reads its model whichever way the parent bound it.** `:model-value` and `v-model`
+  (which compiles to a `modelValue` prop plus an `onUpdate:modelValue` listener) both render.
+  `Select` renders its `options` as `<option>` elements. `Combobox` renders one button per option
+  through the `option` slot (`data-option="<value>"`), the `selected-option` slot once there is a
+  value (the listed option, or `{ value }` for a typed one), and emits `update:modelValue` on a
+  click; a test emits `update:open` on it to close it.
+- **`core` also stubs `Fieldtype`** (the composition-API entry a `<script setup>` fieldtype uses:
+  the mixin's `props` and `emits`) **and `HasInputOptionsMixin`** (`normalizeInputOptions()`).
 
 ## Adding a stub
 
-A component the harness does not stub (say `Combobox`) is added in the setup file when every test
+A component the harness does not stub (say `Card`) is added in the setup file when every test
 needs it, or per test file with `stubUi()` / `stubCore()`. Static `import` statements run before the
 body of a test file, so register the stub from a setup file, or load the component with a dynamic
 `import()` after calling it:
@@ -98,11 +117,11 @@ body of a test file, so register the stub from a setup file, or load the compone
 ```js
 import { builders, stubUi } from './testing/statamic-harness.js';
 
-stubUi('Combobox', builders.input('Combobox'));
+stubUi('Card', builders.plain('Card'));
 const { default: Component } = await import('./MyFieldtype.vue');
 ```
 
-Build the stub from `builders` (`plain`, `input`, `group`, `option`) where one has the right shape,
+Build the stub from `builders` (`plain`, `button`, `input`, `select`, `toggle`, `combobox`, `group`, `option`) where one has the right shape,
 and render only what the add-on's markup reads.
 
 ## Controls run on the worked test
@@ -118,6 +137,20 @@ Both were run on 2026-11-10 against `LikertScaleFieldtype.vue` from `aether-form
   it passed again.
 
 Re-run both when changing a stub, so a stub that stopped reflecting the component is noticed.
+
+The default stubs' own controls (`statamic-harness-controls.test.js.dist`) were run on 2026-11-11 under
+`vitest` 5.1.0 with `jsdom` and `@vue/test-utils` installed fresh in a scratch project (8 tests passed),
+on Windows 11 under Git Bash; Linux and macOS are not yet measured. Each of six changes to the
+harness turned exactly one test red, and restoring the harness turned all eight green:
+
+| Change to `statamic-harness.js` | Test that failed |
+| --- | --- |
+| `Button` stops emitting `click` | Button emits click |
+| `Input` reads only `:model-value` | Input renders a `v-model` value |
+| `Select` renders no `<option>` | Select renders its options |
+| `Switch` stops emitting on change | Switch renders a `v-model` boolean |
+| `Combobox` options stop emitting on click | Combobox renders the selected-option slot |
+| `Combobox` always renders the selected-option slot | Combobox renders the selected-option slot |
 
 ## Version pins
 
