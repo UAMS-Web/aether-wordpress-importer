@@ -26,6 +26,14 @@ jobs:
         with:
           coverage: pcov
 
+      # PCOV overrides zend_execute_ex, so a tracing JIT warns in every php child,
+      # including the ones a compile-cleanly test spawns. Turn it off for all of them.
+      - name: Disable the JIT for every php process
+        run: |
+          dir=$(php -r "echo PHP_CONFIG_FILE_SCAN_DIR;")
+          printf "opcache.jit=off\nopcache.jit_buffer_size=0\n" | sudo tee "$dir/99-no-jit.ini"
+          php -r "var_dump(ini_get('opcache.jit'));"
+
       - name: Record the platform and tool revisions
         run: |
           set -x
