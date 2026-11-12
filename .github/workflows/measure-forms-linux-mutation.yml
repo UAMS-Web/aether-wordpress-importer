@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
       - uses: ./.github/actions/setup
         with:
@@ -30,7 +32,8 @@ jobs:
           uname -a
           cat /etc/os-release
           git rev-parse HEAD
-          git diff --name-only 8fdf912e HEAD
+          git rev-parse HEAD^
+          git diff --name-only HEAD^ HEAD
           php -v
           php --ri pcov
           composer show pestphp/pest-plugin-mutate
