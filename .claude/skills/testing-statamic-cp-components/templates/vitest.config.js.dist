@@ -1,0 +1,17 @@
+// cspell:ignore Likert likert vitest Vitest vitejs jsdom
+import vue from '@vitejs/plugin-vue';
+import { configDefaults, defineConfig } from 'vitest/config';
+import statamicStubs from './resources/js/testing/statamic-stubs-plugin.js';
+
+// Vitest config for an add-on that tests its Control Panel components. Use `vue()` from
+// `@vitejs/plugin-vue` here, not the `statamic()` plugin from `@statamic/cms/vite-plugin`: that one
+// rewrites `vue` to `window.Vue`, which exists only in the Control Panel.
+export default defineConfig({
+    plugins: [vue(), statamicStubs({ sources: ['resources/js'] })],
+    test: {
+        include: ['resources/js/**/*.test.js'],
+        exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
+        environment: 'jsdom',
+        setupFiles: ['resources/js/testing/statamic-harness.js'],
+    },
+});

@@ -73,6 +73,8 @@ elit
 Encapsed
 endforeach
 esac
+# PHP function name (escapeshellarg), quoted in the synced pcov-setup skill
+escapeshellarg
 fatals
 fieldsets
 Fieldtype
@@ -145,6 +147,8 @@ methresearch
 microtime
 mimetypes
 minervakb
+# Shell command name (mktemp), quoted in the synced pcov-setup skill
+mktemp
 mrpunyapal
 MSYS
 multibyte

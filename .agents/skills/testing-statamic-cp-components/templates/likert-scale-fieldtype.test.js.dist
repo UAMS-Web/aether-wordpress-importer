@@ -1,0 +1,54 @@
+// cspell:ignore Likert likert vitest Vitest vitejs jsdom
+// Worked example: mounts a real fieldtype, `LikertScaleFieldtype.vue` from aether-form-settings,
+// and pins its rendered options and the value it passes to `update()`. Copy it beside the
+// component it tests and replace the component, props and assertions.
+import { mount } from '@vue/test-utils';
+import { describe, expect, it } from 'vitest';
+import LikertScaleFieldtype from './LikertScaleFieldtype.vue';
+
+const options = [
+    { value: 1, label: 'Disagree' },
+    { value: 2, label: 'Neutral' },
+    { value: 3, label: 'Agree' },
+];
+
+/** Mount with the props the Control Panel always passes; `handle` is required by the mixin. */
+function mountLikert(props = {}) {
+    return mount(LikertScaleFieldtype, {
+        props: { handle: 'rating', value: null, meta: { options }, ...props },
+    });
+}
+
+describe('LikertScaleFieldtype', () => {
+    it('renders one option per scale point, in order', () => {
+        const wrapper = mountLikert();
+
+        expect(wrapper.findAll('[data-stub="Radio"]').map((radio) => radio.text()))
+            .toEqual(['Disagree', 'Neutral', 'Agree']);
+    });
+
+    it('passes the clicked scale point to update()', async () => {
+        const wrapper = mountLikert();
+
+        await wrapper.findAll('[data-stub="Radio"]')[2].trigger('click');
+
+        expect(wrapper.emitted('update:value')).toEqual([[3]]);
+    });
+
+    it('keeps the other rows when one matrix row changes', async () => {
+        const wrapper = mountLikert({
+            value: { Speed: 1, Quality: 2 },
+            meta: { options, enable_multiple_rows: true, multiple_rows: ['Speed', 'Quality'] },
+        });
+
+        await wrapper.findAll('.likert-scale-row')[1].findAll('[data-stub="Radio"]')[2].trigger('click');
+
+        expect(wrapper.emitted('update:value')).toEqual([[{ Speed: 1, Quality: 3 }]]);
+    });
+
+    it('disables the options when the field is read only', () => {
+        const wrapper = mountLikert({ readOnly: true });
+
+        expect(wrapper.find('[data-stub="Radio"]').attributes('disabled')).toBeDefined();
+    });
+});
