@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - uses: ./.github/actions/setup
         with:
@@ -32,8 +32,8 @@ jobs:
           uname -a
           cat /etc/os-release
           git rev-parse HEAD
-          git rev-parse HEAD^
-          git diff --name-only HEAD^ HEAD
+          git rev-parse origin/main
+          git diff --name-only origin/main...HEAD
           php -v
           php --ri pcov
           composer show pestphp/pest-plugin-mutate
