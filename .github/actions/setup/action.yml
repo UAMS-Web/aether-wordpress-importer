@@ -39,7 +39,7 @@ runs:
         extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
         coverage: ${{ inputs.coverage }}
         tools: composer:v2
-        ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
+        ini-values: ${{ runner.os == 'Windows' && 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing, opcache.jit_max_root_traces=16384' || 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing' }}
 
     - name: Configure Composer GitHub token
       shell: bash
