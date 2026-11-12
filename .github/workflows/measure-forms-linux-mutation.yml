@@ -33,9 +33,10 @@ jobs:
           php --ini
           for f in $(php -r 'echo implode(" ", array_filter(array_merge([php_ini_loaded_file()], explode(",", (string) php_ini_scanned_files())), "strlen"));'); do
             f=$(echo "$f" | tr -d "[:space:]")
-            if grep -q "opcache.jit" "$f"; then echo "rewriting $f"; sudo sed -i -E "s/^(opcache.jit *= *).*/\1off/" "$f"; grep -n "opcache.jit" "$f"; fi
+            if grep -q "opcache.jit" "$f"; then echo "rewriting $f"; sudo sed -i -E -e "s/^(opcache.jit *= *).*/\1off/" -e "s/^(opcache.jit_buffer_size *= *).*/\10/" "$f"; grep -n "opcache.jit" "$f"; fi
           done
-          test "$(php -r 'echo ini_get("opcache.jit");' 2>/dev/null)" = off
+          php -r 'var_dump(ini_get("opcache.jit"), ini_get("opcache.jit_buffer_size"));'
+          ! php -r 'echo 1;' 2>&1 | grep -q "JIT is incompatible"
 
       - name: Record the platform and tool revisions
         run: |
