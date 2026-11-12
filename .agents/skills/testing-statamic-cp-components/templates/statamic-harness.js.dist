@@ -79,6 +79,32 @@ function plain(name, tag = 'div') {
     });
 }
 
+/** The model value, whichever spelling the parent used: `:model-value` or `v-model`. */
+function modelOf(attrs) {
+    return attrs['model-value'] ?? attrs.modelValue;
+}
+
+/** A button: renders its default slot (or its `text`) and forwards the click as `click`, so a parent's `@click` runs. */
+function button(name) {
+    return defineComponent({
+        name: `Stub${name}`,
+        inheritAttrs: false,
+        emits: ['click'],
+        render() {
+            return h(
+                'button',
+                {
+                    type: 'button',
+                    'data-stub': name,
+                    'data-props': JSON.stringify(this.$attrs),
+                    onClick: (event) => this.$emit('click', event),
+                },
+                this.$slots.default?.() ?? this.$attrs.text,
+            );
+        },
+    });
+}
+
 /** A text-like control: renders an element carrying its value and forwards typing as `update:modelValue`. */
 function input(name, tag = 'input') {
     return defineComponent({
@@ -86,14 +112,98 @@ function input(name, tag = 'input') {
         inheritAttrs: false,
         emits: ['update:modelValue'],
         render() {
-            const { 'model-value': modelValue, ...rest } = this.$attrs;
+            const rest = { ...this.$attrs };
+            delete rest['model-value'];
+            delete rest.modelValue;
 
             return h(tag, {
                 'data-stub': name,
                 'data-props': JSON.stringify(rest),
-                value: modelValue,
+                value: modelOf(this.$attrs),
                 onInput: (event) => this.$emit('update:modelValue', event.target.value),
             });
+        },
+    });
+}
+
+/** A select: renders its `options` as `<option>` elements and forwards a change as `update:modelValue`. */
+function select(name) {
+    return defineComponent({
+        name: `Stub${name}`,
+        inheritAttrs: false,
+        emits: ['update:modelValue'],
+        render() {
+            return h(
+                'select',
+                {
+                    'data-stub': name,
+                    'data-props': JSON.stringify(this.$attrs),
+                    value: modelOf(this.$attrs),
+                    onChange: (event) => this.$emit('update:modelValue', event.target.value),
+                },
+                (this.$attrs.options ?? []).map((option) => h('option', { value: option.value }, option.label)),
+            );
+        },
+    });
+}
+
+/** A switch: a checkbox that renders the model value and forwards a change as `update:modelValue`. */
+function toggle(name) {
+    return defineComponent({
+        name: `Stub${name}`,
+        inheritAttrs: false,
+        emits: ['update:modelValue'],
+        render() {
+            return h('input', {
+                type: 'checkbox',
+                'data-stub': name,
+                'data-props': JSON.stringify(this.$attrs),
+                checked: modelOf(this.$attrs) === true,
+                onChange: (event) => this.$emit('update:modelValue', event.target.checked),
+            });
+        },
+    });
+}
+
+/**
+ * A combobox: a search input, one button per option rendered through the `option` slot, and the
+ * `selected-option` slot, which renders only once there is a value (the listed option, or just
+ * `{ value }` for a typed one). Choosing an option emits `update:modelValue`; a test emits
+ * `update:open` on the component to close it.
+ */
+function combobox(name) {
+    return defineComponent({
+        name: `Stub${name}`,
+        inheritAttrs: false,
+        emits: ['update:modelValue', 'update:open'],
+        render() {
+            const options = this.$attrs.options ?? [];
+            const current = modelOf(this.$attrs);
+            const selected = current === null || current === undefined || current === ''
+                ? undefined
+                : (options.find((option) => option.value === current) ?? { value: current });
+
+            return h(
+                'div',
+                {
+                    'data-stub': name,
+                    'data-props': JSON.stringify(this.$attrs),
+                    'data-model-value': JSON.stringify(current ?? null),
+                },
+                [
+                    h('input', { ref: 'search', 'data-search': '' }),
+                    h('div', { 'data-selected': '' }, selected ? this.$slots['selected-option']?.({ option: selected }) : undefined),
+                    ...options.map((option) => h(
+                        'button',
+                        {
+                            type: 'button',
+                            'data-option': String(option.value),
+                            onClick: () => this.$emit('update:modelValue', option.value),
+                        },
+                        this.$slots.option?.(option),
+                    )),
+                ],
+            );
         },
     });
 }
@@ -152,12 +262,30 @@ function option(name) {
     });
 }
 
+/** Stand-in for `HasInputOptionsMixin`'s `normalizeInputOptions()`. */
+function normalizeInputOptions(options) {
+    if (Array.isArray(options)) {
+        return options.map((entry) => (entry !== null && typeof entry === 'object'
+            ? { value: entry.value ?? entry.key, label: entry.label ?? entry.value ?? entry.key }
+            : { value: entry, label: entry }));
+    }
+
+    return Object.entries(options ?? {}).map(([value, label]) => ({ value, label }));
+}
+
 const stubs = {
-    core: { FieldtypeMixin },
+    core: {
+        FieldtypeMixin,
+        // The composition-API entry a `<script setup>` fieldtype uses: the mixin's props and emits.
+        Fieldtype: { props: FieldtypeMixin.props, emits: FieldtypeMixin.emits, use: () => ({ expose: {} }) },
+        // Turns an options object, a list of strings or a list of `{ value, label }` into the `{ value, label }` list.
+        HasInputOptionsMixin: { methods: { normalizeInputOptions } },
+    },
     ui: {
         Badge: plain('Badge', 'span'),
-        Button: plain('Button', 'button'),
+        Button: button('Button'),
         Card: plain('Card'),
+        Combobox: combobox('Combobox'),
         Description: plain('Description', 'p'),
         Field: plain('Field'),
         Heading: plain('Heading', 'h2'),
@@ -165,8 +293,8 @@ const stubs = {
         Label: plain('Label', 'label'),
         Radio: option('Radio'),
         RadioGroup: group('RadioGroup'),
-        Select: input('Select', 'select'),
-        Switch: plain('Switch'),
+        Select: select('Select'),
+        Switch: toggle('Switch'),
         Textarea: input('Textarea', 'textarea'),
     },
 };
@@ -187,4 +315,4 @@ export function stubUi(name, component) {
 }
 
 /** The stub builders, for a stub that needs the same shape as a default one. */
-export const builders = { plain, input, group, option };
+export const builders = { plain, button, input, select, toggle, combobox, group, option };

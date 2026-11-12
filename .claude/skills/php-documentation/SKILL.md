@@ -8,7 +8,9 @@ description: >-
   code, the "only revise docs for impacted code" rule with the 80-char wrap exception, and log
   level selection (PSR-3 levels emergency/alert/critical/error/warning/notice/info/debug, as
   Laravel's `Illuminate\Support\Facades\Log` exposes them). Activate when adding or revising
-  PHPDoc, docblocks, inline comments, or log calls in any PHP, JS, TS, or Vue source.
+  PHPDoc, docblocks, inline comments, or log calls in any PHP, JS, TS, or Vue source. In a
+  WordPress plugin or theme it also states what the header's `Author` and `Author URI` hold and
+  where developers are credited (the README `## Credits` section).
 ---
 <!--
   Synced from UAMS-Web/uams-claude-skills: shared/.claude/skills/php-documentation/SKILL.md
@@ -277,3 +279,4 @@ a leveled logger.
 
 When adding a log, also follow §1: only revise existing log messages when directly impacted by
 the current code revisions.
+
