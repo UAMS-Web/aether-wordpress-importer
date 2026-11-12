@@ -1,0 +1,57 @@
+# One-off measurement for #487: the `Forms` mutation population on Linux, with the
+# invocation the #98 closing record names. It runs only on pushes to its own branch,
+# which is never merged.
+
+name: Measure Forms mutation on Linux
+
+on:
+  push:
+    branches:
+      - 487-forms-linux-mutation
+
+permissions:
+  contents: read
+
+jobs:
+  mutate-forms:
+    name: Forms mutation (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          coverage: pcov
+
+      - name: Record the platform and tool revisions
+        run: |
+          set -x
+          uname -a
+          cat /etc/os-release
+          git rev-parse HEAD
+          git diff --name-only 8fdf912e HEAD
+          php -v
+          php --ri pcov
+          composer show pestphp/pest-plugin-mutate
+          composer show pestphp/pest
+          cat patches.lock.json
+
+      - name: Run the Forms mutation population
+        run: |
+          mapfile -t tests < <(grep -rlF 'WordPressImport\Forms' tests/Unit tests/Integration | sort)
+          echo "test files: ${#tests[@]}"
+          php -d opcache.enable_cli=0 -d opcache.jit=off -d memory_limit=2G vendor/bin/pest "${tests[@]}" \
+            --mutate --path=src/Services/WordPressImport/Forms --covered-only --everything --no-cache \
+            > mutate.log 2>&1 || true
+          tail -60 mutate.log
+
+      - name: Check the run
+        run: php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log --min=100
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: forms-mutation-linux
+          path: mutate.log
