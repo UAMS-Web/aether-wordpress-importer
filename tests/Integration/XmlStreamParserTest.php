@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 
 use Illuminate\Support\Facades\Log;
+use PHPUnit\Framework\Assert;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
@@ -124,6 +125,44 @@ function xmlStreamTitles(
     }
 
     return [$titles, $warnings];
+}
+
+/**
+ * Report whether libxml's own reader still reaches a later item after it fails to
+ * expand an earlier one in the same file. libxml 2.9.14 does; 2.15.1 and 2.15.4
+ * stop at the failure, and `read()` returns false before the later item.
+ *
+ * @param  string  $path  The document to read
+ * @return bool Whether the reader expanded an item after a failed expansion
+ */
+function xmlStreamReaderReadsPastFailedExpansion(
+    string $path
+): bool {
+    // Read with libxml directly, not the parser, so a parser regression cannot skip the test
+    $internalErrors = libxml_use_internal_errors(true);
+    $reader = XMLReader::open($path, null, 0);
+    $failed = false;
+
+    try {
+        // Look for an item that expands after one that did not
+        while ($reader !== false && $reader->read()) {
+            if ($reader->nodeType !== XMLReader::ELEMENT || $reader->name !== 'item') {
+                continue;
+            }
+
+            if ($reader->readOuterXml() === '') {
+                $failed = true;
+            } elseif ($failed) {
+                return true;
+            }
+        }
+
+        return false;
+    } finally {
+        unset($reader);
+        libxml_clear_errors();
+        libxml_use_internal_errors($internalErrors);
+    }
 }
 
 it('keeps only string paths, reindexed in order', function (): void {
@@ -261,6 +300,11 @@ it('recovers a later buffered item after an earlier item cannot expand', functio
         .'</pad></item><item><post_type>post</post_type><status>publish</status>'
         .'<title>later</title></item><broken></channel></rss>');
     $parser = new XmlStreamParser($path);
+
+    // Recovery depends on the reader continuing past the failed expansion
+    if (! xmlStreamReaderReadsPastFailedExpansion($path)) {
+        Assert::markTestSkipped('libxml '.LIBXML_DOTTED_VERSION.' stops reading at the item it cannot expand, so no later item is reachable.');
+    }
 
     // Exercise both public streams, preserving the later sibling rather than stopping.
     [$filtered, $filteredWarnings] = xmlStreamTitles($parser->streamItems('post'));

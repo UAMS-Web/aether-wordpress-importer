@@ -1108,8 +1108,13 @@ it('retains entity text in empty-block diagnostics when nodeValue is null', func
 
 it('keeps the existing empty-result fallback when paragraph cleanup exhausts its regex limit', function (): void {
     // Pin current failure behavior separately from successful cleanup.
-    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>'.str_repeat(' ', 100).'text[subpage-list]</p><!-- /wp:shortcode --></div>');
-    $previous = ini_set('pcre.backtrack_limit', '10');
+    // The limit must let shortcode extraction finish and stop the cleanup over the
+    // whitespace run, and PCRE counts against it differently with pcre.jit on and off.
+    // Measured on PCRE 10.44 and 10.35: extraction needs at most 6 with JIT and 11
+    // without, and cleanup over 1000 spaces needs at least 1002 with JIT and 4006
+    // without, so 100 sits inside the window in both modes.
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>'.str_repeat(' ', 1000).'text[subpage-list]</p><!-- /wp:shortcode --></div>');
+    $previous = ini_set('pcre.backtrack_limit', '100');
 
     try {
         expect($this->processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBe('')
