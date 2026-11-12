@@ -30,9 +30,12 @@ jobs:
       # including the ones a compile-cleanly test spawns. Turn it off for all of them.
       - name: Disable the JIT for every php process
         run: |
-          dir=$(php -r "echo PHP_CONFIG_FILE_SCAN_DIR;")
-          printf "opcache.jit=off\nopcache.jit_buffer_size=0\n" | sudo tee "$dir/99-no-jit.ini"
-          php -r "var_dump(ini_get('opcache.jit'));"
+          php --ini
+          for f in $(php -r 'echo implode(" ", array_filter(array_merge([php_ini_loaded_file()], explode(",", (string) php_ini_scanned_files())), "strlen"));'); do
+            f=$(echo "$f" | tr -d "[:space:]")
+            if grep -q "opcache.jit" "$f"; then echo "rewriting $f"; sudo sed -i -E "s/^(opcache.jit *= *).*/\1off/" "$f"; grep -n "opcache.jit" "$f"; fi
+          done
+          test "$(php -r 'echo ini_get("opcache.jit");' 2>/dev/null)" = off
 
       - name: Record the platform and tool revisions
         run: |
