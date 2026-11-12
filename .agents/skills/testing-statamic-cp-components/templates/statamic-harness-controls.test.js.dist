@@ -1,0 +1,108 @@
+// cspell:ignore vitest Vitest jsdom
+// Controls for the default stubs in `statamic-harness.js`: each stub forwards what a user does, so a
+// component that binds it with `@click` or `v-model` can be driven from a test. Copy it beside the
+// harness as `resources/js/testing/statamic-harness.test.js` and re-run it when changing a stub.
+//
+// A parent written as a template compiles `v-model` to a `modelValue` prop plus an
+// `onUpdate:modelValue` listener, which is what these render functions pass.
+import { mount } from '@vue/test-utils';
+import { defineComponent, h, ref } from 'vue';
+import { describe, expect, it, vi } from 'vitest';
+
+const { core, ui } = globalThis.__STATAMIC_HARNESS__;
+
+/** A parent that binds `component` to a ref with the `v-model` pair and renders the model. */
+function bound(component, initial, props = {}) {
+    return defineComponent({
+        setup() {
+            const model = ref(initial);
+
+            return () => h('div', [
+                h(component, { ...props, modelValue: model.value, 'onUpdate:modelValue': (value) => { model.value = value; } }),
+                h('output', JSON.stringify(model.value)),
+            ]);
+        },
+    });
+}
+
+describe('the default stubs forward what a user does', () => {
+    it('Button emits click to the parent listener', async () => {
+        const onClick = vi.fn();
+        const wrapper = mount(defineComponent({ render: () => h(ui.Button, { text: 'Add rule', onClick }) }));
+
+        await wrapper.find('button').trigger('click');
+
+        expect(onClick).toHaveBeenCalledTimes(1);
+        expect(wrapper.find('button').text()).toBe('Add rule');
+    });
+
+    it('Input renders a v-model value and writes typing back to it', async () => {
+        const wrapper = mount(bound(ui.Input, 'before'));
+
+        expect(wrapper.find('input').element.value).toBe('before');
+
+        await wrapper.find('input').setValue('after');
+
+        expect(wrapper.find('output').text()).toBe('"after"');
+    });
+
+    it('Input still reads :model-value', () => {
+        const wrapper = mount(defineComponent({ render: () => h(ui.Input, { 'model-value': 'kebab' }) }));
+
+        expect(wrapper.find('input').element.value).toBe('kebab');
+    });
+
+    it('Select renders its options, selects the v-model value and writes a change back', async () => {
+        const options = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }];
+        const wrapper = mount(bound(ui.Select, 'a', { options }));
+
+        expect(wrapper.findAll('option').map((option) => option.text())).toEqual(['Alpha', 'Beta']);
+        expect(wrapper.find('select').element.value).toBe('a');
+
+        await wrapper.find('select').setValue('b');
+
+        expect(wrapper.find('output').text()).toBe('"b"');
+    });
+
+    it('Switch renders a v-model boolean and writes a toggle back', async () => {
+        const wrapper = mount(bound(ui.Switch, true));
+
+        expect(wrapper.find('input').element.checked).toBe(true);
+
+        await wrapper.find('input').setValue(false);
+
+        expect(wrapper.find('output').text()).toBe('false');
+    });
+
+    it('Combobox renders the selected-option slot only once there is a value, and an option click writes back', async () => {
+        const options = [{ value: 'x', label: 'Ex' }, { value: 'y', label: 'Why' }];
+        const slots = {
+            option: (option) => h('span', option.label),
+            'selected-option': ({ option }) => h('strong', option.value),
+        };
+        const empty = mount(defineComponent({ render: () => h(ui.Combobox, { options, modelValue: null }, slots) }));
+
+        expect(empty.find('strong').exists()).toBe(false);
+
+        const wrapper = mount(bound(ui.Combobox, null, { options }));
+
+        await wrapper.find('[data-option="y"]').trigger('click');
+
+        expect(wrapper.find('output').text()).toBe('"y"');
+    });
+
+    it('a typed Combobox value renders in the selected-option slot as { value }', () => {
+        const wrapper = mount(defineComponent({
+            render: () => h(ui.Combobox, { options: [], modelValue: 'free' }, { 'selected-option': ({ option }) => h('strong', option.value) }),
+        }));
+
+        expect(wrapper.find('strong').text()).toBe('free');
+    });
+
+    it('the core stubs include Fieldtype and HasInputOptionsMixin', () => {
+        expect(core.Fieldtype.emits).toContain('update:value');
+        expect(core.HasInputOptionsMixin.methods.normalizeInputOptions({ a: 'Alpha' })).toEqual([{ value: 'a', label: 'Alpha' }]);
+        expect(core.HasInputOptionsMixin.methods.normalizeInputOptions(['p', { key: 'q', label: 'Queue' }]))
+            .toEqual([{ value: 'p', label: 'p' }, { value: 'q', label: 'Queue' }]);
+    });
+});
