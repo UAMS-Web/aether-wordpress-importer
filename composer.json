@@ -74,6 +74,9 @@
             "pestphp/pest-plugin": true,
             "phpstan/extension-installer": true,
             "pixelfear/composer-dist-plugin": true
+        },
+        "platform": {
+            "php": "8.4.27"
         }
     },
     "scripts": {

@@ -1077,6 +1077,19 @@ it('does not dispatch malformed names to a different registered shortcode', func
     'invalid name' => [['name' => []]],
 ]);
 
+it('skips a malformed payload among several and converts the rest', function (): void {
+    // The public injection contract permits a payload that is not an array.
+    $shortcodes = $this::createStub(ShortcodeProcessor::class);
+    $shortcodes->method('extract')->willReturn(['malformed', ['name' => 'custom', 'original' => '[custom]']]);
+    $shortcodes->method('getHandlers')->willReturn(['custom' => ['set' => 'custom', 'class' => PeopleShortcodeProcessor::class]]);
+    $shortcodes->method('toTiptapHtml')->willReturn('<p>Rendered</p>');
+    $processor = new ShortcodeBlockProcessor($shortcodes);
+    $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->[custom]<!-- /wp:shortcode --></div>');
+
+    // The payload after the malformed one is still converted.
+    expect($processor->process($opening, [], 'clinic', $this->assetImporter, shortcodeBlockOutput()))->toBe('<p>Rendered</p>');
+});
+
 it('drops whitespace left between empty wrappers after removing a shortcode', function (): void {
     // Removing a shortcode can expose whitespace inside an already-trimmed block.
     $opening = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>[subpage-list]</p> <p></p><!-- /wp:shortcode --></div>');

@@ -147,7 +147,13 @@ abstract class BaseContentDetector
         $offset = 0;
 
         // Walk the content one HTML comment at a time
-        while (($start = \strpos($content, '<!--', $offset)) !== false) {
+        while (
+            // Compared with true, the condition never fails: once no comment is left the
+            // start is false, which counts as 0, so the scan returns to the first comment
+            // forever and the mutant can only time out.
+            // @pest-mutate-ignore: FalseToTrue
+            ($start = \strpos($content, '<!--', $offset)) !== false
+        ) {
             // Find the comment's end. Searching from its second "-" lets "<!-->"
             // and "<!--->" end themselves, as HTML ends them, rather than run on
             // to a later block's "-->". The character before it is the "!", which
@@ -156,7 +162,14 @@ abstract class BaseContentDetector
             $end = \strpos($content, '-->', $start + 2);
 
             // An unterminated comment ends the scan, as nothing after it is a block
-            if ($end === false) {
+            if (
+                // Compared with true, the check never passes, so the scan resumes at offset 3
+                // and finds the same unterminated comment forever.
+                // @pest-mutate-ignore: FalseToTrue
+                $end === false
+            ) {
+                // Without the return the scan resumes at offset 3 and loops the same way.
+                // @pest-mutate-ignore: RemoveEarlyReturn
                 return false;
             }
 
