@@ -40,13 +40,6 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
     private const string OPEN_TAG = '(?>\[section(?:\s+(?:title=(?:(?<quote>["\'])(?<title>(?:(?!\[\/?section\b).)*?)\k<quote>|(?<bare>[^\s\]"\']+))|[\w-]+=(?:"[^"]*"|\'[^\']*\'|[^\s\]"\']*)))*\s*\])';
 
     /**
-     * Matches one [section]...[/section], capturing `title`, `bare` and `body`.
-     */
-    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
-    // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
-    private const string SECTION_PATTERN = '/'.self::OPEN_TAG.'(?<body>(?:[^[]++|\[(?!\/section\]))*+)\[\/section\]/s';
-
-    /**
      * Matches one line break, whitespace character or non-breaking space, the
      * residue wpautop and the editor leave around shortcode tags. The non-breaking
      * space is matched as an entity and as its UTF-8 bytes, since the patterns that
@@ -55,15 +48,33 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
     private const string BREAK_PATTERN = '(?:\s|&nbsp;|\xC2\xA0|<br\s*\/?>)';
 
     /**
+     * Matches one [section]...[/section], capturing `title`, `bare` and `body`.
+     *
+     * A method rather than a constant, so the pattern is built on a line coverage
+     * records and each change to it is a mutant the tests run.
+     *
+     * @return string The pattern
+     */
+    private static function sectionPattern(): string
+    {
+        return '/'.self::OPEN_TAG.'(?<body>(?:[^[]++|\[(?!\/section\]))*+)\[\/section\]/s';
+    }
+
+    /**
      * Matches one ul, ol or li tag, capturing `close` and `tag`. HTML comments and
      * other tags are consumed and skipped, so a list tag in a comment or an
      * attribute value is not read as one.
+     *
+     * A method rather than a constant, for the reason sectionPattern() gives.
+     *
+     * @return string The pattern
      */
-    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
-    // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
-    private const string LIST_TAG_PATTERN = '/<!--(?:-?>|(?:[^-]++|-(?!->))*+(?:-->|\z))(*SKIP)(*FAIL)'
-        .'|<(?!\/?(?:ul|ol|li)[\s\/>])\/?[a-z][^\s\/>]*(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>(*SKIP)(*FAIL)'
-        .'|<(?<close>\/?)(?<tag>ul|ol|li)(?=[\s\/>])(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>/i';
+    private static function listTagPattern(): string
+    {
+        return '/<!--(?:-?>|(?:[^-]++|-(?!->))*+(?:-->|\z))(*SKIP)(*FAIL)'
+            .'|<(?!\/?(?:ul|ol|li)[\s\/>])\/?[a-z][^\s\/>]*(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>(*SKIP)(*FAIL)'
+            .'|<(?<close>\/?)(?<tag>ul|ol|li)(?=[\s\/>])(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>/i';
+    }
 
     /**
      * Parse a WordPress [accordion] shortcode and return an array of sections.
@@ -98,7 +109,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
 
         // Extract all section matches from the accordion content
         preg_match_all(
-            self::SECTION_PATTERN,
+            self::sectionPattern(),
             $content,
             $matches,
             PREG_SET_ORDER
@@ -244,7 +255,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         // Drop the line breaks wpautop leaves at the edges, between sections and at
         // the ends of each section body, so none is left standing outside or at the
         // edge of a paragraph once the sections are replaced.
-        // The opening tag is matched as SECTION_PATTERN matches it, so a "]" inside
+        // The opening tag is matched as sectionPattern() matches it, so a "]" inside
         // a quoted title does not end it.
         // ---
         $break = self::BREAK_PATTERN;
@@ -262,7 +273,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         // Replace each section with its title as a heading followed by its body
         $flattened = \is_string($trimmed)
             ? \preg_replace_callback(
-                self::SECTION_PATTERN,
+                self::sectionPattern(),
                 static function (array $match) use ($site, $pageSlug): string {
                     // The stripper decodes entities and trims, so the title is plain text
                     $title = self::sectionTitle($match);
@@ -340,7 +351,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
     /**
      * The plain-text title of a matched section, or an empty string when it has none.
      *
-     * @param  array<int|string, string>  $match  A SECTION_PATTERN match
+     * @param  array<int|string, string>  $match  A sectionPattern() match
      * @return string The title with its tags stripped and entities decoded
      */
     private static function sectionTitle(
@@ -380,7 +391,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         $open = [];
 
         $balanced = \preg_replace_callback(
-            self::LIST_TAG_PATTERN,
+            self::listTagPattern(),
             static function (array $match) use (&$open): string {
                 $tag = \strtolower($match['tag']);
 
