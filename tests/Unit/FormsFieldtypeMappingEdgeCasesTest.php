@@ -484,3 +484,18 @@ it('applies a transformation table, flat or by structure', function (mixed $tran
     // With no value table to read, the default applies
     'by another attribute that matches nothing, falling back to the default' => [['based_on_other_attribute_value' => ['kind' => ['x' => ['as_numeric_string' => false]]], 'default' => ['as_numeric_string' => true]], '5'],
 ]);
+
+it('reads no value for a key that cannot be an array key, even beside an empty-string key', function (): void {
+    expect(fmeCall('mappingValue', ['' => 'x'], []))->toBeNull()
+        // Text is not a table, so no character of it is read as a value
+        ->and(fmeCall('mappingValue', 'abc', 0))->toBeNull()
+        ->and(fmeCall('mappingValue', ['' => 'x'], ''))->toBe('x');
+});
+
+it('counts empty text, and a list of only empty values, as empty', function (): void {
+    expect(fmeCall('isAttributeNotEmpty', 'a', ['a' => '']))->toBeFalse()
+        ->and(fmeCall('isAttributeNotEmpty', 'a', ['a' => 'x']))->toBeTrue()
+        ->and(fmeCall('isFieldOptionNotEmpty', 'a', ['field_options' => '{"a":""}']))->toBeFalse()
+        ->and(fmeCall('isFieldOptionNotEmpty', 'a', ['field_options' => '{"a":{"b":[]}}']))->toBeFalse()
+        ->and(fmeCall('isFieldOptionNotEmpty', 'a', ['field_options' => '{"a":{"b":"x"}}']))->toBeTrue();
+});

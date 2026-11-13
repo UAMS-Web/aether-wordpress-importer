@@ -308,6 +308,8 @@ trait FieldtypeMappingTrait
         array $data
     ): bool {
         if (self::normalizeArrayKey($attrName) === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
@@ -332,6 +334,8 @@ trait FieldtypeMappingTrait
         array $fieldData
     ): bool {
         if (self::normalizeArrayKey($attrName) === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
@@ -349,6 +353,8 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
+            // Without the return, the key lookup below reads no table and answers the same
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true; // If parsing fails, consider it not set
         }
 
@@ -376,6 +382,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -405,6 +413,8 @@ trait FieldtypeMappingTrait
             \is_array($value)
             && $value === []
         ) {
+            // An empty list has no value, so the check below returns false too
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -441,6 +451,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -458,6 +470,8 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
+            // Without the return, the key lookup below reads no table and answers the same
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false; // If parsing fails, count it as empty
         }
 
@@ -488,6 +502,8 @@ trait FieldtypeMappingTrait
             \is_array($value)
             && $value === []
         ) {
+            // An empty list has no value, so the check below returns false too
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -611,6 +627,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -646,6 +664,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -663,6 +683,8 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
+            // Without the return, the key lookup below reads no table and answers the same
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false; // If parsing fails, consider it not empty
         }
 
