@@ -1284,7 +1284,7 @@ The `src/Services/WordPressImport/Utilities` directory contains classes that pro
 ### LinkProcessor
 
 - **Purpose**: Processes links in WordPress content.
-- **File Path**: `src/Services/WordPressImport/Utilities/LinkProcessor.php`
+- **File Path**: `src/Services/WordPressImport/Utilities/LinkProcessor.php`, with three traits under `src/Services/WordPressImport/Utilities/Traits/` that keep each file small enough for one pull request's mutation run (#548): `LinkProcessorPostLookupTrait` (finding the export post a link points to), `LinkProcessorDeferredResolutionTrait` (resolving the deferred links once every entry exists) and `LinkProcessorUrlReplacementTrait` (replacing a resolved URL in an entry's fields).
 - **Key Functionality**:
   - Converts WordPress links to Statamic format.
   - Handles internal and external links.
