@@ -2342,15 +2342,8 @@ trait FieldtypeMappingTrait
                 }
             }
 
-            // Alert for unsupported attributes
-            if (
-                isset($config['alert_unsupported'])
-                && $config['alert_unsupported'] === true
-                && (! in_array($attrValue, [null, '', []], true))
-            ) {
-                // This will be handled by the calling method to generate warnings
-                // We could add a flag here to indicate unsupported attributes were found
-            }
+            // `alert_unsupported` maps nothing here: mapFieldAttributesWithContext() reads
+            // it through shouldAlertUnsupportedAttribute() to report the attribute
 
             // Handle statamic_attribute.specific_based_on_attribute_value
             $statamicAttributeConfig = self::mappingConfig(
@@ -2387,6 +2380,8 @@ trait FieldtypeMappingTrait
                                     // Replace wildcards in the target attribute
                                     $resolvedTargetAttribute = self::resolveWildcards(
                                         self::stringValue($targetAttribute) ?? '',
+                                        // The pattern is `#not_set`, which holds no `*`, so the matched value is never read
+                                        // @pest-mutate-ignore: EmptyStringToNotEmpty
                                         '',
                                         $pattern
                                     );
@@ -2402,7 +2397,12 @@ trait FieldtypeMappingTrait
                                         );
                                     }
 
-                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                    // A target that is not text resolves to empty and names no attribute,
+                                    // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                    if ($resolvedTargetAttribute !== '') {
+                                        $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                    }
+
                                     // Set mappedValue to ensure statamic_other_field_value gets applied
                                     $mappedValue = $finalValue;
                                     break; // Use the first matching pattern
@@ -2433,7 +2433,12 @@ trait FieldtypeMappingTrait
                                         );
                                     }
 
-                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                    // A target that is not text resolves to empty and names no attribute,
+                                    // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                    if ($resolvedTargetAttribute !== '') {
+                                        $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                    }
+
                                     // Set mappedValue to ensure statamic_other_field_value gets applied
                                     $mappedValue = $finalValue;
                                     break; // Use the first matching pattern
@@ -2450,6 +2455,8 @@ trait FieldtypeMappingTrait
                                 // Replace wildcards in the target attribute
                                 $resolvedTargetAttribute = self::resolveWildcards(
                                     self::stringValue($targetAttribute) ?? '',
+                                    // The pattern is `#not_empty`, which holds no `*`, so the matched value is never read
+                                    // @pest-mutate-ignore: CoalesceRemoveLeft,EmptyStringToNotEmpty
                                     self::stringValue($attrValue) ?? '',
                                     $pattern
                                 );
@@ -2465,7 +2472,12 @@ trait FieldtypeMappingTrait
                                     );
                                 }
 
-                                $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                // A target that is not text resolves to empty and names no attribute,
+                                // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                if ($resolvedTargetAttribute !== '') {
+                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                }
+
                                 // Set mappedValue to ensure statamic_other_field_value gets applied
                                 $mappedValue = $finalValue;
                                 break; // Use the first matching pattern
@@ -2496,7 +2508,12 @@ trait FieldtypeMappingTrait
                                     );
                                 }
 
-                                $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                // A target that is not text resolves to empty and names no attribute,
+                                // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                if ($resolvedTargetAttribute !== '') {
+                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                }
+
                                 // Set mappedValue to ensure statamic_other_field_value gets applied
                                 $mappedValue = $finalValue;
                                 break; // Use the first matching pattern

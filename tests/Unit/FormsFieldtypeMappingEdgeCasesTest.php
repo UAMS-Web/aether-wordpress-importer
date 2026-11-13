@@ -304,3 +304,64 @@ it('translates references, unescapes slashes and builds fields only when asked',
     'an escaped slash, not asked' => ['a\\/b', [], 'a\\/b'],
     'choices as fields, for text' => ['plain', ['choices_as_fields' => true], 'plain'],
 ]);
+
+/**
+ * Map one `mode` attribute through a fieldtype-specific target table, as a radio field.
+ *
+ * @param  mixed  $value  The attribute value
+ * @param  array<int|string, mixed>  $targets  The radio entry of `specific_based_on_attribute_value`
+ * @param  array<int|string, mixed>  $extra  More attribute configuration
+ * @param  array<int|string, mixed>|null  $original  The original field data, for `#not_set` checks
+ * @return mixed The mapped attributes
+ */
+function fmeTargetByValue(mixed $value, array $targets, array $extra = [], ?array $original = null): mixed
+{
+    return fmeMap(
+        ['mode' => $value],
+        ['mode' => ['statamic_attribute' => ['specific_based_on_attribute_value' => ['radio' => $targets]], ...$extra]],
+        'radio',
+        null,
+        $original
+    );
+}
+
+it('writes to the first fieldtype-specific target that matches', function (array $targets, ?array $original, array $expected): void {
+    expect(fmeTargetByValue('v', $targets, [], $original))->toBe($expected);
+})->with([
+    'not set in the original field, before any value' => [['#not_set' => 'first', '*' => 'second'], ['field_options' => '{}'], ['first' => '']],
+    'not empty, before any value' => [['#not_empty' => 'first', '*' => 'second'], null, ['first' => 'v']],
+]);
+
+it('writes nothing to a fieldtype-specific target that is not text', function (mixed $value, string $pattern, ?array $original): void {
+    expect(fmeTargetByValue($value, [$pattern => 5], [], $original))->toBe([]);
+})->with([
+    'not set in the original field' => ['v', '#not_set', ['field_options' => '{}']],
+    'not empty' => ['v', '#not_empty', null],
+    'a value' => ['v', 'v', null],
+]);
+
+it('substitutes the value written to a fieldtype-specific target only when asked', function (mixed $value, string $pattern, ?array $original, array $substitution, array $expected): void {
+    $extra = $substitution === [] ? [] : ['value_substitution_regex' => $substitution];
+
+    expect(fmeTargetByValue($value, [$pattern => 'to'], $extra, $original))->toBe($expected);
+})->with([
+    'not set in the original field' => ['v', '#not_set', ['field_options' => '{}'], [], ['to' => '']],
+    'not set in the original field, substituted' => ['v', '#not_set', ['field_options' => '{}'], ['/^$/' => 'filled'], ['to' => 'filled']],
+    'not empty' => ['v', '#not_empty', null, [], ['to' => 'v']],
+    'not empty, substituted' => ['v', '#not_empty', null, ['/v/' => 'w'], ['to' => 'w']],
+    // A list is not text, so the substitution reads it as empty text
+    'not empty, a list substituted' => [['a'], '#not_empty', null, ['/^$/' => 'empty'], ['to' => 'empty']],
+    'a value' => ['v', 'v', null, [], ['to' => 'v']],
+    'a value, substituted' => ['v', 'v', null, ['/v/' => 'w'], ['to' => 'w']],
+    'any value, a list substituted' => [['a'], '*', null, ['/^$/' => 'empty'], ['to' => 'empty']],
+]);
+
+it('fills a wildcard target from a list value as empty text', function (): void {
+    // `*` matches a list, which is not text, so the part the wildcard captured is empty.
+    expect(fmeTargetByValue(['a'], ['*' => 'to_*']))->toBe(['to_' => ['a']]);
+});
+
+it('matches a numeric fieldtype-specific pattern', function (): void {
+    // A numeric pattern is an integer array key; it still matches the text value.
+    expect(fmeTargetByValue('5', [5 => 'five']))->toBe(['five' => '5']);
+});
