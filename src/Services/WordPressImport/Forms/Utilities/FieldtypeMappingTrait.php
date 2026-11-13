@@ -2158,16 +2158,9 @@ trait FieldtypeMappingTrait
                     $attrName,
                     $attrValue
                 );
+                // A plain `true` or `false` is its own answer: processModifierPatterns()
+                // reports a match for any value that is not a table
                 $shouldPreserveNewlines = $modifierResult['value'];
-                $matchFound = $modifierResult['matchFound'];
-
-                // Legacy boolean check
-                if (
-                    ! $matchFound
-                    && $preserveNewlinesConfig === true
-                ) {
-                    $shouldPreserveNewlines = true;
-                }
 
                 // Apply newline preservation if needed
                 if ($shouldPreserveNewlines === true) {

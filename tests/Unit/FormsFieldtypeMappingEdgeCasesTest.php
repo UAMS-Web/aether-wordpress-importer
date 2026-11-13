@@ -271,3 +271,36 @@ it('takes the first calculation that matches', function (array $calculation, ?ar
     'other attribute values, legacy' => [['based_on_other_attribute_value' => ['kind' => ['x' => '[value] * 2'], 'mode' => ['y' => '[value] * 10']]], null],
     'other attributes not set, legacy' => [['based_on_other_attribute_value' => ['gone' => ['#not_set' => '[value] * 2'], 'gone2' => ['#not_set' => '[value] * 10']]], null],
 ]);
+
+it('keeps escaped newlines unless the newline setting says to preserve them', function (mixed $setting, string $expected): void {
+    expect(fmeMap(['body' => 'a\\nb'], ['body' => ['statamic_attribute' => 'text', 'preserve_newlines' => $setting]], 'textarea'))
+        ->toBe(['text' => $expected]);
+})->with([
+    'true' => [true, "a\nb"],
+    'false' => [false, 'a\\nb'],
+    'a value table that matches' => [['based_on_attribute_value' => ['default' => ['a\\nb' => true]]], "a\nb"],
+    'a value table that matches nothing' => [['based_on_attribute_value' => ['default' => ['other' => true]]], 'a\\nb'],
+]);
+
+it('leaves the value as it was when no calculation applies', function (array $calculation): void {
+    expect(fmeMap(['size' => '3'], ['size' => ['statamic_attribute' => 'width', 'value_calculation' => $calculation]], 'number'))
+        ->toBe(['width' => '3']);
+})->with([
+    'no entry matches' => [['specific_based_on_attribute_value' => ['number' => ['9' => '[value] * 2']]]],
+    // The empty other-attribute table keeps the calculation table whole, so its
+    // `default` is read as the expression
+    'the expression is not text' => [['based_on_other_attribute_value' => [], 'default' => ['[value] * 2']]],
+]);
+
+it('translates references, unescapes slashes and builds fields only when asked', function (mixed $value, array $setting, mixed $expected): void {
+    $fields = [['id' => 2, 'label' => 'Size']];
+
+    expect(fmeMap(['body' => $value], ['body' => ['statamic_attribute' => 'text', ...$setting]], null, null, null, $fields))
+        ->toBe(['text' => $expected]);
+})->with([
+    'a calculation reference, translated' => ['{Size:2} + 1', ['translate_field_references_calculation' => true], '[size_2] + 1'],
+    'a calculation reference, not asked' => ['{Size:2} + 1', [], '{Size:2} + 1'],
+    'an escaped slash, unescaped' => ['a\\/b', ['unescape_slashes' => true], 'a/b'],
+    'an escaped slash, not asked' => ['a\\/b', [], 'a\\/b'],
+    'choices as fields, for text' => ['plain', ['choices_as_fields' => true], 'plain'],
+]);
