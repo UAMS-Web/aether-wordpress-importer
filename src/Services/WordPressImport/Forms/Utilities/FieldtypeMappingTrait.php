@@ -1016,13 +1016,25 @@ trait FieldtypeMappingTrait
 
                     // Legacy support for old structures
                     // Check for specific_based_on_attribute_value (legacy)
+                    $specificBasedOnConfig = self::mappingConfig(
+                        $statamicAttrConfig['specific_based_on_attribute_value'] ?? null
+                    );
                     if (
                         isset($statamicAttrConfig['specific_based_on_attribute_value'])
                         && ! $matchFound
+                        // A table keyed by this fieldtype is resolved once, by the
+                        // statamic_attribute.specific_based_on_attribute_value block
+                        // below, which replaces a `*` in the target and handles
+                        // `#not_set` and `#not_empty` (#455)
+                        && ! (
+                            $excludeFieldtype !== null
+                            && $excludeFieldtype !== ''
+                            && self::arrayKeyExists(
+                                $excludeFieldtype,
+                                $specificBasedOnConfig
+                            )
+                        )
                     ) {
-                        $specificBasedOnConfig = self::mappingConfig(
-                            $statamicAttrConfig['specific_based_on_attribute_value']
-                        );
                         $result = self::processBasedOnAttributeValue(
                             $specificBasedOnConfig,
                             $excludeFieldtype,
@@ -3756,6 +3768,9 @@ trait FieldtypeMappingTrait
             $translationConfig = $config['value_translation'];
             $translationArray = null;
 
+            // Whether the translation is a plain table rather than one split by fieldtype or attribute
+            $isPlainTranslation = false;
+
             // Handle different value_translation structures
             if (
                 self::arrayKeyExists(
@@ -3922,22 +3937,34 @@ trait FieldtypeMappingTrait
             } else { // Otherwise
                 // Simple array structure
                 $translationArray = $translationConfig;
+                $isPlainTranslation = true;
             }
 
             // Apply translations if we have a valid translation array
             if ($translationArray !== null) {
                 // Ensure $translationArray is an array before using array_key_exists
                 if (\is_array($translationArray)) {
-                    // Check for '#not_set' special case first
+                    // Check for '#not_set' special case first, writing nothing for an empty
+                    // target, as the earlier passes over missing attributes do
                     if (
                         self::arrayKeyExists(
                             '#not_set',
                             $translationArray
                         )
+                        && $config['statamic_attribute'] !== ''
                     ) {
                         if ($originalFieldData !== null) {
+                            // A plain table with a string target was handled by the pass over
+                            // the original field data, which writes the translation with the
+                            // subfield handle, deduplication and transformations applied.
+                            // Writing it again here would replace that value, or add a second
+                            // key that still holds the `*`.
+                            $writtenFromOriginalFieldData = $isPlainTranslation
+                                && \is_string($config['statamic_attribute']);
+
                             if (
-                                self::isFieldOptionNotSet(
+                                ! $writtenFromOriginalFieldData
+                                && self::isFieldOptionNotSet(
                                     $attrName,
                                     $originalFieldData
                                 )

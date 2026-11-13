@@ -301,8 +301,11 @@ class LinkProcessor
                     SameSitePolicy::LINK_DIFFERENT_SITE
                 );
 
-                // Check if the file was successfully imported
-                if ($newPath !== null && $newPath !== '') {
+                // Check if the file was successfully imported, rather than
+                // returned as its own URL to link to (#408)
+                if (
+                    ! in_array($newPath, [null, '', $href], true)
+                ) {
                     // Generate the new Statamic URL for the imported file
                     $newUrl = self::getAppUrl().'/files/'.$newPath;
 
@@ -3512,6 +3515,12 @@ class LinkProcessor
             SameSitePolicy::LINK_DIFFERENT_SITE
         );
 
+        // A file on another site is returned as its own URL, to link to as
+        // it is (#408)
+        if ($newPath === $attachmentUrl) {
+            return $attachmentUrl;
+        }
+
         // Check if the file was successfully imported
         if ($newPath !== null && $newPath !== '') {
             // Generate the new Statamic URL for the imported file
@@ -3571,6 +3580,12 @@ class LinkProcessor
             'files',
             SameSitePolicy::LINK_DIFFERENT_SITE
         );
+
+        // A file on another site is returned as its own URL, to link to as
+        // it is (#408)
+        if ($newPath === $attachmentUrl) {
+            return $attachmentUrl;
+        }
 
         // Check if the file was successfully imported
         if ($newPath !== null && $newPath !== '') {

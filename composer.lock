@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cc41b6520219b6154beecd85e02a8b05",
+    "content-hash": "441bc722422dd91140fc36fa91f5a284",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -11650,8 +11650,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-11-03T12:14:22+00:00",
-            "published-time": "2026-11-03T12:14:36+00:00"
+            "time": "2026-11-03T12:14:22+00:00"
         },
         {
             "name": "phpstan/phpstan-strict-rules",
@@ -13658,8 +13657,7 @@
                 "issues": "https://github.com/UAMS-Web/patches-pest-plugin-mutate/issues",
                 "source": "https://github.com/UAMS-Web/patches-pest-plugin-mutate"
             },
-            "time": "2026-11-10T21:43:23+00:00",
-            "published-time": "2026-11-10T21:45:52+00:00"
+            "time": "2026-11-10T21:43:23+00:00"
         }
     ],
     "aliases": [],
@@ -13671,5 +13669,8 @@
         "php": "^8.4"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.11.0"
+    "platform-overrides": {
+        "php": "8.4.27"
+    },
+    "plugin-api-version": "2.9.0"
 }
