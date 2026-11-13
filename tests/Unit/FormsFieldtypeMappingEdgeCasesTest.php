@@ -158,3 +158,51 @@ it('matches a whole-list translation against the object values as a list', funct
 
     expect($mapped)->toBe(['mime_types' => ['image/*']]);
 });
+
+/**
+ * Map one choice list through a key translation, as a radio field.
+ *
+ * @param  array<int|string, mixed>  $keyTranslation  The `key_translation` configuration
+ * @param  array<int|string, mixed>|null  $original  The original field data, for `#not_set` checks
+ * @return mixed The mapped attributes
+ */
+function fmeTranslateChoiceKeys(array $keyTranslation, ?array $original = null): mixed
+{
+    return fmeMap(
+        ['choices' => [['text' => 'A', 'value' => 'a']], 'kind' => 'x', 'mode' => 'y'],
+        ['choices' => ['statamic_attribute' => 'options', 'key_translation' => $keyTranslation]],
+        'radio',
+        null,
+        $original
+    );
+}
+
+it('takes the first matching key translation for the fieldtype', function (array $byAttribute, ?array $original): void {
+    // Both entries match; the first one is the translation, so `text` becomes `label`
+    // rather than `other`.
+    expect(fmeTranslateChoiceKeys(['specific_based_on_attribute_value' => ['radio' => $byAttribute]], $original))
+        ->toBe(['options' => [['label' => 'A', 'value' => 'a']]]);
+})->with([
+    'not set, against the original field' => [['gone' => ['#not_set' => ['text' => 'label']], 'gone2' => ['#not_set' => ['text' => 'other']]], ['field_options' => '{}']],
+    'not set, against the field data' => [['gone' => ['#not_set' => ['text' => 'label']], 'gone2' => ['#not_set' => ['text' => 'other']]], null],
+    'not empty' => [['kind' => ['#not_empty' => ['text' => 'label']], 'mode' => ['#not_empty' => ['text' => 'other']]], null],
+    'a value' => [['kind' => ['x' => ['text' => 'label']], 'mode' => ['y' => ['text' => 'other']]], null],
+]);
+
+it('takes the first key translation another attribute matches', function (string $form, string $condition, ?array $original): void {
+    // `kind` and `mode` both match, and each gives a translation for this attribute
+    // under the same condition; the first is the one used.
+    $byOtherAttribute = [
+        'kind' => ['x' => [$condition => ['text' => 'label']]],
+        'mode' => ['y' => [$condition => ['text' => 'other']]],
+    ];
+    $table = $form === 'default' ? ['default' => $byOtherAttribute] : $byOtherAttribute;
+
+    expect(fmeTranslateChoiceKeys(['based_on_other_attribute_value' => $table], $original))
+        ->toBe(['options' => [['label' => 'A', 'value' => 'a']]]);
+})->with(['default', 'legacy'])->with([
+    'not set, against the original field' => ['#not_set', ['field_options' => '{}']],
+    'not empty' => ['#not_empty', null],
+    'empty in the original field' => ['#empty', ['field_options' => '{"choices":""}']],
+    'this value' => ['[{"text":"A","value":"a"}]', null],
+]);
