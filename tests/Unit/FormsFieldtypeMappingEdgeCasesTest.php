@@ -365,3 +365,13 @@ it('matches a numeric fieldtype-specific pattern', function (): void {
     // A numeric pattern is an integer array key; it still matches the text value.
     expect(fmeTargetByValue('5', [5 => 'five']))->toBe(['five' => '5']);
 });
+
+it('maps an attribute with a numeric name', function (): void {
+    expect(fmeMap([0 => 'x', 'label' => 'y'], [0 => ['statamic_attribute' => 'zero', 'value_translation' => ['x' => 'X']], 'label' => ['statamic_attribute' => 'display']]))
+        ->toBe(['zero' => 'X', 'display' => 'y']);
+});
+
+it('sets no other field value for an attribute with no target', function (): void {
+    expect(fmeMap(['label' => 'Your name'], ['label' => ['statamic_other_field_value' => ['default' => ['shown' => true]]]]))
+        ->toBe([]);
+});

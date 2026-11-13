@@ -718,6 +718,9 @@ trait FieldtypeMappingTrait
             ! \in_array(
                 $fieldtype,
                 $fieldtypesWithSubfields,
+                // The fieldtype is text or null and neither listed name is numeric, so
+                // a loose comparison answers the same as a strict one
+                // @pest-mutate-ignore: TrueToFalse
                 true
             )
         ) {
@@ -868,6 +871,9 @@ trait FieldtypeMappingTrait
             // Normalize the attribute name to a string for downstream helpers
             // and offset lookups that expect string keys. Numeric string keys
             // are normalized back to integers automatically on array access.
+            // Every helper it reaches takes an int as well, and compares it only with
+            // names that are not numeric, so an integer name maps the same uncast.
+            // @pest-mutate-ignore: RemoveStringCast
             $attrName = (string) $attrName;
 
             // Get the appropriate configuration based on fieldtype
@@ -890,7 +896,12 @@ trait FieldtypeMappingTrait
             // Skip if there is no Statamic attribute to map to and no other field value mappings
             if (
                 ! isset($config['statamic_attribute'])
-                && ! isset($config['statamic_other_field_value'])
+                && (
+                    // Without a target the value is never read, and statamic_other_field_value
+                    // applies only to a value that was read, so skipping it changes nothing
+                    // @pest-mutate-ignore: RemoveNot
+                    ! isset($config['statamic_other_field_value'])
+                )
                 && ! isset($config['statamic_other_field_value_based_on_attribute_value'])
                 && ! isset($config['statamic_other_field_value_based_on_nested_attribute_value'])
                 && ! isset($config['statamic_type_based_on_attribute_value']
@@ -2334,6 +2345,9 @@ trait FieldtypeMappingTrait
                 if (
                     $mappedValue !== null
                     && ! self::validateValueAgainstList(
+                        // A value that is not text fails the list either way: the only list
+                        // holds `hidden`, and neither the empty fallback nor other text is it
+                        // @pest-mutate-ignore: EmptyStringToNotEmpty
                         self::stringValue($mappedValue) ?? '',
                         $config['check_against_list']
                     )
