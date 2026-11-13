@@ -16,10 +16,18 @@ declare(strict_types=1);
  * When `any_all` is absent both methods use `any`, which is Formidable Pro's
  * own field default (`FrmProField`, `FrmProFieldsHelper`).
  *
+ * Five mutants in these methods are equivalent and annotated in the source (#537):
+ * the early return for an empty `hide_field` list, which the empty condition list
+ * answers the same way, and the empty-string checks on a field handle and on the
+ * Statamic attribute, neither of which can be empty.
+ *
  * @command  php vendor/bin/pest tests/Unit/FormidableConditionalLogicTest.php
  */
 
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping;
+
+/** Marks a dataset row whose field options carry no `hide_field` at all. */
+const FORMIDABLE_NO_HIDE_FIELD = 'no hide_field key';
 
 /**
  * The form fields the conditions in these tests refer to.
@@ -33,6 +41,8 @@ function formidableConditionFields(): array
         ['id' => 916, 'type' => 'text', 'name' => 'Size'],
         ['id' => '917', 'type' => 'text', 'name' => ''],
         ['id' => '918', 'type' => 'text'],
+        // A field with an empty id, which a condition with an empty field id must not reach
+        ['id' => '', 'type' => 'text', 'name' => 'Blank'],
     ];
 }
 
@@ -59,6 +69,8 @@ it('maps field conditional logic', function (
     'the last condition on a field' => [['any_all' => 'all', 'hide_field' => ['915', '915'], 'hide_opt' => ['red', 'blue']], ['if' => ['color_915' => 'equals blue']]],
     'skipped conditions beside a kept one' => [['any_all' => 'all', 'hide_field' => [['915'], '', '999', '917', '918', '915'], 'hide_field_cond' => [5 => 'LIKE'], 'hide_opt' => [5 => 're']], ['if' => ['color_915' => 'contains re']]],
     'an unsupported operator' => [['any_all' => 'all', 'hide_field' => ['915'], 'hide_field_cond' => ['not LIKE'], 'hide_opt' => ['red']], []],
+    'an unsupported operator before a kept one' => [['any_all' => 'all', 'hide_field' => ['915', '916'], 'hide_field_cond' => ['not LIKE', '>'], 'hide_opt' => ['red', '3']], ['if' => ['size_916' => '> 3']]],
+    'an operator that is not text' => [['any_all' => 'all', 'hide_field' => ['915'], 'hide_field_cond' => [5], 'hide_opt' => ['red']], []],
     'an unknown field' => [['hide_field' => ['999'], 'hide_opt' => ['red']], []],
     'no field ids' => [['show_hide' => 'show', 'hide_field' => []], []],
     'field ids that are not a list' => [['show_hide' => 'show', 'hide_field' => '915'], []],
@@ -82,6 +94,7 @@ it('maps action conditional logic', function (
     'string-numbered conditions' => [['any_all' => 'all', '1' => ['hide_field' => '915', 'hide_field_cond' => '<=', 'hide_opt' => '9'], '2' => ['hide_field' => 916, 'hide_field_cond' => '>=', 'hide_opt' => 1]], ['if' => ['color_915' => '<= 9', 'size_916' => '>= 1']]],
     'skipped conditions beside a kept one' => [['any_all' => 'all', 'rule' => ['hide_field' => '916', 'hide_opt' => 'x'], 0 => 'junk', 1 => ['hide_opt' => 'x'], 2 => ['hide_field' => ''], 3 => ['hide_field' => ['915']], 4 => ['hide_field' => '999'], 5 => ['hide_field' => '917'], 6 => ['hide_field' => '915', 'hide_field_cond' => 'LIKE%'], 7 => ['hide_field' => '915', 'hide_field_cond' => '<', 'hide_opt' => '4']], ['if' => ['color_915' => '< 4']]],
     'an operator and value that are not scalar' => [['any_all' => 'all', 0 => ['hide_field' => '915', 'hide_field_cond' => ['!='], 'hide_opt' => ['red']]], ['if' => ['color_915' => 'equals empty']]],
+    'an operator that is not text' => [['any_all' => 'all', 0 => ['hide_field' => '915', 'hide_field_cond' => 5, 'hide_opt' => 'red']], []],
     'no conditions' => [['send_stop' => 'send', 'any_all' => 'all'], []],
     'no conditions, and an unknown show_hide' => [['show_hide' => 'maybe'], []],
 ]);
@@ -106,6 +119,39 @@ it('converts each operator to a Statamic condition', function (
     'starts with' => ['LIKE%', 'x', null],
     'ends with' => ['%LIKE', 'x', null],
     'an unknown operator' => ['~', 'x', null],
+]);
+
+it('reads conditional logic from a list of field ids or a truthy flag', function (
+    mixed $hideField,
+    bool $expected
+): void {
+    $options = $hideField === FORMIDABLE_NO_HIDE_FIELD ? [] : ['hide_field' => $hideField];
+
+    expect(new ReflectionMethod(FieldtypeMapping::class, 'hasConditionalLogic')->invoke(null, $options))->toBe($expected);
+})->with([
+    'a list' => [['915'], true],
+    'an empty list' => [[], true],
+    'true' => [true, true],
+    'the string 1' => ['1', true],
+    'the integer 1' => [1, true],
+    'false' => [false, false],
+    'the string 0' => ['0', false],
+    'the integer 0' => [0, false],
+    'the integer 2' => [2, false],
+    'null' => [null, false],
+    'absent' => [FORMIDABLE_NO_HIDE_FIELD, false],
+]);
+
+it('reads a field name, and nothing for an empty or missing one', function (
+    array $field,
+    ?string $expected
+): void {
+    expect(new ReflectionMethod(FieldtypeMapping::class, 'getFieldNameFromField')->invoke(null, $field))->toBe($expected);
+})->with([
+    'a name' => [['name' => 'Color'], 'Color'],
+    'an empty name' => [['name' => ''], null],
+    'a name that is not text' => [['name' => 5], null],
+    'no name' => [[], null],
 ]);
 
 it('exposes its attribute and options mappings', function (): void {
