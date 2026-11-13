@@ -55,6 +55,8 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
      *
      * @var list<string>
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array ORDER_BY_VALUES = ['none', 'title', 'sortpriority', 'sorttext', 'modified'];
 
     /**
@@ -64,6 +66,8 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array ORDER_BY_ALIASES = ['menu_order' => 'none'];
 
     /**

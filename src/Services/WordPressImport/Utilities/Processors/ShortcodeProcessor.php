@@ -122,6 +122,8 @@ class ShortcodeProcessor
      *
      * @var array<string, array{set: string, class: string}>
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private array $handlers = [
         'show-people' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
         'show-team' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
@@ -156,6 +158,8 @@ class ShortcodeProcessor
      *
      * @var string[]
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private array $droppedShortcodes = [
         'subpage-list',
     ];
@@ -172,6 +176,8 @@ class ShortcodeProcessor
      *
      * @var string
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: EmptyStringToNotEmpty
     protected $pageId = '';
 
     /**
@@ -179,6 +185,8 @@ class ShortcodeProcessor
      *
      * @var string
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: EmptyStringToNotEmpty
     protected $pageLink = '';
 
     /**

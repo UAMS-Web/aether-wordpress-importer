@@ -42,6 +42,8 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
     /**
      * Matches one [section]...[/section], capturing `title`, `bare` and `body`.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
     private const string SECTION_PATTERN = '/'.self::OPEN_TAG.'(?<body>(?:[^[]++|\[(?!\/section\]))*+)\[\/section\]/s';
 
     /**
@@ -57,6 +59,8 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
      * other tags are consumed and skipped, so a list tag in a comment or an
      * attribute value is not read as one.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
     private const string LIST_TAG_PATTERN = '/<!--(?:-?>|(?:[^-]++|-(?!->))*+(?:-->|\z))(*SKIP)(*FAIL)'
         .'|<(?!\/?(?:ul|ol|li)[\s\/>])\/?[a-z][^\s\/>]*(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>(*SKIP)(*FAIL)'
         .'|<(?<close>\/?)(?<tag>ul|ol|li)(?=[\s\/>])(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>/i';
