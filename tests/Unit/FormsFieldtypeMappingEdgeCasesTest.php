@@ -402,3 +402,39 @@ it('sets the other field values of the first pattern that matches', function (st
     // A legacy table has no `#not_empty` case
     'legacy, not set in the original field' => ['legacy', '#not_set', ['field_options' => '{}']],
 ]);
+
+it('sets no other field value and no form setting for an empty value', function (mixed $value, ?array $original, array $expected): void {
+    // An empty value is skipped by both, including the empty text a `#not_set`
+    // fieldtype-specific target writes.
+    $mapped = fmeMap(
+        ['mode' => $value],
+        ['mode' => [
+            'statamic_attribute' => ['specific_based_on_attribute_value' => ['radio' => ['#not_set' => 'unset', '*' => 'set']]],
+            'statamic_other_field_value' => ['default' => ['shown' => true]],
+            'statamic_form_config' => 'mode',
+        ]],
+        'radio',
+        null,
+        $original
+    );
+
+    expect($mapped)->toBe($expected);
+})->with([
+    'empty text from a #not_set target' => ['v', ['field_options' => '{}'], ['unset' => '']],
+]);
+
+it('sets no other field value and no form setting for no value or an empty list', function (mixed $value): void {
+    $mapped = fmeMap(
+        ['mode' => $value],
+        ['mode' => [
+            'statamic_attribute' => 'a',
+            'statamic_other_field_value' => ['default' => ['shown' => true]],
+            'statamic_form_config' => 'mode',
+        ]]
+    );
+
+    expect($mapped)->not->toHaveKey('shown')->not->toHaveKey('form_config_mode');
+})->with([
+    'empty text, read as no value' => [''],
+    'an empty list' => [[]],
+]);

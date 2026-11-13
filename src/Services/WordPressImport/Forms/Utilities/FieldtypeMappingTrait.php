@@ -2918,7 +2918,15 @@ trait FieldtypeMappingTrait
             // Handle statamic_form_config
             if (
                 isset($attrConfigMap['statamic_form_config'])
-                && (! in_array($mappedValue, [null, '', []], true))
+                && $mappedValue !== ''
+                && (! in_array(
+                    $mappedValue,
+                    // A null or empty-list value written here is dropped with the other
+                    // empty values before the mapping returns, so each item only saves work
+                    // @pest-mutate-ignore: RemoveArrayItem
+                    [null, []],
+                    true
+                ))
             ) {
                 $formConfigKey = self::stringValue(
                     $attrConfigMap['statamic_form_config']
