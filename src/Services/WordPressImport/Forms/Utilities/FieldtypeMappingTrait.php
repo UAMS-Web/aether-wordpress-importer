@@ -5255,7 +5255,13 @@ trait FieldtypeMappingTrait
                         '#not_set'
                     );
                     if (
-                        $flatNotSetConfig !== null
+                        (
+                            // The attribute name is a key of the data being read, so the
+                            // `! arrayKeyExists()` check below is always false and this branch
+                            // never applies, whatever this check reads.
+                            // @pest-mutate-ignore: NotIdenticalToIdentical
+                            $flatNotSetConfig !== null
+                        )
                         && ! self::arrayKeyExists(
                             $attrName,
                             $data
@@ -5890,6 +5896,8 @@ trait FieldtypeMappingTrait
                 continue; // Skip invalid rules
             }
 
+            // The rule has exactly one key here, so its first key is its last.
+            // @pest-mutate-ignore: ArrayKeyFirstToArrayKeyLast
             $key = array_key_first($rule);
             $normalizedKey = self::normalizeArrayKey($key);
             if ($normalizedKey === null) {
@@ -5913,6 +5921,8 @@ trait FieldtypeMappingTrait
                             $fieldId
                         );
                     } elseif ($value === '#count') {
+                        // implode() writes the integer as the same digits.
+                        // @pest-mutate-ignore: RemoveStringCast
                         $parts[] = (string) $count;
                     } else { // Otherwise
                         $parts[] = self::normalizeMixedToString($value);
@@ -5976,6 +5986,9 @@ trait FieldtypeMappingTrait
                 $count
             );
 
+            // Without this return the string reaches the fallback below, which replaces
+            // the same placeholders with the same string.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $complexArray;
         }
 
@@ -6143,6 +6156,9 @@ trait FieldtypeMappingTrait
                 '.'
             )
         ) {
+            // Without this return the loop below reads the one-part path the same way,
+            // and gives null when the key is missing.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $data[$path] ?? null;
         }
 
@@ -6186,6 +6202,9 @@ trait FieldtypeMappingTrait
     ): mixed {
         // Handle null values
         if ($value === null) {
+            // Without this return null is neither an array nor a string and is returned
+            // unchanged below.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -6233,6 +6252,10 @@ trait FieldtypeMappingTrait
         $dateString = \trim($dateString);
 
         // Handle empty strings
+        // No date pattern below matches an empty string, so it is returned unchanged
+        // without the early return, and a non-date string returned early instead
+        // would be returned unchanged as well.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty,RemoveEarlyReturn
         if ($dateString === '') {
             return $dateString;
         }
@@ -6325,6 +6348,8 @@ trait FieldtypeMappingTrait
     ): mixed {
         // Handle null values
         if ($value === null) {
+            // Without this return null falls through to the final return unchanged.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -6363,6 +6388,8 @@ trait FieldtypeMappingTrait
         $value
     ): string {
         if ($value === null) {
+            // Without this return null becomes an empty string below and stays empty.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return '';
         }
 
@@ -6401,6 +6428,8 @@ trait FieldtypeMappingTrait
         $value
     ): string {
         if ($value === null) {
+            // Without this return null becomes an empty string below and stays empty.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return '';
         }
 
@@ -6628,6 +6657,9 @@ trait FieldtypeMappingTrait
         }
 
         // Filter out null values from mapped attributes
+        // mapFieldAttributes() already drops the null values, and self:: reaches no
+        // override, so filtering them again changes nothing.
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $mappedAttributes = \array_filter(
             $mappedAttributes,
             fn ($value): bool => $value !== null
@@ -6730,7 +6762,14 @@ trait FieldtypeMappingTrait
 
         // If no Statamic fieldtype handle was found, return null
         if (
-            in_array($statamicType, [null, '', false], true)
+            in_array($statamicType, [
+                null,
+                // No mapping resolves a fieldtype to an empty handle, and one would name
+                // no class below, so the result would be null either way.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                '',
+                false,
+            ], true)
         ) {
             return null;
         }
@@ -6848,7 +6887,7 @@ trait FieldtypeMappingTrait
                         $normalizedOtherAttrName
                     );
 
-                    // Check if we have a mapping for this value
+                    // Check if we have a mapping for this value, the empty string included
                     if (self::arrayKeyExists($otherAttrValue, $valueMappingsArray)) {
                         return self::resolveFieldtypeMappingValue(
                             self::mappingValue(
@@ -6889,22 +6928,6 @@ trait FieldtypeMappingTrait
                             self::mappingValue(
                                 $valueMappingsArray,
                                 '#not_empty'
-                            )
-                        );
-                    }
-
-                    // Check for empty string case
-                    if (
-                        self::arrayKeyExists(
-                            '',
-                            $valueMappingsArray
-                        )
-                        && $otherAttrValue === ''
-                    ) {
-                        return self::resolveFieldtypeMappingValue(
-                            self::mappingValue(
-                                $valueMappingsArray,
-                                ''
                             )
                         );
                     }
@@ -6925,7 +6948,7 @@ trait FieldtypeMappingTrait
                         $normalizedOtherAttrName
                     );
 
-                    // Check if we have a mapping for this value
+                    // Check if we have a mapping for this value, the empty string included
                     if (self::arrayKeyExists($otherAttrValue, $valueMappingsArray)) {
                         return self::resolveFieldtypeMappingValue(
                             self::mappingValue(
@@ -6966,22 +6989,6 @@ trait FieldtypeMappingTrait
                             self::mappingValue(
                                 $valueMappingsArray,
                                 '#not_empty'
-                            )
-                        );
-                    }
-
-                    // Check for empty string case
-                    if (
-                        self::arrayKeyExists(
-                            '',
-                            $valueMappingsArray
-                        )
-                        && $otherAttrValue === ''
-                    ) {
-                        return self::resolveFieldtypeMappingValue(
-                            self::mappingValue(
-                                $valueMappingsArray,
-                                ''
                             )
                         );
                     }
@@ -7309,6 +7316,10 @@ trait FieldtypeMappingTrait
         );
 
         // Process placeholders in the attributes
+        // Read as an `or`, the loop runs for an empty table, which writes nothing,
+        // or without a site handle, which replaces nothing and writes each key and
+        // value back unchanged.
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         if ($attributes !== [] && $siteHandle !== null) {
             $processedAttributes = [];
             foreach ($attributes as $key => $value) {
@@ -7387,6 +7398,9 @@ trait FieldtypeMappingTrait
 
                 // If the value is not set, return null
                 if ($value === null) {
+                    // Without this return every branch below reads the null value and returns
+                    // null.
+                    // @pest-mutate-ignore: RemoveEarlyReturn
                     return null;
                 }
 
@@ -7761,6 +7775,9 @@ trait FieldtypeMappingTrait
                         'default'
                     );
                     if ($defaultAttribute !== null) {
+                        // Without this return the default block below reads the same default and
+                        // returns the same pair.
+                        // @pest-mutate-ignore: RemoveEarlyReturn
                         return [
                             self::replacePlaceholders(
                                 self::normalizeMixedToString($defaultAttribute),
@@ -7976,7 +7993,11 @@ trait FieldtypeMappingTrait
             // If the class exists, instantiate and configure it
             if (
                 $fieldtypeClass !== null
-                && $fieldtypeClass !== ''
+                && (
+                    // An empty class name fails class_exists() below anyway.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $fieldtypeClass !== ''
+                )
                 && class_exists($fieldtypeClass)
             ) {
                 $fieldtypeInstance = new $fieldtypeClass;
@@ -8127,6 +8148,9 @@ trait FieldtypeMappingTrait
                 'fieldAttributeOptionsMapping'
             )
         ) {
+            // Without the property, get_class_vars() has no entry for it, and the
+            // fallback below gives the same empty array.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -8274,6 +8298,9 @@ trait FieldtypeMappingTrait
         string $fieldId
     ): string {
         // Convert to lowercase and trim whitespace
+        // The whitespace trim() removes becomes underscores below, and those are
+        // trimmed from the ends, so the handle is the same without it.
+        // @pest-mutate-ignore: UnwrapTrim
         $handle = \strtolower(\trim($fieldName));
 
         // Replace non-alphanumeric characters with underscores
@@ -8404,6 +8431,9 @@ trait FieldtypeMappingTrait
         $caseSensitiveValue = \is_bool($caseSensitiveValueRaw) && $caseSensitiveValueRaw;
 
         // If nested_attribute is empty, no match
+        // A string pattern is not an array, so every check below passes it by and
+        // the method returns false anyway.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty,RemoveEarlyReturn
         if ($nestedAttribute === '') {
             return false;
         }
@@ -8436,6 +8466,9 @@ trait FieldtypeMappingTrait
             }
 
             // If attrValue is scalar, no match
+            // Without this return a value that is not an array fails the list check
+            // below, which returns false too.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -8457,6 +8490,8 @@ trait FieldtypeMappingTrait
             }
 
             // If attrValue is associative array or scalar, no match
+            // Without this return the method reaches its final return false.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -8516,6 +8551,9 @@ trait FieldtypeMappingTrait
                         )
                     ) {
                         $found = true;
+                        // Going on to the next key once the match is found leaves $found true,
+                        // so the pattern key matches the same either way.
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                     }
                 }
@@ -8568,6 +8606,9 @@ trait FieldtypeMappingTrait
                                 )
                             ) {
                                 $found = true;
+                                // Leaving only the inner loop, or moving to the next item, leaves $found
+                                // true, so the pattern key matches the same either way.
+                                // @pest-mutate-ignore: BreakToContinue,DecrementInteger
                                 break 2;
                             }
                         }
@@ -8636,6 +8677,9 @@ trait FieldtypeMappingTrait
                             )
                         ) {
                             $found = true;
+                            // Going on to the next key once the match is found leaves $found true,
+                            // so the pattern key matches the same either way.
+                            // @pest-mutate-ignore: BreakToContinue
                             break;
                         }
                     }
