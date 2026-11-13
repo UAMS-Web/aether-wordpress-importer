@@ -248,3 +248,26 @@ it('calculates only with a numeric value', function (mixed $value, mixed $expect
     'a number' => ['3', 6],
     'text' => ['wide', 'wide'],
 ]);
+
+it('takes the first calculation that matches', function (array $calculation, ?array $original): void {
+    // Two entries match each time; the first doubles the value, the second would
+    // multiply it by ten.
+    $mapped = fmeMap(
+        ['size' => '3', 'kind' => 'x', 'mode' => 'y'],
+        ['size' => ['statamic_attribute' => 'width', 'value_calculation' => $calculation]],
+        'number',
+        null,
+        $original
+    );
+
+    expect($mapped)->toBe(['width' => 6]);
+})->with([
+    'not set in the original field, then any value' => [['specific_based_on_attribute_value' => ['number' => ['#not_set' => '[value] * 2', '*' => '[value] * 10']]], ['field_options' => '{}']],
+    'a value pattern, then any value' => [['specific_based_on_attribute_value' => ['number' => ['3' => '[value] * 2', '*' => '[value] * 10']]], null],
+    'other attribute values, by default' => [['based_on_other_attribute_value' => ['default' => ['kind' => ['x' => '[value] * 2'], 'mode' => ['y' => '[value] * 10']]]], null],
+    'other attributes not set, by default' => [['based_on_other_attribute_value' => ['default' => ['gone' => ['#not_set' => '[value] * 2'], 'gone2' => ['#not_set' => '[value] * 10']]]], null],
+    'other attribute values, for the fieldtype' => [['based_on_other_attribute_value' => ['specific' => ['number' => ['kind' => ['x' => '[value] * 2'], 'mode' => ['y' => '[value] * 10']]]]], null],
+    'other attributes not set, for the fieldtype' => [['based_on_other_attribute_value' => ['specific' => ['number' => ['gone' => ['#not_set' => '[value] * 2'], 'gone2' => ['#not_set' => '[value] * 10']]]]], null],
+    'other attribute values, legacy' => [['based_on_other_attribute_value' => ['kind' => ['x' => '[value] * 2'], 'mode' => ['y' => '[value] * 10']]], null],
+    'other attributes not set, legacy' => [['based_on_other_attribute_value' => ['gone' => ['#not_set' => '[value] * 2'], 'gone2' => ['#not_set' => '[value] * 10']]], null],
+]);
