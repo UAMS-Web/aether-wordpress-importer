@@ -1,5 +1,5 @@
 diff --git a/src/Support/NodeVisitor.php b/src/Support/NodeVisitor.php
-index a1e5fc1..665e5ca 100644
+index 902a21a..aea04b9 100644
 --- a/src/Support/NodeVisitor.php
 +++ b/src/Support/NodeVisitor.php
 @@ -12,6 +12,16 @@ class NodeVisitor extends NodeVisitorAbstract
@@ -19,22 +19,22 @@ index a1e5fc1..665e5ca 100644
      /**
       * @param  array<int, int>  $linesToMutate
       * @param  array<int, array<int, string>>  $mutatorsToIgnoreByLine
-@@ -34,10 +44,14 @@ class NodeVisitor extends NodeVisitorAbstract
-                 preg_match('/@pest-mutate-ignore(.*)/', (string) $comment->getText(), $matches); // @phpstan-ignore-line
-                 if ($matches !== []) {
-                     if ($matches[1] === '') {
+@@ -41,10 +51,14 @@ class NodeVisitor extends NodeVisitorAbstract
+                     $mutatorsToIgnore = trim($matches[1], " \t\n\r*/:");
+ 
+                     if ($mutatorsToIgnore === '') {
 +                        $this->ignoredNodes[spl_object_id($node)] = true;
 +
                          return NodeTraverser::DONT_TRAVERSE_CURRENT_AND_CHILDREN;
                      }
  
-                     if (in_array($this->mutator::name(), array_map(fn (string $mutatorToIgnore): string => trim($mutatorToIgnore, ' */:'), explode(',', $matches[1])), true)) {
+                     if (in_array($this->mutator::name(), array_map(fn (string $mutatorToIgnore): string => trim($mutatorToIgnore, ' */:'), explode(',', $mutatorsToIgnore)), true)) {
 +                        $this->ignoredNodes[spl_object_id($node)] = true;
 +
                          return NodeTraverser::DONT_TRAVERSE_CURRENT_AND_CHILDREN;
                      }
                  }
-@@ -53,6 +67,12 @@ class NodeVisitor extends NodeVisitorAbstract
+@@ -60,6 +74,12 @@ class NodeVisitor extends NodeVisitorAbstract
              return NodeTraverser::STOP_TRAVERSAL;
          }
  
