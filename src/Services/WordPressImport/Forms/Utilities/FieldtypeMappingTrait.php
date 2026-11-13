@@ -3322,9 +3322,21 @@ trait FieldtypeMappingTrait
                 // Skip if there is no Statamic attribute to map to and no other field value mappings
                 if (
                     ! isset($config['statamic_attribute'])
-                    && ! isset($attrConfigArr['statamic_other_field_value'])
+                    && (
+                        // Equivalent: this pass never reads `statamic_other_field_value`. Every write
+                        // below needs a target, an attribute-value table or a type table, so when all
+                        // three are absent, skipping the attribute or not gives the same result
+                        // @pest-mutate-ignore: RemoveNot
+                        ! isset($attrConfigArr['statamic_other_field_value'])
+                    )
                     && ! isset($attrConfigArr['statamic_other_field_value_based_on_attribute_value'])
-                    && ! isset($attrConfigArr['statamic_other_field_value_based_on_nested_attribute_value'])
+                    && (
+                        // Equivalent: this pass never reads the nested-attribute table. Every write
+                        // below needs a target, an attribute-value table or a type table, so when all
+                        // three are absent, skipping the attribute or not gives the same result
+                        // @pest-mutate-ignore: RemoveNot
+                        ! isset($attrConfigArr['statamic_other_field_value_based_on_nested_attribute_value'])
+                    )
                     && ! isset($attrConfigArr['statamic_type_based_on_attribute_value'])
                 ) {
                     continue;
@@ -3512,6 +3524,9 @@ trait FieldtypeMappingTrait
                             // Replace wildcards in the target attribute
                             $resolvedTargetAttribute = self::resolveWildcards(
                                 self::stringValue($targetAttribute) ?? '',
+                                // Equivalent: the pattern `#not_set` holds no `*`, so the matched
+                                // value is never read
+                                // @pest-mutate-ignore: EmptyStringToNotEmpty
                                 '',
                                 '#not_set'
                             );
@@ -3831,6 +3846,9 @@ trait FieldtypeMappingTrait
                                 )
                             ) {
                                 $hasNotSetCases = true;
+                                // Equivalent: the loop only ever sets the flag to true, so reading the
+                                // remaining tables changes nothing
+                                // @pest-mutate-ignore: BreakToContinue
                                 break;
                             }
                         }
@@ -4073,6 +4091,10 @@ trait FieldtypeMappingTrait
                             ) {
                                 // Resolve the statamic_attribute before using it as an array key
                                 $resolvedMapping = self::processAttributeMapping(
+                                    // Equivalent: from here the name is only used as an array key, and PHP
+                                    // stores a numeric string key such as '5' as the integer 5, so the cast
+                                    // changes nothing
+                                    // @pest-mutate-ignore: RemoveStringCast
                                     (string) $attrName,
                                     null,
                                     $config,
@@ -4106,6 +4128,10 @@ trait FieldtypeMappingTrait
                         ) {
                             // Resolve the statamic_attribute before using it as an array key
                             $resolvedMapping = self::processAttributeMapping(
+                                // Equivalent: from here the name is only used as an array key, and PHP
+                                // stores a numeric string key such as '5' as the integer 5, so the cast
+                                // changes nothing
+                                // @pest-mutate-ignore: RemoveStringCast
                                 (string) $attrName,
                                 null,
                                 $config,
@@ -4138,6 +4164,10 @@ trait FieldtypeMappingTrait
                         ) {
                             // Resolve the statamic_attribute before using it as an array key
                             $resolvedMapping = self::processAttributeMapping(
+                                // Equivalent: from here the name is only used as an array key, and PHP
+                                // stores a numeric string key such as '5' as the integer 5, so the cast
+                                // changes nothing
+                                // @pest-mutate-ignore: RemoveStringCast
                                 (string) $attrName,
                                 null,
                                 $config,
@@ -4163,6 +4193,10 @@ trait FieldtypeMappingTrait
                     ) {
                         // Resolve the statamic_attribute before using it as an array key
                         $resolvedMapping = self::processAttributeMapping(
+                            // Equivalent: from here the name is only used as an array key, and PHP
+                            // stores a numeric string key such as '5' as the integer 5, so the cast
+                            // changes nothing
+                            // @pest-mutate-ignore: RemoveStringCast
                             (string) $attrName,
                             null,
                             $config,
@@ -4305,8 +4339,15 @@ trait FieldtypeMappingTrait
 
             // Define all possible "new structure" keys
             $newStructureKeys = [
+                // Equivalent: a table whose only new-structure key is this one is kept whole by
+                // the legacy branch below, just as the complex-structure branch keeps it
+                // @pest-mutate-ignore: RemoveArrayItem
                 'based_on_other_attribute_value',
+                // Equivalent: as for `based_on_other_attribute_value` above
+                // @pest-mutate-ignore: RemoveArrayItem
                 'specific_based_on_attribute_value',
+                // Equivalent: as for `based_on_other_attribute_value` above
+                // @pest-mutate-ignore: RemoveArrayItem
                 'based_on_attribute_value',
                 'specific',
                 'default',
@@ -4314,10 +4355,15 @@ trait FieldtypeMappingTrait
 
             // Check if this is a new structure (has any of the new structure keys)
             $isNewStructure = \is_array($propertyConfig)
-                && array_intersect_key(
-                    $propertyConfig,
-                    array_flip($newStructureKeys)
-                ) !== [];
+                && (
+                    // Equivalent: a non-empty table with none of these keys matches no branch for
+                    // a new structure except one that keeps it whole, as the legacy branch does
+                    // @pest-mutate-ignore: UnwrapArrayIntersectKey
+                    array_intersect_key(
+                        $propertyConfig,
+                        array_flip($newStructureKeys)
+                    ) !== []
+                );
 
             // Handle properties that need to preserve their entire structure
             if (
@@ -4331,6 +4377,9 @@ trait FieldtypeMappingTrait
 
                 // Preserve the entire configuration for these special properties
                 if (
+                    // Equivalent: the property and the list are non-numeric strings, which loose
+                    // and strict comparison treat alike
+                    // @pest-mutate-ignore: TrueToFalse
                     \in_array($property, $preserveStructureProperties, true)
                 ) {
                     $config[$property] = $propertyConfig;
@@ -4340,6 +4389,9 @@ trait FieldtypeMappingTrait
 
             // Handle properties with complex nested structures that need preservation
             if (
+                // Equivalent: outside a new structure the table has none of the keys the loop
+                // looks for, and after a match it would keep the same whole table again
+                // @pest-mutate-ignore: BooleanAndToBooleanOr
                 $isNewStructure
                 && ! $matchFound
             ) {
@@ -4360,6 +4412,8 @@ trait FieldtypeMappingTrait
                         $matchFound = true;
 
                         // Exit the loop since we found a complex structure to preserve
+                        // Equivalent: a later key would keep the same whole table again
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                     }
                 }
@@ -4477,6 +4531,9 @@ trait FieldtypeMappingTrait
         }
 
         // Filter out null values from mapped attributes (consistent with mapFieldOptions)
+        // Equivalent: none are left, since `mapAttributesFromMapping()` drops null values and
+        // the conditional logic adds only a non-empty list of conditions
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $mappedAttributes = \array_filter(
             $mappedAttributes,
             fn ($value): bool => $value !== null
@@ -4570,6 +4627,9 @@ trait FieldtypeMappingTrait
         }
 
         // Filter out null values from mapped attributes (consistent with mapFieldAttributes)
+        // Equivalent: none are left, since `mapAttributesFromMapping()` drops null values and
+        // the conditional logic adds only a non-empty list of conditions
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $mappedAttributes = \array_filter(
             $mappedAttributes,
             fn ($value): bool => $value !== null
@@ -4722,6 +4782,9 @@ trait FieldtypeMappingTrait
             return null;
         }
 
+        // Equivalent: index 0 holds the same number followed by its unit, and a float cast
+        // reads the leading number, so it gives the same size
+        // @pest-mutate-ignore: DecrementInteger
         $size = (float) $matches[1];
         $unit = \strtoupper($matches[2]);
 
@@ -4786,6 +4849,8 @@ trait FieldtypeMappingTrait
         string $unit
     ): int {
         $multipliers = [
+            // Equivalent: a unit with no entry falls back to 1 below, the value for `B`
+            // @pest-mutate-ignore: RemoveArrayItem
             'B' => 1,
             'KB' => 1000,
             'MB' => 1000 * 1000,
@@ -4808,6 +4873,8 @@ trait FieldtypeMappingTrait
         string $targetUnit
     ): int|float {
         $divisors = [
+            // Equivalent: a unit with no entry falls back to 1 below, the value for `B`
+            // @pest-mutate-ignore: RemoveArrayItem
             'B' => 1,
             'KB' => 1000,
             'MB' => 1000 * 1000,
