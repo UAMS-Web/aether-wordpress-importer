@@ -3070,7 +3070,7 @@ trait FieldtypeMappingTrait
             // Now assign the transformed value to the statamic attribute
             if (
                 \is_string($statamicAttr)
-                && ($statamicAttr !== '' && $statamicAttr !== '')
+                && $statamicAttr !== ''
             ) {
                 if (
                     isset($config['as_array'])
@@ -3108,8 +3108,15 @@ trait FieldtypeMappingTrait
                         // A flat transformation config should only contain transformation keys (like as_numeric_string, as_date_iso_8601, etc.)
                         // and should not contain structural keys like 'default', 'specific', 'based_on_attribute_value', etc.
                         if (\is_array($valueTransformations)) {
-                            $isFlatConfig = ! isset($valueTransformations['default'])
+                            $isFlatConfig = (
+                                // getFieldtypeSpecificConfig() flattens a table whose only
+                                // structural keys are `default` and `specific`, so either one
+                                // reaches here only beside a key checked below, and these two
+                                // read as an `or` answer the same
+                                // @pest-mutate-ignore: BooleanAndToBooleanOr
+                                ! isset($valueTransformations['default'])
                                 && ! isset($valueTransformations['specific'])
+                            )
                                 && ! isset($valueTransformations['based_on_attribute_value'])
                                 && ! isset($valueTransformations['based_on_other_attribute_value'])
                                 && ! isset($valueTransformations['specific_based_on_attribute_value']);

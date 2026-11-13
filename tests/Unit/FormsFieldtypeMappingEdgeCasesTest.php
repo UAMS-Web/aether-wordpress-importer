@@ -459,3 +459,28 @@ it('sets the other field values of the first nested value pattern that matches',
 
     expect($mapped)->toBe(['first' => true]);
 });
+
+it('writes nothing for a target table that resolves to empty', function (): void {
+    expect(fmeMap(['label' => 'L'], ['label' => ['statamic_attribute' => [
+        'based_on_attribute_value' => ['default' => ['no match' => 'never']],
+        'default' => '',
+    ]]]))->toBe([]);
+});
+
+it('deduplicates a list and reindexes it', function (): void {
+    expect(fmeMap(['tags' => ['a', 'a', 'b']], ['tags' => ['statamic_attribute' => 'options', 'deduplicate_values' => true]]))
+        ->toBe(['options' => ['a', 'b']]);
+});
+
+it('applies a transformation table, flat or by structure', function (mixed $transformations, mixed $expected): void {
+    expect(fmeMap(['size' => 5], ['size' => ['statamic_attribute' => 'width', 'value_transformations' => $transformations]], 'number'))
+        ->toBe(['width' => $expected]);
+})->with([
+    'flat' => [['as_numeric_string' => true], '5'],
+    'a default' => [['default' => ['as_numeric_string' => true]], '5'],
+    'for the fieldtype' => [['specific' => ['number' => ['as_numeric_string' => true]]], '5'],
+    'by the value' => [['based_on_attribute_value' => ['5' => ['as_numeric_string' => true]]], '5'],
+    'not a table' => ['as_numeric_string', 5],
+    // With no value table to read, the default applies
+    'by another attribute that matches nothing, falling back to the default' => [['based_on_other_attribute_value' => ['kind' => ['x' => ['as_numeric_string' => false]]], 'default' => ['as_numeric_string' => true]], '5'],
+]);
