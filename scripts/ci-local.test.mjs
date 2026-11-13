@@ -204,9 +204,10 @@ describe('local-ci.json against ci.yml', () => {
             assert.doesNotMatch(own, /^ {6}linux-only: true$/m)
         })
 
-        // Deferred to post-launch on #315: no mutation run of this repository finished on a hosted runner.
-        it('leaves mutation testing to the local run, as #315 decided', () => {
-            assert.match(own, /^ {6}mutate: false$/m)
+        // Mutation testing runs in the chain, with the weekly full pass on a schedule (#519).
+        it('runs mutation testing, with a weekly full pass', () => {
+            assert.match(own, /^ {6}mutate: true$/m)
+            assert.match(ci, /^ {2}schedule:\n {4}- cron: '[^']+'$/m)
         })
     })
 
