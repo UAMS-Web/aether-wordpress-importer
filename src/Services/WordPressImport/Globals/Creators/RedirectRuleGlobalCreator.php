@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators;
 
 use SimpleXMLElement;
+use Statamic\Entries\Collection as StatamicCollection;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
@@ -39,6 +40,15 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * The collection a vanity domain's rules are written to (UAMS-Web/uams-statamic-archive#2594, #1306).
      */
     public const DOMAIN_COLLECTION = 'redirect_domains';
+
+    /**
+     * The domain list a redirect domains entry's `host` refers to, where the host application keeps one (#347).
+     *
+     * `UAMS-Web/aether-redirects` stores one published record per trusted domain here, and a rule's
+     * `host` holds the id of its record. A host application without the collection still takes the
+     * domain as a string.
+     */
+    public const HOST_COLLECTION = 'redirect_hosts';
 
     /**
      * The vanity domains whose redirect rules go to the redirect domains collection.
@@ -362,12 +372,14 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
             return;
         }
 
-        $sites = $collection->sites();
+        $entrySite = self::firstSite($collection, $site);
 
-        // `sites()` always answers a non-empty collection, the default site when none is set,
-        // so the fallback to the import's site only types the value.
-        // @pest-mutate-ignore: InstanceOfToTrue, BooleanAndToBooleanOr
-        $entrySite = $sites instanceof \Illuminate\Support\Collection && \is_string($sites->first()) ? $sites->first() : $site;
+        // What each rule stores as its host: the domain record's id, or the domain where there is no list
+        $hostValue = $this->hostReference($host, $site, $output);
+
+        if ($hostValue === null) {
+            return;
+        }
 
         $created = 0;
         $updated = 0;
@@ -412,14 +424,14 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
                 continue;
             }
 
-            $fields = $this->domainEntryFields($host, $rule, $site, $assetImporter, $output);
+            $fields = $this->domainEntryFields($hostValue, $rule, $site, $assetImporter, $output);
 
             // A response the blueprint does not offer is kept as WordPress served it, and counted
             if (! \in_array($fields['response'], self::DOMAIN_RESPONSES, true)) {
                 $unsupportedResponses++;
             }
 
-            $entry = $this->findDomainEntry($host, $fields['source']);
+            $entry = $this->findDomainEntry($host, $hostValue, $fields['source']);
 
             if (! $entry instanceof StatamicEntry) {
                 $entry = Entry::make();
@@ -450,11 +462,13 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         // A rule unpublished or deleted at the source since an earlier run leaves its entry behind.
         // Disable it rather than delete it, so the redirect stops and the change stays reversible (wordpress-importer-archive#1311).
-        foreach (ImportProgress::track($output, "stale redirect_rule entries ({$host})", $this->importedDomainEntries($host)) as $entry) {
+        foreach (ImportProgress::track($output, "stale redirect_rule entries ({$host})", $this->importedDomainEntries($host, $hostValue)) as $entry) {
             if (isset($written[self::entryId($entry)]) || $entry->get('enabled') === false) {
                 continue;
             }
 
+            // An entry written before the domain list existed holds the domain; it is saved holding the record
+            $entry->set('host', $hostValue);
             $entry->set('enabled', false);
             $entry->save();
             $disabled++;
@@ -463,7 +477,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $output->writeln("<info>Redirect domain {$host}: {$created} created, {$updated} updated, {$disabled} disabled, {$skipped} unpublished skipped, {$shadowed} shadowed.</info>");
 
         // What the domain holds after the run, so a check needs no look at the content tree (#254)
-        $stored = \count($this->importedDomainEntries($host));
+        $stored = \count($this->importedDomainEntries($host, $hostValue));
 
         $output->writeln("<info>Redirect domain {$host}: {$stored} stored with a wordpress_post_id.</info>");
 
@@ -473,9 +487,122 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     }
 
     /**
+     * The first site a collection is configured for, or the given site.
+     *
+     * @param  StatamicCollection  $collection  The collection
+     * @param  string  $site  The site to fall back to
+     */
+    private static function firstSite(StatamicCollection $collection, string $site): string
+    {
+        $sites = $collection->sites();
+
+        // `sites()` always answers a non-empty collection, the default site when none is set,
+        // so the fallback to the import's site only types the value.
+        // @pest-mutate-ignore: InstanceOfToTrue, BooleanAndToBooleanOr
+        return $sites instanceof \Illuminate\Support\Collection && \is_string($sites->first()) ? $sites->first() : $site;
+    }
+
+    /**
+     * The value a vanity domain's rules store as their `host` (#347).
+     *
+     * Where the host application keeps a domain list, this is the id of the domain's record,
+     * created and published first when no record names the domain. A re-run finds the record it
+     * created, so a domain never has two. Where there is no domain list, it is the domain itself.
+     * An unpublished record is a domain someone withdrew from the list, so its rules are not
+     * written and the import says why.
+     *
+     * @param  string  $host  The vanity domain, lower-cased
+     * @param  string  $site  The Statamic site handle being imported into
+     * @param  OutputInterface  $output  Console output for logging
+     * @return ?string The record id, the domain, or null when the rules must not be written
+     */
+    private function hostReference(string $host, string $site, OutputInterface $output): ?string
+    {
+        $collection = Collection::findByHandle(self::HOST_COLLECTION);
+
+        // A host application without the domain list takes the domain as a string
+        if ($collection === null) {
+            return $host;
+        }
+
+        $record = $this->findHostRecord($host);
+
+        if ($record instanceof StatamicEntry) {
+            if ($record->published() !== true) {
+                $output->writeln("  - <error>Domain record for {$host} in '".self::HOST_COLLECTION."' is unpublished - skipping redirect rules for {$host}.</error>");
+
+                ImportWarningManager::addWarning('redirects', 'unpublished_domain_records', [
+                    'host' => $host,
+                    'record' => self::entryId($record),
+                ]);
+
+                return null;
+            }
+
+            return self::entryId($record);
+        }
+
+        $record = Entry::make();
+
+        // `Entry::make()` always answers an entry, so the narrowing only types it.
+        // @pest-mutate-ignore: InstanceOfToTrue
+        if (! $record instanceof StatamicEntry) {
+            return null;
+        }
+
+        $record->collection(self::HOST_COLLECTION);
+        $record->locale(self::firstSite($collection, $site));
+        $record->data(['title' => $host, 'host' => $host]);
+        $record->published(true);
+        $record->save();
+
+        $output->writeln("<info>Redirect domain {$host}: domain record created in '".self::HOST_COLLECTION."'.</info>");
+
+        return self::entryId($record);
+    }
+
+    /**
+     * The domain list record naming a host, published or not.
+     *
+     * Compared as the add-on stores a domain: lower-cased, without surrounding space or a
+     * trailing dot.
+     *
+     * @param  string  $host  The vanity domain, lower-cased
+     */
+    private function findHostRecord(string $host): ?StatamicEntry
+    {
+        $query = EntryQueryHelper::query();
+        $query->where('collection', self::HOST_COLLECTION);
+
+        $results = $query->get();
+
+        // A Stache query always answers a collection of concrete entries, so these narrowings
+        // only type what follows.
+        // @pest-mutate-ignore: InstanceOfToTrue
+        if (! $results instanceof \Illuminate\Support\Collection) {
+            return null;
+        }
+
+        foreach ($results->all() as $record) {
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
+            if (! $record instanceof StatamicEntry) {
+                continue;
+            }
+
+            $stored = $record->get('host');
+
+            if (\is_string($stored) && \rtrim(\strtolower(\trim($stored)), '.') === $host) {
+                return $record;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * The redirect domains entry fields for one published rule.
      *
-     * @param  string  $host  The vanity domain
+     * @param  string  $hostValue  What the entry stores as its host: the domain record's id, or the domain
      * @param  SimpleXMLElement  $rule  The `redirect_rule` item
      * @param  string  $site  The Statamic site handle being imported into, for target resolution
      * @param  AssetImporter  $assetImporter  Instance for importing linked files
@@ -483,7 +610,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * @return array{host: string, wordpress_post_id: string, enabled: bool, whole_domain: bool, source: string, use_regex: bool, response: string, order: int, notes?: string, target_type: string, target_url?: string, target_entry?: list<string>}
      */
     private function domainEntryFields(
-        string $host,
+        string $hostValue,
         SimpleXMLElement $rule,
         string $site,
         AssetImporter $assetImporter,
@@ -505,7 +632,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         );
 
         $fields = [
-            'host' => $host,
+            'host' => $hostValue,
             'wordpress_post_id' => XpathHelper::getStringValue($rule, 'wp:post_id'),
             'enabled' => true,
             'whole_domain' => false,
@@ -631,14 +758,18 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * Only entries carrying a `wordpress_post_id` came from a WordPress rule. An entry an editor
      * authored in the control panel has none, so a re-import never disables it.
      *
+     * An entry is the host's whether it holds the domain record's id or, written before the
+     * domain list existed, the domain itself (#347).
+     *
      * @param  string  $host  The vanity domain
+     * @param  string  $hostValue  The domain record's id, or the domain where there is no list
      * @return list<StatamicEntry>
      */
-    private function importedDomainEntries(string $host): array
+    private function importedDomainEntries(string $host, string $hostValue): array
     {
         $query = EntryQueryHelper::query();
         $query->where('collection', self::DOMAIN_COLLECTION);
-        $query->where('host', $host);
+        $query->whereIn('host', \array_values(\array_unique([$hostValue, $host])));
 
         $results = $query->get();
 
@@ -684,14 +815,18 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     /**
      * The existing redirect domains entry for a host and source, if one was imported before.
      *
+     * Matched on the domain record's id or, for an entry written before the domain list
+     * existed, on the domain itself (#347).
+     *
      * @param  string  $host  The vanity domain
+     * @param  string  $hostValue  The domain record's id, or the domain where there is no list
      * @param  string  $source  The rule's source
      */
-    private function findDomainEntry(string $host, string $source): ?StatamicEntry
+    private function findDomainEntry(string $host, string $hostValue, string $source): ?StatamicEntry
     {
         $query = EntryQueryHelper::query();
         $query->where('collection', self::DOMAIN_COLLECTION);
-        $query->where('host', $host);
+        $query->whereIn('host', \array_values(\array_unique([$hostValue, $host])));
         $query->where('source', $source);
 
         $entry = $query->first();
