@@ -1880,7 +1880,10 @@ trait FieldtypeMappingTrait
 
                 // Handle different value_calculation structures
                 if (\is_string($calculationConfig)) {
-                    // Simple string expression - only apply if value is numeric
+                    // Simple string expression - only apply if value is numeric. Read
+                    // as an `or`, the check lets a value that is not numeric through,
+                    // and applyValueCalculation() returns such a value unchanged.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
                     if (
                         $mappedValue !== null
                         && \is_numeric($mappedValue)

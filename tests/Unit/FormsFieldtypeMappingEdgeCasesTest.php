@@ -227,3 +227,24 @@ it('reads no fieldtype-specific key translation for an empty fieldtype', functio
 
     expect($mapped)->toBe(['options' => [['label' => 'A', 'value' => 'a']]]);
 });
+
+it('trims the configured characters from a text value and from each value in a list', function (mixed $value, mixed $expected): void {
+    expect(fmeMap(['label' => $value], ['label' => ['statamic_attribute' => 'display', 'trim_characters' => ['.']]]))
+        ->toBe(['display' => $expected]);
+})->with([
+    'text' => ['.Your name.', 'Your name'],
+    'a list' => [['.a.', 'b.'], ['a', 'b']],
+]);
+
+it('drops the empty pieces of an exploded value and reindexes the list', function (): void {
+    expect(fmeMap(['ext' => 'jpg,,png,'], ['ext' => ['statamic_attribute' => 'extensions', 'explode_string' => ',']]))
+        ->toBe(['extensions' => ['jpg', 'png']]);
+});
+
+it('calculates only with a numeric value', function (mixed $value, mixed $expected): void {
+    expect(fmeMap(['size' => $value], ['size' => ['statamic_attribute' => 'width', 'value_calculation' => '[value] * 2']]))
+        ->toBe(['width' => $expected]);
+})->with([
+    'a number' => ['3', 6],
+    'text' => ['wide', 'wide'],
+]);
