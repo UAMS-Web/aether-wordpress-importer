@@ -121,12 +121,18 @@ trait UnwrappingBlockProcessorTrait
     private function trimmedCommentText(
         DOMNode $node
     ): string {
+        // Traversal callers narrow to DOMComment; canProcess checks native comment type.
+        // @pest-mutate-ignore: InstanceOfToTrue
         if (! ($node instanceof DOMComment)) {
+            // Native comment nodes are DOMComment instances, so callers cannot enter here.
+            // @pest-mutate-ignore: RemoveEarlyReturn, EmptyStringToNotEmpty
             return '';
         }
 
         $value = $node->nodeValue;
 
+        // Neither the empty fallback nor the mutation sentinel matches a block pattern.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($value) ? \trim($value) : '';
     }
 
@@ -262,6 +268,8 @@ trait UnwrappingBlockProcessorTrait
         // The loop breaks as soon as $depth reaches 0, so $depth is always > 0 here.
         while ($currentNode instanceof DOMNode) {
             // Check if this is a closing block comment
+            // trimmedCommentText() independently returns empty text for other nodes.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($currentNode instanceof DOMComment
             && \preg_match(
                 '/^\/wp:'.$escapedBlockName.'\s*$/',
@@ -287,6 +295,8 @@ trait UnwrappingBlockProcessorTrait
             }
 
             // Check if this is a closing block comment
+            // trimmedCommentText() independently returns empty text for other nodes.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($currentNode instanceof DOMComment
             && \preg_match(
                 '/^wp:'.$escapedBlockName.'\s*({.+?})?\s*$/s',
@@ -318,6 +328,9 @@ trait UnwrappingBlockProcessorTrait
             if ($currentNode instanceof DOMText) {
                 // Trim whitespace from the text node's value
                 $nodeValue = $currentNode->nodeValue;
+                // Native text is a string; stable null subclasses append no bytes
+                // with either fallback.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $text = \is_string($nodeValue) ? \trim($nodeValue) : '';
 
                 // Check if the trimmed text is not empty
@@ -375,6 +388,9 @@ trait UnwrappingBlockProcessorTrait
             // Split class attribute into individual class values
             $classes = \preg_split(
                 '/\s+/',
+                // Empty tokens cannot match a nonempty prefix. An empty prefix
+                // matches with or without trimming.
+                // @pest-mutate-ignore: UnwrapTrim
                 \trim($class)
             );
 
@@ -396,6 +412,8 @@ trait UnwrappingBlockProcessorTrait
                     $isWrapper = true;
 
                     // Exit loop early since we found a match
+                    // Later comparisons cannot reset the wrapper flag.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
                 }
             }
@@ -413,6 +431,9 @@ trait UnwrappingBlockProcessorTrait
                 if ($child instanceof DOMText) {
                     // Trim whitespace from text content
                     $childValue = $child->nodeValue;
+                    // Native text is a string; stable null subclasses append no bytes
+                    // with either fallback.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
                     $text = \is_string($childValue) ? \trim($childValue) : '';
 
                     // Check if text content is not empty after trimming
@@ -432,6 +453,8 @@ trait UnwrappingBlockProcessorTrait
             // Include non-wrapper elements as-is
             $ownerDocument = $element->ownerDocument;
 
+            // Traversed elements belong to the document containing the opening node.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($ownerDocument instanceof \DOMDocument) {
                 $content .= $ownerDocument->saveHTML($element);
             }
@@ -474,6 +497,8 @@ trait UnwrappingBlockProcessorTrait
 
             // Check if this is a closing block comment
             if (
+                // trimmedCommentText() independently rejects non-comment nodes.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 $currentNode instanceof DOMComment
                 && \preg_match(
                     '/^\/wp:'.$escapedBlockName.'\s*$/',
@@ -493,6 +518,8 @@ trait UnwrappingBlockProcessorTrait
                     break;
                 }
             } elseif (
+                // trimmedCommentText() independently rejects non-comment nodes.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 $currentNode instanceof DOMComment
                 && \preg_match(
                     '/^wp:'.$escapedBlockName.'\s*({.+?})?\s*$/s',
