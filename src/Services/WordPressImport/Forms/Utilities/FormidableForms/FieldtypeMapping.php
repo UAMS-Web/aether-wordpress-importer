@@ -4620,6 +4620,9 @@ class FieldtypeMapping
 
         // If no field IDs, return empty array
         if ($fieldIds === []) {
+            // Without the return the loop below runs no condition, and the empty
+            // condition list returns the same empty array.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -4658,7 +4661,14 @@ class FieldtypeMapping
             );
 
             // Skip this condition if field handle not found
-            if ($fieldHandle === null || $fieldHandle === '') {
+            if (
+                $fieldHandle === null
+                || (
+                    // A handle always ends in "_" and the field id, so it is never empty
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $fieldHandle === ''
+                )
+            ) {
                 continue;
             }
 
@@ -4686,7 +4696,11 @@ class FieldtypeMapping
         // Return empty array if no valid attribute or no conditions
         if (
             $statamicAttribute === null
-            || $statamicAttribute === ''
+            || (
+                // getStatamicConditionalAttribute() answers a non-empty attribute or null
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $statamicAttribute === ''
+            )
             || $statamicConditions === []
         ) {
             return [];
@@ -4770,7 +4784,14 @@ class FieldtypeMapping
             );
 
             // Skip this condition if field handle not found
-            if ($fieldHandle === null || $fieldHandle === '') {
+            if (
+                $fieldHandle === null
+                || (
+                    // A handle always ends in "_" and the field id, so it is never empty
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $fieldHandle === ''
+                )
+            ) {
                 continue;
             }
 
@@ -4801,7 +4822,14 @@ class FieldtypeMapping
         );
 
         // Return empty array if no valid attribute
-        if ($statamicAttribute === null || $statamicAttribute === '') {
+        if (
+            $statamicAttribute === null
+            || (
+                // getStatamicConditionalAttribute() answers a non-empty attribute or null
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $statamicAttribute === ''
+            )
+        ) {
             return [];
         }
 
