@@ -112,13 +112,15 @@ it('converts each rule to a condition on the field it names', function (): void 
     $logic = [
         'actionType' => 'show',
         'logicType' => 'all',
+        // Each skipped rule comes before a kept one, so a skip that ended the loop
+        // would lose the rules after it
         'rules' => [
-            ['fieldId' => '1', 'operator' => 'is', 'value' => ''],
-            ['fieldId' => '2', 'operator' => 'isnot', 'value' => 'Clinic'],
             'not a rule',
             ['fieldId' => '404', 'operator' => 'is', 'value' => 'x'],
             ['fieldId' => '3', 'operator' => 'is', 'value' => 'x'],
             ['fieldId' => '1', 'operator' => 'starts_with', 'value' => 'x'],
+            ['fieldId' => '1', 'operator' => 'is', 'value' => ''],
+            ['fieldId' => '2', 'operator' => 'isnot', 'value' => 'Clinic'],
         ],
     ];
 
@@ -126,6 +128,43 @@ it('converts each rule to a condition on the field it names', function (): void 
         'first_name_1' => 'equals empty',
         'visit_type_2' => 'not Clinic',
     ]]);
+});
+
+it('reads a rule value that is missing, not scalar or a number', function (
+    array $rule,
+    string $expected
+): void {
+    $logic = ['actionType' => 'show', 'logicType' => 'all', 'rules' => [['fieldId' => '1', 'operator' => 'is', ...$rule]]];
+
+    expect(mapConditionalField($logic))->toBe(['if' => ['first_name_1' => $expected]]);
+})->with([
+    'missing' => [[], 'equals empty'],
+    'not scalar' => [['value' => ['Ann']], 'equals empty'],
+    'a number' => [['value' => 5], 'equals 5'],
+]);
+
+it('maps no conditional for an unknown action type, called directly', function (): void {
+    // Through a field the attribute filter hides what this returns, so call the
+    // mapping itself: an unknown action has no attribute, whatever its rules.
+    expect(FieldtypeMapping::mapConditionalLogic(['actionType' => 'toggle', 'rules' => [['fieldId' => '1', 'operator' => 'is', 'value' => 'a']]], conditionalSourceFields()))->toBe([]);
+});
+
+it('raises no PHP warning for rules that are not a list', function (): void {
+    $warnings = [];
+    \set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
+        $warnings[] = $message;
+
+        return true;
+    });
+
+    try {
+        $mapped = FieldtypeMapping::mapConditionalLogic(['actionType' => 'show', 'rules' => 'x'], conditionalSourceFields());
+    } finally {
+        \restore_error_handler();
+    }
+
+    expect($mapped)->toBe([])
+        ->and($warnings)->toBe([]);
 });
 
 it('maps no conditional when there is nothing to apply', function (mixed $conditionalLogic): void {
