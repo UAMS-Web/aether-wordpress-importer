@@ -1016,13 +1016,25 @@ trait FieldtypeMappingTrait
 
                     // Legacy support for old structures
                     // Check for specific_based_on_attribute_value (legacy)
+                    $specificBasedOnConfig = self::mappingConfig(
+                        $statamicAttrConfig['specific_based_on_attribute_value'] ?? null
+                    );
                     if (
                         isset($statamicAttrConfig['specific_based_on_attribute_value'])
                         && ! $matchFound
+                        // A table keyed by this fieldtype is resolved once, by the
+                        // statamic_attribute.specific_based_on_attribute_value block
+                        // below, which replaces a `*` in the target and handles
+                        // `#not_set` and `#not_empty` (#455)
+                        && ! (
+                            $excludeFieldtype !== null
+                            && $excludeFieldtype !== ''
+                            && self::arrayKeyExists(
+                                $excludeFieldtype,
+                                $specificBasedOnConfig
+                            )
+                        )
                     ) {
-                        $specificBasedOnConfig = self::mappingConfig(
-                            $statamicAttrConfig['specific_based_on_attribute_value']
-                        );
                         $result = self::processBasedOnAttributeValue(
                             $specificBasedOnConfig,
                             $excludeFieldtype,
