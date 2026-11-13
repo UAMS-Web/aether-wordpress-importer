@@ -382,7 +382,7 @@ it('sets the other field values of the first pattern that matches', function (st
     $table = match ($form) {
         'default' => ['default' => $patterns],
         'specific' => ['default' => [], 'specific' => ['radio' => $patterns]],
-        'legacy' => $patterns,
+        default => $patterns,
     };
 
     $mapped = fmeMap(
