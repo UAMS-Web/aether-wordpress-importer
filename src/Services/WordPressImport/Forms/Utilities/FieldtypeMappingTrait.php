@@ -3530,7 +3530,11 @@ trait FieldtypeMappingTrait
                                 '',
                                 '#not_set'
                             );
-                            $mappedData[$resolvedTargetAttribute] = '';
+                            // A target that is not text resolves to empty and names no attribute,
+                            // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                            if ($resolvedTargetAttribute !== '') {
+                                $mappedData[$resolvedTargetAttribute] = '';
+                            }
                         }
                     }
                 }

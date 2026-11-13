@@ -499,3 +499,21 @@ it('counts empty text, and a list of only empty values, as empty', function (): 
         ->and(fmeCall('isFieldOptionNotEmpty', 'a', ['field_options' => '{"a":{"b":[]}}']))->toBeFalse()
         ->and(fmeCall('isFieldOptionNotEmpty', 'a', ['field_options' => '{"a":{"b":"x"}}']))->toBeTrue();
 });
+
+it('writes nothing for a missing attribute whose fieldtype-specific not-set target is not text', function (mixed $target, array $expected): void {
+    $mapped = fmeCall(
+        'mapAttributesFromMapping',
+        [],
+        ['gone' => ['statamic_attribute' => ['specific_based_on_attribute_value' => ['radio' => ['#not_set' => $target]]]]],
+        [],
+        null,
+        'radio',
+        ['field_options' => '{}'],
+        null
+    );
+
+    expect($mapped)->toBe($expected);
+})->with([
+    'a list' => [['x'], []],
+    'text' => ['gone_to', ['gone_to' => '']],
+]);
