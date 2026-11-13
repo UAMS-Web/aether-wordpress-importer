@@ -2984,8 +2984,13 @@ trait FieldtypeMappingTrait
                                 // Get the choices configuration to determine key mapping
                                 $choicesConfig = static::$fieldAttributeMapping['choices'] ?? null;
                                 if (
-                                    $choicesConfig !== null
-                                    && $choicesConfig !== []
+                                    (
+                                        // The isset() below already fails for null and for an
+                                        // empty table, so these two read as an `or` answer the same
+                                        // @pest-mutate-ignore: BooleanAndToBooleanOr
+                                        $choicesConfig !== null
+                                        && $choicesConfig !== []
+                                    )
                                     && isset($choicesConfig['key_translation'])
                                 ) {
                                     $keyTranslationConfig = $choicesConfig['key_translation'];

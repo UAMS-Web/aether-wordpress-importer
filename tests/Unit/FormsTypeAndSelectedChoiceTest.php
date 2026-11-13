@@ -266,3 +266,21 @@ it('reads no selected choice when the field has no choices', function (): void {
         'radio'
     ))->toBe([]);
 });
+
+it('reads no fieldtype key translation for the selected choice without a named fieldtype', function (?string $fieldtype): void {
+    // An entry keyed by the empty string is no fieldtype's, so the default table applies
+    // and the choice's value is the key (#537).
+    FormsSelectedChoiceMapping::useChoices(['key_translation' => ['default' => ['value' => 'key'], 'specific' => ['' => ['text' => 'key']]]]);
+
+    expect(new ReflectionMethod(FormsSelectedChoiceMapping::class, 'mapAttributesFromMapping')->invoke(
+        null,
+        ['defaultValue' => null, 'choices' => FORMS_SC_CHOICES],
+        ['defaultValue' => ['statamic_attribute' => 'default', 'get_selected_choice' => true]],
+        [],
+        null,
+        $fieldtype
+    ))->toBe(['default' => 'two']);
+})->with([
+    'no fieldtype' => [null],
+    'an empty fieldtype' => [''],
+]);
