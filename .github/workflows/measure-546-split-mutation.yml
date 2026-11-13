@@ -1,0 +1,80 @@
+# One-off measurement for #546: each file the ImportWordPress split leaves, mutated on
+# its own on Linux with the ticket's command. It runs only on pushes to its own branch,
+# which is never merged.
+
+name: Measure the ImportWordPress split on Linux
+
+on:
+  push:
+    branches:
+      - 546-split-mutation-measure
+
+permissions:
+  contents: read
+
+jobs:
+  mutate-file:
+    name: Mutate ${{ matrix.file }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - ImportWordPress
+          - Concerns/ChecksImportMemory
+          - Concerns/ImportWordPressMappings
+          - Concerns/PreparesImportSite
+          - Concerns/ReportsImportResults
+          - Concerns/ScansImportContent
+          - Concerns/SourcesImportFromApi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          coverage: pcov
+
+      # PCOV overrides zend_execute_ex, so a tracing JIT warns in every php child,
+      # including the ones a compile-cleanly test spawns. Turn it off for all of them.
+      - name: Disable the JIT for every php process
+        run: |
+          php --ini
+          for f in $(php -r 'echo implode(" ", array_filter(array_merge([php_ini_loaded_file()], explode(",", (string) php_ini_scanned_files())), "strlen"));'); do
+            f=$(echo "$f" | tr -d "[:space:]")
+            if grep -q "opcache.jit" "$f"; then echo "rewriting $f"; sudo sed -i -E -e "s/^(opcache.jit *= *).*/\1off/" -e "s/^(opcache.jit_buffer_size *= *).*/\10/" "$f"; grep -n "opcache.jit" "$f"; fi
+          done
+          php -r 'var_dump(ini_get("opcache.jit"), ini_get("opcache.jit_buffer_size"));'
+          ! php -r 'echo 1;' 2>&1 | grep -q "JIT is incompatible"
+
+      - name: Record the platform and tool revisions
+        run: |
+          set -x
+          uname -a
+          cat /etc/os-release
+          git rev-parse HEAD
+          git rev-parse origin/main
+          git diff --name-only origin/main...HEAD
+          php -v
+          php --ri pcov
+          composer show pestphp/pest-plugin-mutate
+          composer show pestphp/pest
+          cat patches.lock.json
+
+      - name: Mutate the file
+        run: |
+          start=$(date +%s)
+          php -d opcache.enable_cli=0 -d opcache.jit=off -d memory_limit=2G vendor/bin/pest --testsuite=Unit,Integration \
+            --mutate --path=src/Console/Commands/${{ matrix.file }}.php --no-cache \
+            > mutate.log 2>&1 || true
+          echo "wall seconds: $(( $(date +%s) - start ))" | tee -a mutate.log
+          tail -60 mutate.log
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: mutate-${{ strategy.job-index }}
+          path: mutate.log
