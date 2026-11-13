@@ -171,6 +171,8 @@ it('warns on each product mode the Statamic fieldtype cannot express', function 
     expect($first['field_id'] ?? null)->toBe('8');
     expect($first['field_label'] ?? null)->toBe('Product Name');
     expect($first['form_title'] ?? null)->toBe('Springdale Caregiving');
+    expect($first['plugin'] ?? null)->toBe('Gravity Forms');
+    expect($first['reason'] ?? null)->toBe('The Gravity Forms "'.$inputType.'" product mode has no analog in the Statamic product fieldtype, so this field imports without a selection type and needs a manual port.');
 })->with([
     'hidden' => ['hiddenproduct'],
     'user defined price' => ['price'],
