@@ -27,7 +27,8 @@
     },
     "autoload": {
         "psr-4": {
-            "UAMSWeb\\Aether\\WordPressImporter\\": "src/"
+            "UAMSWeb\\Aether\\WordPressImporter\\": "src/",
+            "UAMSWeb\\Aether\\WordPressImporter\\Data\\": "data/"
         }
     },
     "autoload-dev": {
