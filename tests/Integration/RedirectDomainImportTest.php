@@ -606,6 +606,7 @@ it('writes each rule\'s host as the id of the domain record, creating one record
     $record = $records[0];
 
     expect($record->get('host'))->toBe('uams.info')
+        ->and($record->get('title'))->toBe('uams.info')
         ->and($record->published())->toBeTrue()
         ->and($record->locale())->toBe('default');
 
@@ -728,4 +729,26 @@ it('writes no rule for a domain whose record is unpublished, and says why (#347)
         ->and(ImportWarningManager::getWarnings('redirects', 'unpublished_domain_records'))->toBe([
             ['host' => 'uams.info', 'record' => redirectDomainId($record)],
         ]);
+});
+
+it('creates the domain record in the site its collection is configured for (#347)', function (): void {
+    // A collection reports its own sites only with multisite on
+    config(['statamic.system.multisite' => true]);
+
+    Site::setSites([
+        'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
+        'vanity' => ['name' => 'Vanity', 'locale' => 'en_US', 'url' => '/vanity/'],
+    ]);
+
+    $collection = CollectionFacade::make(RedirectRuleGlobalCreator::HOST_COLLECTION);
+    $collection->sites(['vanity']);
+    $collection->save();
+
+    redirectDomainRun(redirectDomainParser('https://uams.info', [['id' => 1, 'from' => '/give', 'to' => 'https://a.example/']]));
+
+    $records = redirectHostRecords();
+
+    expect($records)->toHaveCount(1)
+        ->and($records[0]->locale())->toBe('vanity')
+        ->and(redirectDomainEntries()['/give']->get('host'))->toBe(redirectDomainId($records[0]));
 });

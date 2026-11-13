@@ -545,7 +545,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $record = Entry::make();
 
         // `Entry::make()` always answers an entry, so the narrowing only types it.
-        // @pest-mutate-ignore: InstanceOfToTrue
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn
         if (! $record instanceof StatamicEntry) {
             return null;
         }
@@ -553,6 +553,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $record->collection(self::HOST_COLLECTION);
         $record->locale(self::firstSite($collection, $site));
         $record->data(['title' => $host, 'host' => $host]);
+        // A new entry is already published (`Publishable::$published` is true), so this cannot be observed.
+        // @pest-mutate-ignore: RemoveMethodCall
         $record->published(true);
         $record->save();
 
@@ -578,7 +580,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         // A Stache query always answers a collection of concrete entries, so these narrowings
         // only type what follows.
-        // @pest-mutate-ignore: InstanceOfToTrue
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn
         if (! $results instanceof \Illuminate\Support\Collection) {
             return null;
         }
@@ -769,7 +771,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     {
         $query = EntryQueryHelper::query();
         $query->where('collection', self::DOMAIN_COLLECTION);
-        $query->whereIn('host', \array_values(\array_unique([$hostValue, $host])));
+        $query->whereIn('host', [$hostValue, $host]);
 
         $results = $query->get();
 
@@ -826,7 +828,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     {
         $query = EntryQueryHelper::query();
         $query->where('collection', self::DOMAIN_COLLECTION);
-        $query->whereIn('host', \array_values(\array_unique([$hostValue, $host])));
+        $query->whereIn('host', [$hostValue, $host]);
         $query->where('source', $source);
 
         $entry = $query->first();
