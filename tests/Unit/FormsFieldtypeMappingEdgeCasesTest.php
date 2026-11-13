@@ -375,3 +375,30 @@ it('sets no other field value for an attribute with no target', function (): voi
     expect(fmeMap(['label' => 'Your name'], ['label' => ['statamic_other_field_value' => ['default' => ['shown' => true]]]]))
         ->toBe([]);
 });
+
+it('sets the other field values of the first pattern that matches', function (string $form, string $condition, ?array $original): void {
+    // The condition and `*` both match; only the first sets its values.
+    $patterns = [$condition => ['first' => true], '*' => ['second' => true]];
+    $table = match ($form) {
+        'default' => ['default' => $patterns],
+        'specific' => ['default' => [], 'specific' => ['radio' => $patterns]],
+        'legacy' => $patterns,
+    };
+
+    $mapped = fmeMap(
+        ['mode' => 'v'],
+        ['mode' => ['statamic_other_field_value_based_on_attribute_value' => $table]],
+        'radio',
+        null,
+        $original
+    );
+
+    expect($mapped)->toBe(['first' => true]);
+})->with([
+    'default, not set in the original field' => ['default', '#not_set', ['field_options' => '{}']],
+    'default, not empty' => ['default', '#not_empty', null],
+    'for the fieldtype, not set in the original field' => ['specific', '#not_set', ['field_options' => '{}']],
+    'for the fieldtype, not empty' => ['specific', '#not_empty', null],
+    // A legacy table has no `#not_empty` case
+    'legacy, not set in the original field' => ['legacy', '#not_set', ['field_options' => '{}']],
+]);
