@@ -1665,11 +1665,6 @@ abstract class BaseEntryCreator
             $term = TermFacade::make();
             $term->taxonomy($statamicTaxonomyHandle);
             $term->slug($termData['slug']);
-            // Term::in() answers a localization and changes the term in nothing, so
-            // no outcome depends on this call; the host-app suite pins it
-            // (TermCreationInNonDefaultSitesTest)
-            // @pest-mutate-ignore: RemoveMethodCall
-            $term->in($site);
             $term->set(
                 'title',
                 $termData['title']
@@ -2914,11 +2909,6 @@ abstract class BaseEntryCreator
         $term = TermFacade::make();
         $term->taxonomy($statamicTaxonomyHandle);
         $term->slug($siteSpecificSlug);
-        // Term::in() answers a localization and changes the term in nothing, so no
-        // outcome depends on this call; the host-app suite pins it
-        // (TermCreationInNonDefaultSitesTest)
-        // @pest-mutate-ignore: RemoveMethodCall
-        $term->in($site);
         $term->set(
             'title',
             $title
