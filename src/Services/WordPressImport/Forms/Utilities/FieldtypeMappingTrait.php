@@ -1047,11 +1047,16 @@ trait FieldtypeMappingTrait
                         }
                     }
 
-                    // Check for based_on_attribute_value (legacy)
-                    if (
-                        $basedOnAttributeValue !== []
+                    // Check for based_on_attribute_value (legacy): a table with neither a
+                    // `default` nor a `specific` key. Read as an `or`, either check lets
+                    // through only an empty table, which matches nothing, or a table the
+                    // steps above already read without a match, which matches nothing again.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $isLegacyBasedOnAttributeValue = $basedOnAttributeValue !== []
                         && ! isset($basedOnAttributeValue['default'])
-                        && ! isset($basedOnAttributeValue['specific'])
+                        && ! isset($basedOnAttributeValue['specific']);
+                    if (
+                        $isLegacyBasedOnAttributeValue
                         && ! $matchFound
                     ) {
                         $result = self::processBasedOnAttributeValue(
@@ -1066,11 +1071,16 @@ trait FieldtypeMappingTrait
                         }
                     }
 
-                    // Check for based_on_other_attribute_value (legacy)
-                    if (
-                        $basedOnOtherAttributeValue !== []
+                    // Check for based_on_other_attribute_value (legacy): a table with neither a
+                    // `default` nor a `specific` key. Read as an `or`, either check lets
+                    // through only an empty table, which matches nothing, or a table the
+                    // steps above already read without a match, which matches nothing again.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $isLegacyBasedOnOtherAttributeValue = $basedOnOtherAttributeValue !== []
                         && ! isset($basedOnOtherAttributeValue['default'])
-                        && ! isset($basedOnOtherAttributeValue['specific'])
+                        && ! isset($basedOnOtherAttributeValue['specific']);
+                    if (
+                        $isLegacyBasedOnOtherAttributeValue
                         && ! $matchFound
                     ) {
                         $result = self::processBasedOnOtherAttributeValue(

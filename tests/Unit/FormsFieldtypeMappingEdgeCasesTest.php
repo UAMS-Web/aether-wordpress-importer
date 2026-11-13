@@ -93,3 +93,30 @@ it('reads no fieldtype-specific target for an empty fieldtype', function (): voi
 
     expect($mapped)->toBe(['display' => 'Your name']);
 });
+
+it('reads a legacy value table only when no other target matched', function (): void {
+    // A legacy `based_on_attribute_value` table, one with no `default` or `specific`
+    // key, is the last resort: the default target wins over it.
+    $mapped = fmeMap(
+        ['label' => 'Your name'],
+        ['label' => ['statamic_attribute' => [
+            'based_on_attribute_value' => ['Your name' => 'legacy'],
+            'default' => 'display',
+        ]]]
+    );
+
+    expect($mapped)->toBe(['display' => 'Your name']);
+});
+
+it('reads a legacy table of other attribute values only when no other target matched', function (): void {
+    // The legacy `based_on_other_attribute_value` table is the last resort too.
+    $mapped = fmeMap(
+        ['label' => 'Your name', 'kind' => 'big'],
+        ['label' => ['statamic_attribute' => [
+            'based_on_other_attribute_value' => ['kind' => ['big' => 'legacy']],
+            'default' => 'display',
+        ]]]
+    );
+
+    expect($mapped)->toBe(['display' => 'Your name']);
+});
