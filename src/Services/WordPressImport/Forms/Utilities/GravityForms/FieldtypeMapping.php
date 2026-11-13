@@ -20380,11 +20380,23 @@ class FieldtypeMapping
 
         // A product field with no inputType is a Single Product, the default
         if (! \is_string($inputType)) {
+            // Without the return the strict lookup below finds no text value among the
+            // unsupported modes, and returns the same way.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return;
         }
 
         // Anything the fieldtype can express needs no warning
-        if (! \in_array($inputType, self::UNSUPPORTED_PRODUCT_INPUT_TYPES, true)) {
+        if (
+            ! \in_array(
+                $inputType,
+                self::UNSUPPORTED_PRODUCT_INPUT_TYPES,
+                // The value is text here and no unsupported mode is numeric, so a loose
+                // comparison answers the same as a strict one.
+                // @pest-mutate-ignore: TrueToFalse
+                true
+            )
+        ) {
             return;
         }
 
@@ -20506,7 +20518,10 @@ class FieldtypeMapping
         $conditionalLogic,
         array $allFields = []
     ): array {
-        // If no conditional logic, return empty array
+        // If no conditional logic, return empty array. Past this guard, a value that is
+        // not a table reads no key and an empty table has no rules, so the rules check
+        // below returns the same empty array.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd,RemoveEarlyReturn
         if (! \is_array($conditionalLogic) || $conditionalLogic === []) {
             return [];
         }
@@ -20541,12 +20556,18 @@ class FieldtypeMapping
                 continue;
             }
 
-            // Extract field ID from the rule
+            // Extract field ID from the rule. A Gravity Forms field id is a number, so
+            // neither the empty fallback nor any other text names a field.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $fieldIdRaw = $rule['fieldId'] ?? '';
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $fieldId = \is_scalar($fieldIdRaw) ? (string) $fieldIdRaw : '';
 
-            // Extract operator from the rule
+            // Extract operator from the rule. The empty fallback is no operator, and
+            // neither is any other text the converter does not name.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $operatorRaw = $rule['operator'] ?? '';
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $operator = \is_string($operatorRaw) ? $operatorRaw : '';
 
             // Extract value from the rule
@@ -20560,7 +20581,14 @@ class FieldtypeMapping
             );
 
             // Skip this rule if field handle not found
-            if ($fieldHandle === null || $fieldHandle === '') {
+            if (
+                $fieldHandle === null
+                || (
+                    // A handle always ends in "_" and the field id, so it is never empty
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $fieldHandle === ''
+                )
+            ) {
                 continue;
             }
 
@@ -20588,7 +20616,11 @@ class FieldtypeMapping
         // Return empty array if no valid attribute or no conditions
         if (
             $statamicAttribute === null
-            || $statamicAttribute === ''
+            || (
+                // getStatamicConditionalAttribute() answers a non-empty attribute or null
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $statamicAttribute === ''
+            )
             || $statamicConditions === []
         ) {
             return [];
