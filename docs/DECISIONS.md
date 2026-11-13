@@ -1558,3 +1558,15 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Why.** No link in the exports would land on such an `id`. Counted over the 259 exports at `UAMS-Web/wordpress-importer-exports` `2dc5f67`: none of 808 `<blockquote>` elements carries one, the 45 image ids are Word paste artifacts, the one image block's `id` is a generated block UUID, and none of 2,554 links with a fragment points at any of them. The measurement and its control are on #374.
 
 **Rejected: carrying the `id`.** It needs an `id` field on the host's `pull_quote` and image sets in `uams-statamic`, and the importer mapping to fill it, for anchors nothing links to. It stays open if one appears; the follow-up that reports a fragment link aimed at a dropped `id` is what would show one.
+
+## The Gravity Forms mapping data lives in class constants under `data/`, outside `src` (#558)
+
+**Decided 2026-11-13, on #558.** The three Gravity Forms mapping arrays (`$mapping`, `$fieldAttributeMapping` and `$subfieldMapping`) move out of `FieldtypeMapping.php` into the constants of `FieldtypeMappingData`, in `data/Forms/GravityForms/` under a second PSR-4 root, `UAMSWeb\Aether\WordPressImporter\Data\`. The class's static properties still hold the data from the moment it loads (`protected static array $mapping = FieldtypeMappingData::MAPPING;`), so `FieldtypeMappingTrait` and the tests read the same properties. PHPStan and Rector cover `data/`, and the package archive ships it, since nothing export-ignores it.
+
+**Why.** Mutation testing mutates `src`. The file was 20,668 lines, about 20,300 of them data holding 222 booleans and 185 integers, and Pest reprints the whole file for every mutant, so its mutant count never came back within 45 minutes (#558). With the data outside `src`, a change to the mapping logic mutates only the logic. The data keeps its 1,821 comment lines and its two `AddressChoiceCodes` constants. It sets the pattern for the Formidable Forms mapping (#547).
+
+**Rejected: a JSON or YAML data file.** It loses the comments and the constant references, and a static property cannot be initialized from a file, so it needs lazy loading that `FieldtypeMappingTrait`, which reads the properties directly, cannot see.
+
+**Rejected: constant classes under `src`.** They are still mutated, by every pull request that touches one and by the weekly full run, each with a run time nobody has measured.
+
+**A host-app run has to carry `data/` too.** One that copies only `src/` and `tests/` into the vendored package misses the mapping, and the host's autoloader knows the `data/` root only after `composer dump-autoload`, or an install of a release that declares it.
