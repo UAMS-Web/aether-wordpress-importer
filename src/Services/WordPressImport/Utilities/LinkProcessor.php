@@ -27,8 +27,6 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\D
  * preprocess content before Tiptap parsing, ensuring compatibility with
  * Statamic's asset system and maintaining internal link integrity.
  *
- * Temporary line for a pull-request mutation timing run; reverted on the same branch.
- *
  * @phpstan-type DeferredLinkData array{
  *     url: string,
  *     post_name: string,
