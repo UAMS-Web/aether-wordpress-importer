@@ -120,3 +120,41 @@ it('reads a legacy table of other attribute values only when no other target mat
 
     expect($mapped)->toBe(['display' => 'Your name']);
 });
+
+it('collects an object value list once per value, as a list, then maps the next attribute', function (): void {
+    // The duplicate is dropped and the list is reindexed; the attribute after the
+    // object one is still mapped.
+    $mapped = fmeMap(
+        ['ftypes' => ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png'], 'label' => 'Upload'],
+        ['ftypes' => ['statamic_attribute' => 'mime_types', 'extract_object_values' => true], 'label' => ['statamic_attribute' => 'display']]
+    );
+
+    expect($mapped)->toBe(['mime_types' => ['image/jpeg', 'image/png'], 'display' => 'Upload']);
+});
+
+it('collects no object values for a target that resolves to empty', function (): void {
+    $mapped = fmeMap(
+        ['ftypes' => ['jpg' => 'image/jpeg']],
+        ['ftypes' => [
+            'statamic_attribute' => ['based_on_attribute_value' => ['default' => ['no match' => 'never']], 'default' => ''],
+            'extract_object_values' => true,
+        ]]
+    );
+
+    expect($mapped)->toBe([]);
+});
+
+it('matches a whole-list translation against the object values as a list', function (): void {
+    // The values are read as a list before translation, so a translation whose search
+    // is that list matches although the object's own keys are extensions.
+    $mapped = fmeMap(
+        ['ftypes' => ['jpg' => 'image/jpeg', 'png' => 'image/png']],
+        ['ftypes' => [
+            'statamic_attribute' => 'mime_types',
+            'extract_object_values' => true,
+            'value_translation' => [['search' => ['image/jpeg', 'image/png'], 'replace' => ['image/*']]],
+        ]]
+    );
+
+    expect($mapped)->toBe(['mime_types' => ['image/*']]);
+});
