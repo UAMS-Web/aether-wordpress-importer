@@ -8600,6 +8600,10 @@ trait FieldtypeMappingTrait
             $attrNumeric = \is_numeric($attrValue) ? (float) $attrValue : $attrValue;
             $patternNumeric = \is_numeric($patternValue) ? (float) $patternValue : $patternValue;
 
+            // Read as an `or`, the check lets through one number, compared as a
+            // float, and one value that is not numeric and so not a float; they are
+            // never identical, and the comparisons below also find them unequal
+            // @pest-mutate-ignore: BooleanAndToBooleanOr
             if (
                 \is_numeric($attrValue)
                 && \is_numeric($patternValue)
@@ -8719,6 +8723,8 @@ trait FieldtypeMappingTrait
                     $fieldData
                 )
             ) {
+                // $separateValue is only read for its truth below, which the cast keeps
+                // @pest-mutate-ignore: RemoveBooleanCast
                 $separateValue = (bool) self::mappingValue(
                     $fieldData,
                     $separateValueFieldOption
@@ -8740,6 +8746,8 @@ trait FieldtypeMappingTrait
                 \is_array($fieldOptions)
                 && isset($fieldOptions['separate_value'])
             ) {
+                // $separateValue is only read for its truth below, which the cast keeps
+                // @pest-mutate-ignore: RemoveBooleanCast
                 $separateValue = (bool) $fieldOptions['separate_value'];
             }
         }
@@ -8853,6 +8861,9 @@ trait FieldtypeMappingTrait
                     'radio',
                     'checkbox',
                 ],
+                // A string or null compares with these two non-numeric strings the
+                // same way loosely as strictly
+                // @pest-mutate-ignore: TrueToFalse
                 true
             )
         ) {
@@ -9037,6 +9048,10 @@ trait FieldtypeMappingTrait
 
         // Return a whole result as an int, so a calculation feeding an integer
         // field such as `character_limit` does not write `1198.0`
+        // A finite float equals its floor, its ceiling and its rounding exactly
+        // when it is whole, and PHP compares a float with an int as two floats, so
+        // the float cast changes nothing
+        // @pest-mutate-ignore: FloorToCiel,FloorToRound,RemoveDoubleCast
         return $result === \floor($result)
             && \abs($result) < (float) PHP_INT_MAX
             ? (int) $result
@@ -9111,6 +9126,9 @@ trait FieldtypeMappingTrait
     ) {
         $configArray = self::mappingConfig($config);
         $dataArray = self::asArray($data);
+        // A fieldtype that is not a string reads as none, and only a table keyed
+        // by the very text put in place of '' could tell another default apart
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $excludeFieldtypeString = self::stringValue($excludeFieldtype) ?? '';
 
         // Check if value_translation configuration exists
@@ -9581,7 +9599,14 @@ trait FieldtypeMappingTrait
                 foreach ($translationArray as $pattern => $replacement) {
                     // Skip special cases that were already handled
                     if (
-                        in_array($pattern, ['#not_set', '#not_empty', '#empty'], true)
+                        in_array(
+                            $pattern,
+                            // None of these keys holds a `*`, so one left out of
+                            // the list is skipped by the wildcard check below anyway
+                            // @pest-mutate-ignore: RemoveArrayItem
+                            ['#not_set', '#not_empty', '#empty'],
+                            true
+                        )
                     ) {
                         continue;
                     }
@@ -9644,6 +9669,9 @@ trait FieldtypeMappingTrait
 
         // Check if all elements are arrays with 'search' and 'replace' keys
         foreach ($translationArray as $item) {
+            // Without this return, an item that is not an array has no `search`
+            // key below, which returns false as well
+            // @pest-mutate-ignore: RemoveEarlyReturn
             if (! \is_array($item)) {
                 return false;
             }
@@ -9795,7 +9823,9 @@ trait FieldtypeMappingTrait
             return \json_encode($value) === $search;
         }
 
-        // Handle array-to-array matching
+        // Handle array-to-array matching. Read as an `or`, the check lets through
+        // only one array and one non-array, which are never identical
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         if (\is_array($value) && \is_array($search)) {
             // Check for exact array match (same elements, same order)
             return $value === $search;
@@ -9817,12 +9847,16 @@ trait FieldtypeMappingTrait
         mixed $originalValue,
         $searchPattern
     ) {
-        // If replacement is null, return null (exclude the value)
+        // If replacement is null, return null (exclude the value). Without this
+        // return, a null falls through to the last return, which returns it too
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($replace === null) {
             return null;
         }
 
-        // If replacement is an array, return it as-is
+        // If replacement is an array, return it as-is. Without this return, an
+        // array falls through to the last return, which returns it as-is too
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (\is_array($replace)) {
             return $replace;
         }
@@ -9999,6 +10033,9 @@ trait FieldtypeMappingTrait
                 $translationConfig['#empty'] = null;
             }
 
+            // None of the keys the code below reads is present here, so without
+            // this return the configuration comes back unchanged as well
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $translationConfig;
         }
 
@@ -10183,6 +10220,10 @@ trait FieldtypeMappingTrait
     ): array {
         // Get the choices configuration from the implementing class
         $choicesConfig = static::$fieldAttributeMapping['choices'] ?? null;
+        // A null or empty configuration has no `expected_keys` either, so the last
+        // check alone decides. Without the return, a configuration without
+        // `expected_keys` reads no pattern below and falls back to the same keys
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd,RemoveEarlyReturn
         if (
             $choicesConfig === null
             || $choicesConfig === []
@@ -10198,6 +10239,10 @@ trait FieldtypeMappingTrait
                 'expected_keys'
             )
         );
+        // A `default` entry is returned by processModifierPatternsWithReturn()
+        // itself, so the fallback is read only when there is none, and then the
+        // left side is null anyway
+        // @pest-mutate-ignore: CoalesceRemoveLeft
         $defaultExpectedKeys = self::asArray(
             self::mappingValue(
                 $expectedKeysConfig,
@@ -10285,6 +10330,9 @@ trait FieldtypeMappingTrait
         string $string
     ): string {
         // Convert to lowercase and trim whitespace
+        // Every character trim() removes is replaced with an underscore below, and
+        // leading and trailing underscores are trimmed, so the result is the same
+        // @pest-mutate-ignore: UnwrapTrim
         $handle = \strtolower(\trim($string));
 
         // Replace non-alphanumeric characters with underscores
@@ -10379,17 +10427,6 @@ trait FieldtypeMappingTrait
             return [$valueMappings['#empty'], true];
         }
 
-        // Check for empty string case
-        if (
-            self::arrayKeyExists(
-                '',
-                $valueMappings
-            )
-            && $otherAttrValue === ''
-        ) {
-            return [$valueMappings[''], true];
-        }
-
         return null;
     }
 
@@ -10461,6 +10498,9 @@ trait FieldtypeMappingTrait
         $matchFound = false;
         $result = null;
         $configArray = self::mappingConfig($config);
+        // A fieldtype that is not a string reads as none, and only a table keyed
+        // by the very text put in place of '' could tell another default apart
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $excludeFieldtypeString = self::stringValue($excludeFieldtype) ?? '';
 
         // Check if config is an array
@@ -10550,11 +10590,17 @@ trait FieldtypeMappingTrait
 
         // Legacy structure - process each based_on_other_attribute_value configuration directly (if match not found)
         if (
-            ! $matchFound
-            && $configArray !== []
-            && ! self::arrayKeyExists(
-                'specific',
-                $configArray
+            (
+                // A match needs a `specific` or `default` table, which the checks
+                // here rule out, so read as an `or`, either of the first two lets
+                // through only an empty table, whose loop below matches nothing
+                // @pest-mutate-ignore: BooleanAndToBooleanOr
+                ! $matchFound
+                && $configArray !== []
+                && ! self::arrayKeyExists(
+                    'specific',
+                    $configArray
+                )
             )
             && ! self::arrayKeyExists(
                 'default',
@@ -10615,6 +10661,9 @@ trait FieldtypeMappingTrait
         $matchFound = false;
         $result = null;
         $configArray = self::mappingConfig($config);
+        // A fieldtype that is not a string reads as none, and only a table keyed
+        // by the very text put in place of '' could tell another default apart
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $excludeFieldtypeString = self::stringValue($excludeFieldtype) ?? '';
 
         // Check if config is an array
@@ -10684,11 +10733,17 @@ trait FieldtypeMappingTrait
 
         // Legacy structure - process each based_on_attribute_value configuration directly (if match not found)
         if (
-            ! $matchFound
-            && $configArray !== []
-            && ! self::arrayKeyExists(
-                'specific',
-                $configArray
+            (
+                // A match needs a `specific` or `default` table, which the checks
+                // here rule out, so read as an `or`, either of the first two lets
+                // through only an empty table, whose loop below matches nothing
+                // @pest-mutate-ignore: BooleanAndToBooleanOr
+                ! $matchFound
+                && $configArray !== []
+                && ! self::arrayKeyExists(
+                    'specific',
+                    $configArray
+                )
             )
             && ! self::arrayKeyExists(
                 'default',
@@ -10856,6 +10911,9 @@ trait FieldtypeMappingTrait
         array $config
     ): mixed {
         // Check if trim_characters configuration exists
+        // Without trim_characters the list below is empty, and an empty list
+        // returns the value unchanged as well
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! isset($config['trim_characters'])) {
             return $value;
         }
@@ -10866,6 +10924,9 @@ trait FieldtypeMappingTrait
                 'trim_characters'
             )
         );
+        // The list is only tested for emptiness and joined below, and neither
+        // reads its keys, so reindexing it changes nothing
+        // @pest-mutate-ignore: UnwrapArrayValues
         $characterStrings = \array_values(
             \array_filter(
                 \array_map(
@@ -10939,11 +11000,17 @@ trait FieldtypeMappingTrait
         ?string $preset = null
     ): ?array {
         $normalizedAttrName = self::normalizeArrayKey($attrName);
+        // A name that is not a key reads no configuration below, so without this
+        // return the missing statamic_attribute returns null as well
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($normalizedAttrName === null) {
             return null;
         }
 
-        // Skip if this attribute is not in processedMappings
+        // Skip if this attribute is not in processedMappings. Without this
+        // return, an absent or null entry reads as no configuration below, and
+        // its missing statamic_attribute returns null as well
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! isset($processedMappings[$normalizedAttrName])) {
             return null;
         }
@@ -10963,6 +11030,9 @@ trait FieldtypeMappingTrait
             $attrConfig,
             'statamic_attribute'
         );
+        // processAttributeMapping() returns null for a missing statamic_attribute
+        // too, before it reads anything else
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($statamicAttr === null) {
             return null;
         }
@@ -11022,86 +11092,26 @@ trait FieldtypeMappingTrait
             $resolvedAttribute = null;
             $finalValue = $attrValue;
 
-            // 1. based_on_attribute_value.specific
-            if (
-                self::arrayKeyExists(
-                    'specific',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
+            // 1. based_on_attribute_value: processBasedOnAttributeValue() reads its
+            // specific, default and legacy tables itself, in that order, so one call
+            // covers all three, and an empty table matches nothing
+            $result = self::processBasedOnAttributeValue(
+                $basedOnAttributeValueArray,
+                null,
+                $attrName,
+                $attrValue,
+                $combinedData
+            );
+            if ($result !== null) {
+                [$resolvedAttribute] = $result;
+                if ($resolvedAttribute === null) {
+                    return null; // Skip this attribute
                 }
+
+                // Don't return yet - continue to check for value_translation
             }
 
-            // 2. based_on_attribute_value.default
-            if (
-                $resolvedAttribute === null
-                && self::arrayKeyExists(
-                    'default',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
-                }
-            }
-
-            // 3. based_on_attribute_value (legacy)
-            if (
-                $resolvedAttribute === null
-                && $basedOnAttributeValueArray !== []
-                && ! self::arrayKeyExists(
-                    'default',
-                    $basedOnAttributeValueArray
-                )
-                && ! self::arrayKeyExists(
-                    'specific',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
-                }
-            }
-
-            // 4. based_on_other_attribute_value.specific
+            // 2. based_on_other_attribute_value.specific
             $basedOnOtherAttributeValue = self::asArray(
                 self::mappingValue(
                     $statamicAttrArray,
@@ -11127,7 +11137,14 @@ trait FieldtypeMappingTrait
                     $attrValue
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $finalValue] = $result;
+                    [
+                        $resolvedAttribute,
+                        // processBasedOnOtherAttributeValueMapping() returns the
+                        // attribute value it was given as the second item, which is
+                        // what $finalValue already holds
+                        // @pest-mutate-ignore: RemoveArrayItem
+                        $finalValue,
+                    ] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -11136,7 +11153,7 @@ trait FieldtypeMappingTrait
                 }
             }
 
-            // 5. based_on_other_attribute_value.default
+            // 3. based_on_other_attribute_value.default
             if (
                 $resolvedAttribute === null
                 && self::arrayKeyExists(
@@ -11156,7 +11173,14 @@ trait FieldtypeMappingTrait
                     $attrValue
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $finalValue] = $result;
+                    [
+                        $resolvedAttribute,
+                        // processBasedOnOtherAttributeValueMapping() returns the
+                        // attribute value it was given as the second item, which is
+                        // what $finalValue already holds
+                        // @pest-mutate-ignore: RemoveArrayItem
+                        $finalValue,
+                    ] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -11165,7 +11189,7 @@ trait FieldtypeMappingTrait
                 }
             }
 
-            // 6. based_on_other_attribute_value (legacy)
+            // 4. based_on_other_attribute_value (legacy)
             if (
                 $resolvedAttribute === null
                 && $basedOnOtherAttributeValue !== []
@@ -11184,7 +11208,14 @@ trait FieldtypeMappingTrait
                     $attrValue
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $finalValue] = $result;
+                    [
+                        $resolvedAttribute,
+                        // processBasedOnOtherAttributeValueMapping() returns the
+                        // attribute value it was given as the second item, which is
+                        // what $finalValue already holds
+                        // @pest-mutate-ignore: RemoveArrayItem
+                        $finalValue,
+                    ] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -11237,6 +11268,10 @@ trait FieldtypeMappingTrait
 
         // Otherwise
         // Handle simple string statamic_attribute
+        // stringValue() returns a string unchanged and null for anything else,
+        // and normalizeMixedToString() returns that same string, so the right side
+        // alone gives the same name
+        // @pest-mutate-ignore: CoalesceRemoveLeft
         $statamicAttrString = self::stringValue($statamicAttr)
             ?? self::normalizeMixedToString($statamicAttr);
         $finalValue = self::processSimpleStatamicAttribute(
@@ -11507,6 +11542,9 @@ trait FieldtypeMappingTrait
                 $value = $resultProcessor($value);
             }
 
+            // Every branch above sets a match, and each step below waits for no
+            // match, so without this return the same value and flag come back
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [
                 'value' => $value,
                 'matchFound' => $matchFound,
@@ -12078,6 +12116,9 @@ trait FieldtypeMappingTrait
         mixed $value,
         array $translationConfig
     ): mixed {
+        // A value that is not an array cannot equal an array search below, so
+        // without this return the method still returns false
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! \is_array($value)) {
             return false;
         }
@@ -12325,21 +12366,6 @@ trait FieldtypeMappingTrait
                     )
                 );
             }
-
-            if (
-                self::arrayKeyExists(
-                    '',
-                    $valueMappingsArray
-                )
-                && $otherAttrValue === ''
-            ) {
-                return self::resolveOptionalStringMappingValue(
-                    self::mappingValue(
-                        $valueMappingsArray,
-                        ''
-                    )
-                );
-            }
         }
 
         return null;
@@ -12498,6 +12524,9 @@ trait FieldtypeMappingTrait
     private static function numericChoiceCount(
         int|string $index
     ): ?int {
+        // An int index is numeric too, and the cast below leaves it unchanged, so
+        // without this return the one below gives the same count
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (\is_int($index)) {
             return $index + 1;
         }
