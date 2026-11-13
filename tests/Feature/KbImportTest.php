@@ -3709,12 +3709,17 @@ it('makes an imported knowledge-base article discoverable through the search ind
         // what makes the rebuild below load-bearing instead of incidental.
         //
         // An index that has never been built has no file, and searching it
-        // throws `IndexNotFoundException` rather than returning nothing. A
-        // freshly prepared slot has no index file (#562), so a missing index
-        // counts as "not searchable" here. The searches after the rebuild do
-        // not get this allowance: with `reindexAll()` removed they throw.
+        // throws `IndexNotFoundException` rather than returning nothing. The
+        // host's test boot points the `local` driver at a per-process directory
+        // and deletes it before every test (`uams-statamic`'s
+        // `CreatesApplication::isolateSearchIndexes()`), so no index exists
+        // here (#562), and a missing index counts as "not searchable". The
+        // searches after the rebuild do not get this allowance: with
+        // `reindexAll()` removed they throw.
         // ---
-        $searchableBeforeReindex = kbSearchIndex()->exists()
+        // `exists()` is untyped on Statamic's `Index`; the `local` driver
+        // returns `File::exists()`, a bool
+        $searchableBeforeReindex = kbSearchIndex()->exists() === true
             ? kbSearchReferences('Sample Article 9')
             : [];
 
