@@ -206,3 +206,24 @@ it('takes the first key translation another attribute matches', function (string
     'empty in the original field' => ['#empty', ['field_options' => '{"choices":""}']],
     'this value' => ['[{"text":"A","value":"a"}]', null],
 ]);
+
+it('reads a key translation table kept whole by a value table as default and specific translations', function (): void {
+    // A `based_on_attribute_value` key keeps the key translation whole, so its
+    // `default` is still read as the default translations rather than as a key.
+    expect(fmeTranslateChoiceKeys(['based_on_attribute_value' => ['no match' => []], 'default' => ['text' => 'label']]))
+        ->toBe(['options' => [['label' => 'A', 'value' => 'a']]]);
+});
+
+it('reads no fieldtype-specific key translation for an empty fieldtype', function (): void {
+    $mapped = fmeMap(
+        ['choices' => [['text' => 'A', 'value' => 'a']]],
+        ['choices' => ['statamic_attribute' => 'options', 'key_translation' => [
+            'specific_based_on_attribute_value' => ['radio' => []],
+            'specific' => ['' => ['text' => 'wrong']],
+            'default' => ['text' => 'label'],
+        ]]],
+        ''
+    );
+
+    expect($mapped)->toBe(['options' => [['label' => 'A', 'value' => 'a']]]);
+});
