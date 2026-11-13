@@ -6704,7 +6704,7 @@ trait FieldtypeMappingTrait
                         $normalizedOtherAttrName
                     );
 
-                    // Check if we have a mapping for this value
+                    // Check if we have a mapping for this value, the empty string included
                     if (self::arrayKeyExists($otherAttrValue, $valueMappingsArray)) {
                         return self::resolveFieldtypeMappingValue(
                             self::mappingValue(
@@ -6745,22 +6745,6 @@ trait FieldtypeMappingTrait
                             self::mappingValue(
                                 $valueMappingsArray,
                                 '#not_empty'
-                            )
-                        );
-                    }
-
-                    // Check for empty string case
-                    if (
-                        self::arrayKeyExists(
-                            '',
-                            $valueMappingsArray
-                        )
-                        && $otherAttrValue === ''
-                    ) {
-                        return self::resolveFieldtypeMappingValue(
-                            self::mappingValue(
-                                $valueMappingsArray,
-                                ''
                             )
                         );
                     }
@@ -6781,7 +6765,7 @@ trait FieldtypeMappingTrait
                         $normalizedOtherAttrName
                     );
 
-                    // Check if we have a mapping for this value
+                    // Check if we have a mapping for this value, the empty string included
                     if (self::arrayKeyExists($otherAttrValue, $valueMappingsArray)) {
                         return self::resolveFieldtypeMappingValue(
                             self::mappingValue(
@@ -6822,22 +6806,6 @@ trait FieldtypeMappingTrait
                             self::mappingValue(
                                 $valueMappingsArray,
                                 '#not_empty'
-                            )
-                        );
-                    }
-
-                    // Check for empty string case
-                    if (
-                        self::arrayKeyExists(
-                            '',
-                            $valueMappingsArray
-                        )
-                        && $otherAttrValue === ''
-                    ) {
-                        return self::resolveFieldtypeMappingValue(
-                            self::mappingValue(
-                                $valueMappingsArray,
-                                ''
                             )
                         );
                     }
