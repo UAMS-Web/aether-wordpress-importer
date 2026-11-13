@@ -1558,3 +1558,13 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Why.** No link in the exports would land on such an `id`. Counted over the 259 exports at `UAMS-Web/wordpress-importer-exports` `2dc5f67`: none of 808 `<blockquote>` elements carries one, the 45 image ids are Word paste artifacts, the one image block's `id` is a generated block UUID, and none of 2,554 links with a fragment points at any of them. The measurement and its control are on #374.
 
 **Rejected: carrying the `id`.** It needs an `id` field on the host's `pull_quote` and image sets in `uams-statamic`, and the importer mapping to fill it, for anchors nothing links to. It stays open if one appears; the follow-up that reports a fragment link aimed at a dropped `id` is what would show one.
+
+## Mutation testing runs on pull requests in CI, with no scheduled full pass (#519)
+
+**Decided 2026-11-13, on #519.** `ci.yml` calls the shared chain at `v0.10.1` with `mutate: true` and has no `schedule:` trigger. The chain's `mutate` job mutates the PHP files under `src` that a pull request or push changes, under its 45-minute limit, and fails on any survivor. A pull request that changes a file whose mutants do not finish inside that limit fails `CI` until the file is split or annotated. The full pass stays a local run.
+
+**Why.** Measured on #536 on standard `ubuntu-latest` runners with PCOV 1.0.12 on PHP 8.4.27. The full pass ran 2h52m of mutation without finishing and was cancelled at the chain's 180-minute limit. A pull request touching `LinkProcessor.php` made 982 mutants and finished 662, all killed, before the 45-minute limit cancelled it, about 3.2 seconds per mutant. About 700 mutants is the most a pull request's changed files fit. Counted locally on the 15 largest files under `src`, ten exceed it: eight at 719 to 1,280 mutants, `FieldtypeMappingTrait.php` at 3,769, and the Gravity Forms `FieldtypeMapping.php`, which never reported a count. #546 to #553, #556 and #558 split them.
+
+**Rejected: keeping mutation off in CI and running it locally only.** It keeps every pull request green, but drops the per-change check the chain exists to give.
+
+**Rejected: a weekly full pass with a longer limit.** At the rate measured, the full pass is on the order of 36 hours on one runner (an estimate from one file's mutant density), past a hosted job's 6-hour maximum.

@@ -17,11 +17,14 @@ name: CI
 #   Windows and macOS by default, and `composer-validate`, `pint`, `rector` and `phpstan` on Linux
 #   alone; `all-platform-jobs` puts those four back on Windows, which also adds a macOS leg.
 #   The chain has no Linux-and-Windows setting.
-# - Mutation testing is on (#519). The chain's `mutate` job runs on `ubuntu-latest` alone, mutates
-#   only the PHP files under `src` a pull request or a push changes, under a 45-minute limit, and
-#   mutates everything `composer mutate` covers on the weekly schedule and on a manual run, under the
-#   chain's `mutate-full-timeout-minutes` default (180). It fails on any survivor. `mutate-ignore`
-#   runs only while `mutate` is on.
+# - Mutation testing is on for pull requests and pushes (#519). The chain's `mutate` job runs on
+#   `ubuntu-latest` alone, mutates only the PHP files under `src` that a pull request or a push
+#   changes, under a 45-minute limit, and fails on any survivor. A change to a large file can
+#   exceed that limit: `LinkProcessor.php` alone made 982 mutants and was cancelled at 662, so such
+#   a pull request fails `CI` until the file is split or annotated. There is no schedule: the full
+#   pass ran 2h52m without finishing under the chain's 180-minute limit, so it stays a local run.
+#   A manual `workflow_dispatch` run would start the full pass and hit the same limit.
+#   `mutate-ignore` runs only while `mutate` is on.
 #
 # PLAIN JOBS. `mutate-ignore-breadth`, `spell`, `node-test` and `python-test` stay here as jobs of
 # their own, each a matrix over `ubuntu-latest` and `windows-latest`.
@@ -64,13 +67,9 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Lets the workflow be run on demand against a branch. A manual run mutates everything.
+  # Lets the workflow be run on demand against a branch. The chain's mutate job mutates everything
+  # on a manual run, which does not finish on a hosted runner (#519).
   workflow_dispatch:
-  # The weekly full mutation pass (#519), which catches decay no pull request touches: a dependency
-  # or tooling change. A schedule runs on the default branch, and GitHub disables it after 60 days
-  # without repository activity.
-  schedule:
-    - cron: '17 7 * * 1'
 
 # A new push to a pull request cancels that pull request's stale run. Every other run (a push to
 # the default branch, a manual run) gets a group of its own, keyed on the commit, so a later push

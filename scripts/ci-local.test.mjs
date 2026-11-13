@@ -204,10 +204,11 @@ describe('local-ci.json against ci.yml', () => {
             assert.doesNotMatch(own, /^ {6}linux-only: true$/m)
         })
 
-        // Mutation testing runs in the chain, with the weekly full pass on a schedule (#519).
-        it('runs mutation testing, with a weekly full pass', () => {
+        // Mutation testing runs in the chain on pull requests and pushes. No schedule: the full
+        // pass does not finish under the chain's 180-minute limit on a hosted runner (#519).
+        it('runs mutation testing on changes, with no scheduled full pass', () => {
             assert.match(own, /^ {6}mutate: true$/m)
-            assert.match(ci, /^ {2}schedule:\n {4}- cron: '[^']+'$/m)
+            assert.doesNotMatch(ci, /^ {2}schedule:$/m)
         })
     })
 
