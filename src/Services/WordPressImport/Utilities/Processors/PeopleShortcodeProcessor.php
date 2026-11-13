@@ -53,9 +53,15 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
      * Read from `uamsweb_common_people_block_set.yaml` in `uams-statamic`. `date` left
      * the list when people became undated (`UAMS-Web/uams-statamic-archive#2552`).
      *
-     * @var list<string>
+     * A method rather than a constant, so the list is built on a line coverage
+     * records and removing a value is a mutant the tests run.
+     *
+     * @return list<string> The values
      */
-    private const array ORDER_BY_VALUES = ['none', 'title', 'sortpriority', 'sorttext', 'modified'];
+    private static function orderByValues(): array
+    {
+        return ['none', 'title', 'sortpriority', 'sorttext', 'modified'];
+    }
 
     /**
      * WordPress `orderby` values with a same-meaning `order_by` value in the host app.
@@ -64,6 +70,8 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array ORDER_BY_ALIASES = ['menu_order' => 'none'];
 
     /**
@@ -222,7 +230,7 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
         // Pass a supported value through, or map it to its host equivalent. Every
         // supported value is a word, so a loose comparison finds the same matches.
         // @pest-mutate-ignore: TrueToFalse
-        if (\in_array($orderBy, self::ORDER_BY_VALUES, true)) {
+        if (\in_array($orderBy, self::orderByValues(), true)) {
             return $orderBy;
         }
 
