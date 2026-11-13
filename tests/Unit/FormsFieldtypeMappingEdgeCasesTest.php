@@ -517,3 +517,39 @@ it('writes nothing for a missing attribute whose fieldtype-specific not-set targ
     'a list' => [['x'], []],
     'text' => ['gone_to', ['gone_to' => '']],
 ]);
+
+it('reads a legacy fieldtype-specific target table keyed by value when the fieldtype has no entry', function (?string $fieldtype, mixed $value, array $table, array $expected): void {
+    // The table holds no entry for the fieldtype, so it is read as a legacy table of
+    // patterns, the same as with no fieldtype at all.
+    expect(fmeMap(['mode' => $value], ['mode' => ['statamic_attribute' => ['specific_based_on_attribute_value' => $table]]], $fieldtype))
+        ->toBe($expected);
+})->with([
+    'a fieldtype' => ['radio', 'v', ['v' => 'legacy'], ['legacy' => 'v']],
+    'no fieldtype' => [null, 'v', ['v' => 'legacy'], ['legacy' => 'v']],
+    'an empty fieldtype, beside an empty-key entry' => ['', 'v', ['' => 'blank', 'v' => 'legacy'], ['legacy' => 'v']],
+]);
+
+it('maps nothing for a missing attribute whose fieldtype-split translation resolves to no target', function (): void {
+    // The translation is split by fieldtype, so the last pass resolves the target
+    // itself, and a value table that sends the attribute nowhere maps nothing.
+    $mapped = fmeCall(
+        'mapAttributesFromMapping',
+        [],
+        ['gone' => [
+            'statamic_attribute' => ['based_on_attribute_value' => ['default' => ['#not_set' => null]]],
+            'value_translation' => ['specific' => ['radio' => ['#not_set' => 'N']], 'based_on_attribute_value' => []],
+        ]],
+        [],
+        null,
+        'radio',
+        ['field_options' => '{}'],
+        null
+    );
+
+    expect($mapped)->toBe([]);
+});
+
+it('takes the first other attribute that matches in a legacy table', function (): void {
+    expect(fmeCall('processBasedOnOtherAttributeValue', ['kind' => ['x' => 'first'], 'mode' => ['y' => 'second']], null, ['kind' => 'x', 'mode' => 'y']))
+        ->toBe(['first', true]);
+});

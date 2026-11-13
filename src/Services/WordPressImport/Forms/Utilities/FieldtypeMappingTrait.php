@@ -4072,6 +4072,9 @@ trait FieldtypeMappingTrait
                             ) {
                                 // Resolve the statamic_attribute before using it as an array key
                                 $resolvedMapping = self::processAttributeMapping(
+                                    // processAttributeMapping() takes an integer name too, and uses it only as an
+                                    // array key, where PHP stores '5' as 5, so the cast changes nothing
+                                    // @pest-mutate-ignore: RemoveStringCast
                                     (string) $attrName,
                                     null,
                                     $config,
@@ -5928,6 +5931,8 @@ trait FieldtypeMappingTrait
                         $parts[] = self::normalizeMixedToString($value);
                     }
 
+                    // Inside a switch, `continue` ends the case the same way `break` does
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case 'attribute_value_sluggified':
@@ -5936,6 +5941,8 @@ trait FieldtypeMappingTrait
                         self::normalizeMixedToString($value)
                     );
                     $parts[] = self::sluggifyValue($attributeValue);
+                    // Inside a switch, `continue` ends the case the same way `break` does
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case 'attribute_value_snake_case':
@@ -5944,6 +5951,8 @@ trait FieldtypeMappingTrait
                         self::normalizeMixedToString($value)
                     );
                     $parts[] = self::snakeCaseValue($attributeValue);
+                    // Inside a switch, `continue` ends the case the same way `break` does
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
         }
