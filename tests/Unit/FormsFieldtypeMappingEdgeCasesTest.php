@@ -438,3 +438,24 @@ it('sets no other field value and no form setting for no value or an empty list'
     'empty text, read as no value' => [''],
     'an empty list' => [[]],
 ]);
+
+it('sets the default other field values, and the fieldtype ones only for a named fieldtype', function (array $values, ?string $fieldtype, array $expected): void {
+    expect(fmeMap(['label' => 'L'], ['label' => ['statamic_attribute' => 'display', 'statamic_other_field_value' => $values]], $fieldtype))
+        ->toBe([...$expected, 'display' => 'L']);
+})->with([
+    'a default only, for a fieldtype' => [['default' => ['shown' => true]], 'text', ['shown' => true]],
+    'for the fieldtype' => [['specific' => ['text' => ['wide' => true]]], 'text', ['wide' => true]],
+    'an empty fieldtype' => [['specific' => ['' => ['wide' => true]]], '', []],
+]);
+
+it('sets the other field values of the first nested value pattern that matches', function (): void {
+    $mapped = fmeMap(
+        ['mode' => ['size' => '1']],
+        ['mode' => ['statamic_other_field_value_based_on_nested_attribute_value' => ['default' => [
+            ['nested_attribute' => ['size' => '1'], 'other_attribute' => ['first' => true]],
+            ['nested_attribute' => ['size' => '1'], 'other_attribute' => ['second' => true]],
+        ]]]]
+    );
+
+    expect($mapped)->toBe(['first' => true]);
+});
