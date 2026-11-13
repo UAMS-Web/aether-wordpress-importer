@@ -6762,14 +6762,14 @@ trait FieldtypeMappingTrait
 
         // If no Statamic fieldtype handle was found, return null
         if (
-            in_array($statamicType, [
-                null,
+            $statamicType === null
+            || $statamicType === false
+            || (
                 // No mapping resolves a fieldtype to an empty handle, and one would name
-                // no class below, so the result would be null either way.
+                // no class below, so the result would be null either way
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
-                '',
-                false,
-            ], true)
+                $statamicType === ''
+            )
         ) {
             return null;
         }
