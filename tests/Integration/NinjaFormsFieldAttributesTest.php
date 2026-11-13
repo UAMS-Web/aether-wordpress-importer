@@ -243,6 +243,18 @@ it('exposes the attribute mapping and leaves the options mapping empty', functio
         ->and(FieldtypeMapping::getFieldOptionsMapping())->toBe([]);
 });
 
+it('reads the options mapping of the class it is called on', function (): void {
+    // The table is empty here, so only a class that fills it can show the getter returns
+    // the table rather than an empty array.
+    $subclass = new class extends FieldtypeMapping
+    {
+        /** @var array<int|string, mixed> */
+        protected static array $fieldAttributeOptionsMapping = ['size' => 'width'];
+    };
+
+    expect($subclass::getFieldOptionsMapping())->toBe(['size' => 'width']);
+});
+
 it('keeps a leading prompt option so the rendered form matches WordPress', function (): void {
     // Both corpus `liststate` fields open with this pseudo-option, value equal to label.
     $mapped = mapNinjaFieldAttributes([

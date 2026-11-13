@@ -581,6 +581,9 @@ it('turns text into Bard content, and blank text into none', function (): void {
         ->and(\json_encode(fcmCall($this->probe, 'processMappingConfiguration', 'It&amp;#8217;s fine', ['as_bard' => true], [], 'default', $this->importer), \JSON_UNESCAPED_UNICODE))->toContain("It\u{2019}s fine")
         // A single line break is kept as a hard break.
         ->and(\json_encode(fcmCall($this->probe, 'processMappingConfiguration', "One\nTwo", ['as_bard' => true], [], 'default', $this->importer)))->toContain('hardBreak')
+        // A line break beside a `<br>` stays one paragraph with its hard breaks. A second
+        // paragraph pass would read the two `<br />` as a paragraph break and split it.
+        ->and(\substr_count((string) \json_encode(fcmCall($this->probe, 'processMappingConfiguration', "Thanks!\n<br>\nbye", ['as_bard' => true], [], 'default', $this->importer)), '"type":"paragraph"'))->toBe(1)
         // Without an asset importer the text is left as it was.
         ->and(fcmCall($this->probe, 'processMappingConfiguration', 'Hello', ['as_bard' => true], [], 'default'))->toBe('Hello')
         ->and(fcmCall($this->probe, 'processMappingConfiguration', 'Hello', ['as_bard' => 1], [], 'default', $this->importer))->toBe('Hello')
