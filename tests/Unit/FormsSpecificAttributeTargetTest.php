@@ -26,6 +26,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/FormsSpecificAttributeTargetTest.php
  */
 
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping as FormidableFormsFieldtypeMapping;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
 
 /**
@@ -85,9 +86,10 @@ it('picks the target attribute by fieldtype and value', function (
 })->with([
     'an exact value' => [['radio' => ['v' => 'tv'], 'select' => ['v' => 'sv']], [], 'v', 'radio', null, ['tv' => 'v']],
     'a pattern' => [['radio' => ['pre_*' => 'xy']], [], 'pre_abc', 'radio', null, ['xy' => 'pre_abc']],
-    // Both the attribute hierarchy and this option resolve the table, and
-    // only this option replaces the star (#455)
-    'a pattern with a star in the target' => [['radio' => ['pre_*' => 'x_*_y']], [], 'pre_abc', 'radio', null, ['x_abc_y' => 'pre_abc', 'x_*_y' => 'pre_abc']],
+    // Resolved once, with the star replaced, and no attribute named with
+    // the star (#455)
+    'a pattern with a star in the target' => [['radio' => ['pre_*' => 'x_*_y']], [], 'pre_abc', 'radio', null, ['x_abc_y' => 'pre_abc']],
+    'a pattern with a star in the target, the first match' => [['radio' => ['pre_*' => 'x_*_y', '*' => 'other']], [], 'pre_abc', 'radio', null, ['x_abc_y' => 'pre_abc']],
     'the first match' => [['radio' => ['v*' => 'a', 'v' => 'b']], [], 'v', 'radio', null, ['a' => 'v']],
     'no match' => [['radio' => ['w' => 'tw']], [], 'v', 'radio', null, []],
     'another fieldtype' => [['radio' => ['v' => 'tv']], [], 'v', 'select', null, []],
@@ -103,6 +105,21 @@ it('picks the target attribute by fieldtype and value', function (
     'not empty, substituted' => [['radio' => ['#not_empty' => 'ne']], ['value_substitution_regex' => ['/v/' => 'w']], 'v', 'radio', null, ['ne' => 'w']],
     'not empty, a star in the target' => [['radio' => ['#not_empty' => 'ne_*']], [], 'v', 'radio', null, ['ne_*' => 'v']],
     'with a further attribute' => [['radio' => ['v' => 'tv']], ['statamic_other_field_value' => ['default' => ['flag' => true]]], 'v', 'radio', null, ['tv' => 'v', 'flag' => true]],
+]);
+
+it('maps a Formidable Forms text field format to one input mask attribute', function (string $format, array $expected): void {
+    expect(new ReflectionMethod(FormidableFormsFieldtypeMapping::class, 'mapAttributesFromMapping')->invoke(
+        null,
+        ['format' => $format],
+        ['format' => FormidableFormsFieldtypeMapping::getFieldOptionsMapping()['format']],
+        [],
+        null,
+        'text',
+        null
+    ))->toBe($expected);
+})->with([
+    'a regular expression' => ['^\d{3}$', ['input_mask_mask_MaskedRegExp' => '^\d{3}$', 'input_mask_class' => 'MaskedRegExp', 'input_mask' => true]],
+    'a pattern' => ['(999) 999-9999', ['input_mask_mask_MaskedPattern' => '(000) 000-0000', 'input_mask_class' => 'MaskedPattern', 'input_mask' => true]],
 ]);
 
 it('writes the target beside a default Statamic attribute', function (): void {
