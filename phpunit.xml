@@ -3,6 +3,8 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
+         failOnWarning="true"
+         failOnNotice="true"
 >
     <!--
         Three suites split by how much they boot (see tests/CLAUDE.md). Both
