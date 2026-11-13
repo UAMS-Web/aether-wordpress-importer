@@ -371,7 +371,7 @@ class FcmTraitPlainToProbe extends FcmTraitProbe
  */
 function fcmCall(object $probe, string $method, mixed ...$arguments): mixed
 {
-    return (new ReflectionMethod($probe, $method))->invoke($probe, ...$arguments);
+    return new ReflectionMethod($probe, $method)->invoke($probe, ...$arguments);
 }
 
 /**

@@ -35,7 +35,6 @@ function mapNinjaFieldAttributes(array $field): array
     $creator = app(FormBlueprintCreator::class);
 
     $method = new ReflectionMethod($creator, 'getMappedFieldAttributes');
-    $method->setAccessible(true);
 
     $mapped = $method->invoke($creator, $field, 'ninja-forms', [], null, null, null, 'default');
 
@@ -248,11 +247,11 @@ it('reads the options mapping of the class it is called on', function (): void {
     // the table rather than an empty array.
     $subclass = new class extends FieldtypeMapping
     {
-        /** @var array<int|string, mixed> */
-        protected static array $fieldAttributeOptionsMapping = ['size' => 'width'];
+        /** @var array<int|string, array<int|string, mixed>> */
+        protected static array $fieldAttributeOptionsMapping = ['size' => ['statamic_attribute' => 'width']];
     };
 
-    expect($subclass::getFieldOptionsMapping())->toBe(['size' => 'width']);
+    expect($subclass::getFieldOptionsMapping())->toBe(['size' => ['statamic_attribute' => 'width']]);
 });
 
 it('keeps a leading prompt option so the rendered form matches WordPress', function (): void {
