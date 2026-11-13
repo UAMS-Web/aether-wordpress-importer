@@ -10306,17 +10306,6 @@ trait FieldtypeMappingTrait
             return [$valueMappings['#empty'], true];
         }
 
-        // Check for empty string case
-        if (
-            self::arrayKeyExists(
-                '',
-                $valueMappings
-            )
-            && $otherAttrValue === ''
-        ) {
-            return [$valueMappings[''], true];
-        }
-
         return null;
     }
 
@@ -10949,86 +10938,26 @@ trait FieldtypeMappingTrait
             $resolvedAttribute = null;
             $finalValue = $attrValue;
 
-            // 1. based_on_attribute_value.specific
-            if (
-                self::arrayKeyExists(
-                    'specific',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
+            // 1. based_on_attribute_value: processBasedOnAttributeValue() reads its
+            // specific, default and legacy tables itself, in that order, so one call
+            // covers all three, and an empty table matches nothing
+            $result = self::processBasedOnAttributeValue(
+                $basedOnAttributeValueArray,
+                null,
+                $attrName,
+                $attrValue,
+                $combinedData
+            );
+            if ($result !== null) {
+                [$resolvedAttribute] = $result;
+                if ($resolvedAttribute === null) {
+                    return null; // Skip this attribute
                 }
+
+                // Don't return yet - continue to check for value_translation
             }
 
-            // 2. based_on_attribute_value.default
-            if (
-                $resolvedAttribute === null
-                && self::arrayKeyExists(
-                    'default',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
-                }
-            }
-
-            // 3. based_on_attribute_value (legacy)
-            if (
-                $resolvedAttribute === null
-                && $basedOnAttributeValueArray !== []
-                && ! self::arrayKeyExists(
-                    'default',
-                    $basedOnAttributeValueArray
-                )
-                && ! self::arrayKeyExists(
-                    'specific',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
-                }
-            }
-
-            // 4. based_on_other_attribute_value.specific
+            // 2. based_on_other_attribute_value.specific
             $basedOnOtherAttributeValue = self::asArray(
                 self::mappingValue(
                     $statamicAttrArray,
@@ -11063,7 +10992,7 @@ trait FieldtypeMappingTrait
                 }
             }
 
-            // 5. based_on_other_attribute_value.default
+            // 3. based_on_other_attribute_value.default
             if (
                 $resolvedAttribute === null
                 && self::arrayKeyExists(
@@ -11092,7 +11021,7 @@ trait FieldtypeMappingTrait
                 }
             }
 
-            // 6. based_on_other_attribute_value (legacy)
+            // 4. based_on_other_attribute_value (legacy)
             if (
                 $resolvedAttribute === null
                 && $basedOnOtherAttributeValue !== []
@@ -12249,21 +12178,6 @@ trait FieldtypeMappingTrait
                     self::mappingValue(
                         $valueMappingsArray,
                         '#not_empty'
-                    )
-                );
-            }
-
-            if (
-                self::arrayKeyExists(
-                    '',
-                    $valueMappingsArray
-                )
-                && $otherAttrValue === ''
-            ) {
-                return self::resolveOptionalStringMappingValue(
-                    self::mappingValue(
-                        $valueMappingsArray,
-                        ''
                     )
                 );
             }
