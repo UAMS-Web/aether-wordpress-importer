@@ -19,9 +19,10 @@ name: CI
 #   The chain has no Linux-and-Windows setting.
 # - Mutation testing is on for pull requests and pushes (#519). The chain's `mutate` job runs on
 #   `ubuntu-latest` alone, mutates only the PHP files under `src` that a pull request or a push
-#   changes, under a 45-minute limit, and fails on any survivor. A change to a large file can
-#   exceed that limit: `LinkProcessor.php` alone made 982 mutants and was cancelled at 662, so such
-#   a pull request fails `CI` until the file is split or annotated. There is no schedule: the full
+#   changes, and fails on any survivor. `mutate-timeout-minutes` gives it 240 minutes (#573; the
+#   chain's default is 45 and its cap 360). At the 3.2 seconds per mutant measured on #536, a file
+#   of about 3,800 mutants takes about 200 minutes, so it fits; a pull request whose changed files
+#   need longer still fails `CI` until a file is split or annotated. There is no schedule: the full
 #   pass ran 2h52m without finishing under the chain's 180-minute limit, so it stays a local run.
 #   A manual `workflow_dispatch` run would start the full pass and hit the same limit.
 #   `mutate-ignore` runs only while `mutate` is on.
@@ -93,10 +94,11 @@ jobs:
   # The shared chain. Keep the reference a release tag.
   checks:
     if: vars.RUN_REMOTE_CI != 'false'
-    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.10.1
+    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.13.0
     with:
       all-platform-jobs: 'composer-validate pint rector phpstan'
       mutate: true
+      mutate-timeout-minutes: 240
 
   mutate-ignore-breadth:
     name: Mutation annotation breadth (${{ matrix.os }})
