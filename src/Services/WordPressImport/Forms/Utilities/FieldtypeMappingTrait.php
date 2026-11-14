@@ -1081,13 +1081,17 @@ trait FieldtypeMappingTrait
                     }
 
                     // Check for based_on_attribute_value (legacy): a table with neither a
-                    // `default` nor a `specific` key. Read as an `or`, either check lets
-                    // through only an empty table, which matches nothing, or a table the
-                    // steps above already read without a match, which matches nothing again.
+                    // `default` nor a `specific` key. Read as an `or`, this lets through a
+                    // table with one of the keys, which the steps above already read without
+                    // a match and which matches nothing again.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $hasNeitherBasedOnAttributeValueKey = ! isset($basedOnAttributeValue['default'])
+                        && ! isset($basedOnAttributeValue['specific']);
+                    // Read as an `or`, this lets through an empty table, which matches
+                    // nothing, or a table the steps above already read without a match.
                     // @pest-mutate-ignore: BooleanAndToBooleanOr
                     $isLegacyBasedOnAttributeValue = $basedOnAttributeValue !== []
-                        && ! isset($basedOnAttributeValue['default'])
-                        && ! isset($basedOnAttributeValue['specific']);
+                        && $hasNeitherBasedOnAttributeValueKey;
                     if (
                         $isLegacyBasedOnAttributeValue
                         && ! $matchFound
@@ -1105,13 +1109,17 @@ trait FieldtypeMappingTrait
                     }
 
                     // Check for based_on_other_attribute_value (legacy): a table with neither a
-                    // `default` nor a `specific` key. Read as an `or`, either check lets
-                    // through only an empty table, which matches nothing, or a table the
-                    // steps above already read without a match, which matches nothing again.
+                    // `default` nor a `specific` key. Read as an `or`, this lets through a
+                    // table with one of the keys, which the steps above already read without
+                    // a match and which matches nothing again.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $hasNeitherBasedOnOtherAttributeValueKey = ! isset($basedOnOtherAttributeValue['default'])
+                        && ! isset($basedOnOtherAttributeValue['specific']);
+                    // Read as an `or`, this lets through an empty table, which matches
+                    // nothing, or a table the steps above already read without a match.
                     // @pest-mutate-ignore: BooleanAndToBooleanOr
                     $isLegacyBasedOnOtherAttributeValue = $basedOnOtherAttributeValue !== []
-                        && ! isset($basedOnOtherAttributeValue['default'])
-                        && ! isset($basedOnOtherAttributeValue['specific']);
+                        && $hasNeitherBasedOnOtherAttributeValueKey;
                     if (
                         $isLegacyBasedOnOtherAttributeValue
                         && ! $matchFound
@@ -2941,11 +2949,10 @@ trait FieldtypeMappingTrait
             if (
                 isset($attrConfigMap['statamic_form_config'])
                 && $mappedValue !== ''
+                // A null or empty list would replace a value an earlier attribute wrote
+                // to the same key, and the empty values are dropped before the return
                 && (! in_array(
                     $mappedValue,
-                    // A null or empty-list value written here is dropped with the other
-                    // empty values before the mapping returns, so each item only saves work
-                    // @pest-mutate-ignore: RemoveArrayItem
                     [null, []],
                     true
                 ))
@@ -9720,19 +9727,8 @@ trait FieldtypeMappingTrait
                 );
             } elseif (\is_string($value)) { // If no exact match, try pattern matching for wildcard patterns
                 foreach ($translationArray as $pattern => $replacement) {
-                    // Skip special cases that were already handled
-                    if (
-                        in_array(
-                            $pattern,
-                            // None of these keys holds a `*`, so one left out of
-                            // the list is skipped by the wildcard check below anyway
-                            // @pest-mutate-ignore: RemoveArrayItem
-                            ['#not_set', '#not_empty', '#empty'],
-                            true
-                        )
-                    ) {
-                        continue;
-                    }
+                    // The special cases (`#not_set`, `#not_empty`, `#empty`) hold no
+                    // `*`, so the wildcard check below passes over them
 
                     // Normalize the pattern key to a string so wildcard
                     // detection and matching operate on string-only inputs.
@@ -10343,15 +10339,11 @@ trait FieldtypeMappingTrait
     ): array {
         // Get the choices configuration from the implementing class
         $choicesConfig = static::$fieldAttributeMapping['choices'] ?? null;
-        // A null or empty configuration has no `expected_keys` either, so the last
-        // check alone decides. Without the return, a configuration without
-        // `expected_keys` reads no pattern below and falls back to the same keys
-        // @pest-mutate-ignore: BooleanOrToBooleanAnd,RemoveEarlyReturn
-        if (
-            $choicesConfig === null
-            || $choicesConfig === []
-            || ! isset($choicesConfig['expected_keys'])
-        ) {
+        // A null or empty configuration has no `expected_keys` either. Without the
+        // return, a configuration without `expected_keys` reads no pattern below and
+        // falls back to the same keys
+        // @pest-mutate-ignore: RemoveEarlyReturn
+        if (! isset($choicesConfig['expected_keys'])) {
             // Fallback to default keys if no configuration exists
             return ['key', 'value'];
         }
@@ -10714,12 +10706,14 @@ trait FieldtypeMappingTrait
         // Legacy structure - process each based_on_other_attribute_value configuration directly (if match not found)
         if (
             (
-                // A match needs a `specific` or `default` table, which the checks
-                // here rule out, so read as an `or`, either of the first two lets
-                // through only an empty table, whose loop below matches nothing
-                // @pest-mutate-ignore: BooleanAndToBooleanOr
-                ! $matchFound
-                && $configArray !== []
+                (
+                    // A match needs a `specific` or `default` table, which the
+                    // checks below rule out, so read as an `or`, this lets through
+                    // only an empty table, whose loop below matches nothing
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    ! $matchFound
+                    && $configArray !== []
+                )
                 && ! self::arrayKeyExists(
                     'specific',
                     $configArray
@@ -10857,12 +10851,14 @@ trait FieldtypeMappingTrait
         // Legacy structure - process each based_on_attribute_value configuration directly (if match not found)
         if (
             (
-                // A match needs a `specific` or `default` table, which the checks
-                // here rule out, so read as an `or`, either of the first two lets
-                // through only an empty table, whose loop below matches nothing
-                // @pest-mutate-ignore: BooleanAndToBooleanOr
-                ! $matchFound
-                && $configArray !== []
+                (
+                    // A match needs a `specific` or `default` table, which the
+                    // checks below rule out, so read as an `or`, this lets through
+                    // only an empty table, whose loop below matches nothing
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    ! $matchFound
+                    && $configArray !== []
+                )
                 && ! self::arrayKeyExists(
                     'specific',
                     $configArray

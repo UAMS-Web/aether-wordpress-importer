@@ -87,6 +87,7 @@ it('resolves an attribute-value table from specific, default, then legacy', func
     'a legacy fieldtype table with no match' => [['radio' => ['b' => 'R'], 'a' => 'G'], 'radio', 'a', null],
     'a string' => ['label', 'text', 'a', ['label', true]],
     'no match' => [['specific' => ['radio' => ['a' => 'R']], 'default' => ['b' => 'D']], 'text', 'a', null],
+    'a fieldtype table with no match, never read as a legacy table' => [['specific' => ['a' => 'R']], 'specific', 'a', null],
     'an empty table' => [[], 'text', 'a', null],
     'a number' => [5, 'text', 'a', null],
 ]);
@@ -111,6 +112,7 @@ it('resolves an other-attribute table from specific, default, then legacy', func
     'an integer value' => [['default' => ['t' => [5 => 'I']]], null, ['t' => 5], ['I', true]],
     'a string' => ['label', null, [], ['label', true]],
     'no match' => [['default' => ['t' => ['y' => 'D']]], null, ['t' => 'x'], null],
+    'a fieldtype table with no match, never read as a legacy table' => [['specific' => ['x' => 'L']], 'text', ['specific' => 'x'], null],
     'an empty table' => [[], null, ['t' => 'x'], null],
 ]);
 

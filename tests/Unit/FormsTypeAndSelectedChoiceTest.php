@@ -164,6 +164,22 @@ it('copies a non-empty value to a form config attribute', function (
     'a number key' => [['statamic_attribute' => 'a', 'statamic_form_config' => 5], 'v', ['a' => 'v']],
 ]);
 
+it('keeps a form config value when a later attribute maps to an empty value', function (
+    mixed $empty
+): void {
+    expect(new ReflectionMethod(FieldtypeMapping::class, 'mapAttributesFromMapping')->invoke(
+        null,
+        ['n' => 'v', 'o' => $empty],
+        [
+            'n' => ['statamic_attribute' => 'a', 'statamic_form_config' => 'honeypot'],
+            'o' => ['statamic_attribute' => 'b', 'statamic_form_config' => 'honeypot'],
+        ]
+    ))->toBe(['form_config_honeypot' => 'v', 'a' => 'v']);
+})->with([
+    'null' => [null],
+    'an empty list' => [[]],
+]);
+
 it('appends the value when as_array is true', function (): void {
     $map = new ReflectionMethod(FieldtypeMapping::class, 'mapAttributesFromMapping');
 
