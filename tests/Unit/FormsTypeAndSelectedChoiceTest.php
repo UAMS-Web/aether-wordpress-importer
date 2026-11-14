@@ -164,6 +164,22 @@ it('copies a non-empty value to a form config attribute', function (
     'a number key' => [['statamic_attribute' => 'a', 'statamic_form_config' => 5], 'v', ['a' => 'v']],
 ]);
 
+it('keeps a form config value when a later attribute maps to an empty value', function (
+    mixed $empty
+): void {
+    expect(new ReflectionMethod(FieldtypeMapping::class, 'mapAttributesFromMapping')->invoke(
+        null,
+        ['n' => 'v', 'o' => $empty],
+        [
+            'n' => ['statamic_attribute' => 'a', 'statamic_form_config' => 'honeypot'],
+            'o' => ['statamic_attribute' => 'b', 'statamic_form_config' => 'honeypot'],
+        ]
+    ))->toBe(['form_config_honeypot' => 'v', 'a' => 'v']);
+})->with([
+    'null' => [null],
+    'an empty list' => [[]],
+]);
+
 it('appends the value when as_array is true', function (): void {
     $map = new ReflectionMethod(FieldtypeMapping::class, 'mapAttributesFromMapping');
 
@@ -266,3 +282,21 @@ it('reads no selected choice when the field has no choices', function (): void {
         'radio'
     ))->toBe([]);
 });
+
+it('reads no fieldtype key translation for the selected choice without a named fieldtype', function (?string $fieldtype): void {
+    // An entry keyed by the empty string is no fieldtype's, so the default table applies
+    // and the choice's value is the key (#537).
+    FormsSelectedChoiceMapping::useChoices(['key_translation' => ['default' => ['value' => 'key'], 'specific' => ['' => ['text' => 'key']]]]);
+
+    expect(new ReflectionMethod(FormsSelectedChoiceMapping::class, 'mapAttributesFromMapping')->invoke(
+        null,
+        ['defaultValue' => null, 'choices' => FORMS_SC_CHOICES],
+        ['defaultValue' => ['statamic_attribute' => 'default', 'get_selected_choice' => true]],
+        [],
+        null,
+        $fieldtype
+    ))->toBe(['default' => 'two']);
+})->with([
+    'no fieldtype' => [null],
+    'an empty fieldtype' => [''],
+]);
