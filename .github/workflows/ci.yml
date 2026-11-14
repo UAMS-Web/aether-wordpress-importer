@@ -17,9 +17,14 @@ name: CI
 #   Windows and macOS by default, and `composer-validate`, `pint`, `rector` and `phpstan` on Linux
 #   alone; `all-platform-jobs` puts those four back on Windows, which also adds a macOS leg.
 #   The chain has no Linux-and-Windows setting.
-# - `mutate: false`: #315 deferred mutation testing in Actions to post-launch, because no run of
-#   this repository's changed classes finished on a hosted runner. The `mutate-ignore` annotation
-#   check still runs.
+# - Mutation testing is on for pull requests and pushes (#519). The chain's `mutate` job runs on
+#   `ubuntu-latest` alone, mutates only the PHP files under `src` that a pull request or a push
+#   changes, under a 45-minute limit, and fails on any survivor. A change to a large file can
+#   exceed that limit: `LinkProcessor.php` alone made 982 mutants and was cancelled at 662, so such
+#   a pull request fails `CI` until the file is split or annotated. There is no schedule: the full
+#   pass ran 2h52m without finishing under the chain's 180-minute limit, so it stays a local run.
+#   A manual `workflow_dispatch` run would start the full pass and hit the same limit.
+#   `mutate-ignore` runs only while `mutate` is on.
 #
 # PLAIN JOBS. `mutate-ignore-breadth`, `spell`, `node-test` and `python-test` stay here as jobs of
 # their own, each a matrix over `ubuntu-latest` and `windows-latest`.
@@ -62,7 +67,8 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Lets the workflow be run on demand against a branch.
+  # Lets the workflow be run on demand against a branch. The chain's mutate job mutates everything
+  # on a manual run, which does not finish on a hosted runner (#519).
   workflow_dispatch:
 
 # A new push to a pull request cancels that pull request's stale run. Every other run (a push to
@@ -87,10 +93,10 @@ jobs:
   # The shared chain. Keep the reference a release tag.
   checks:
     if: vars.RUN_REMOTE_CI != 'false'
-    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.2.0
+    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.10.1
     with:
       all-platform-jobs: 'composer-validate pint rector phpstan'
-      mutate: false
+      mutate: true
 
   mutate-ignore-breadth:
     name: Mutation annotation breadth (${{ matrix.os }})
