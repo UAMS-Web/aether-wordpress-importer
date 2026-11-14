@@ -181,11 +181,19 @@ trait PersistsStoredTaxonomyTerms
                         self::$processedTermsCache[$cacheKey] = false;
 
                         // Skip to next term in the loop
+                        // continue 1 here ends only the switch (PHP runs it as break, with a compile
+                        // warning), which reaches nothing but the unset() and the cycle collection
+                        // below; neither changes a result
+                        // @pest-mutate-ignore: DecrementInteger
                         continue 2; // Skip to next term
 
                         // Handle case where additional terms should be created with unique slugs
                     case 'Create an additional term':
                         if (! $existingTerm instanceof Term) {
+                            // continue 1 here ends only the switch (PHP runs it as break, with a compile
+                            // warning), which reaches nothing but the unset() and the cycle collection
+                            // below; neither changes a result
+                            // @pest-mutate-ignore: DecrementInteger
                             continue 2;
                         }
 
@@ -237,12 +245,19 @@ trait PersistsStoredTaxonomyTerms
                         $reservedKeys[$newCacheKey] = true;
 
                         // Exit the switch statement after processing additional term creation
+                        // PHP runs continue inside a switch as break (with a compile warning), so
+                        // the mutant imports the same terms
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
 
                         // Handle case where existing terms should be overwritten or updated
                     case 'Overwrite matching terms':
                     default:
                         if (! $existingTerm instanceof Term) {
+                            // continue 1 here ends only the switch (PHP runs it as break, with a compile
+                            // warning), which reaches nothing but the unset() and the cycle collection
+                            // below; neither changes a result
+                            // @pest-mutate-ignore: DecrementInteger
                             continue 2;
                         }
 
@@ -287,6 +302,9 @@ trait PersistsStoredTaxonomyTerms
                         }
 
                         // Exit the switch statement after processing overwrite behavior
+                        // PHP runs continue inside a switch as break (with a compile warning), so
+                        // the mutant imports the same terms
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                 }
             } else { // Otherwise
@@ -512,11 +530,6 @@ trait PersistsStoredTaxonomyTerms
             $term = TermFacade::make();
             $term->taxonomy($statamicTaxonomyHandle);
             $term->slug($termData['slug']);
-            // Term::in() answers a localization and changes the term in nothing, so
-            // no outcome depends on this call; the host-app suite pins it
-            // (TermCreationInNonDefaultSitesTest)
-            // @pest-mutate-ignore: RemoveMethodCall
-            $term->in($site);
             $term->set(
                 'title',
                 $termData['title']
