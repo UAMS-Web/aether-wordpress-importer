@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
+use DOMComment;
 use DOMNode;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -39,20 +40,14 @@ trait FormBlockProcessorTrait
         ?string $pageSlug
     ): bool {
         // Check if the node is a comment node
-        if ($node->nodeType !== XML_COMMENT_NODE) {
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
         // Check if the comment matches the form block pattern
-        $commentValue = $node->nodeValue;
-
-        if (! \is_string($commentValue)) {
-            return false;
-        }
-
         return \preg_match(
             $blockPattern,
-            \trim($commentValue)
+            \trim($node->data)
         ) === 1;
     }
 
