@@ -27,7 +27,8 @@
     },
     "autoload": {
         "psr-4": {
-            "UAMSWeb\\Aether\\WordPressImporter\\": "src/"
+            "UAMSWeb\\Aether\\WordPressImporter\\": "src/",
+            "UAMSWeb\\Aether\\WordPressImporter\\Data\\": "data/"
         }
     },
     "autoload-dev": {
@@ -65,7 +66,8 @@
         "phpstan/phpstan": "^2.2",
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpunit/phpunit": "^13.0",
-        "rector/rector": "^2.6"
+        "rector/rector": "^2.6",
+        "uams-web/patches-pest-plugin-mutate": "^1.0"
     },
     "config": {
         "sort-packages": true,
