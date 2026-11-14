@@ -67,7 +67,7 @@
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpunit/phpunit": "^13.0",
         "rector/rector": "^2.6",
-        "uams-web/patches-pest-plugin-mutate": "^1.0"
+        "uams-web/patches-pest-plugin-mutate": "^1.4"
     },
     "config": {
         "sort-packages": true,

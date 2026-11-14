@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "441bc722422dd91140fc36fa91f5a284",
+    "content-hash": "04beb1fb3fc523365a76fe7d62a67ac7",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -13613,16 +13613,16 @@
         },
         {
             "name": "uams-web/patches-pest-plugin-mutate",
-            "version": "v1.0.0",
+            "version": "v1.4.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/UAMS-Web/patches-pest-plugin-mutate.git",
-                "reference": "26ea5f32f1515a5cc8ef9067e63661722745eaa6"
+                "reference": "6091433589d65c8741c409d37066aa137641dc91"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/UAMS-Web/patches-pest-plugin-mutate/zipball/26ea5f32f1515a5cc8ef9067e63661722745eaa6",
-                "reference": "26ea5f32f1515a5cc8ef9067e63661722745eaa6",
+                "url": "https://api.github.com/repos/UAMS-Web/patches-pest-plugin-mutate/zipball/6091433589d65c8741c409d37066aa137641dc91",
+                "reference": "6091433589d65c8741c409d37066aa137641dc91",
                 "shasum": ""
             },
             "require": {
@@ -13636,9 +13636,16 @@
                         "Stop three silent @pest-mutate-ignore parsing defects suppressing nothing or the wrong set (temporary; see #2327)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-annotation-parsing.patch",
                         "Launch each mutant child process so a run cannot score every mutant killed without executing one (temporary; see #2322)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-process-launch.patch",
                         "Drop the run's own --filter from each mutant child so a filtered run cannot score every mutant killed (temporary; see #2570)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-drop-run-filter.patch",
+                        "Select tests for a mutated scalar function default, so it is not scored without a test running it (temporary; see UAMS-Web/uams-2020#673)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-function-defaults.patch",
+                        "Skip a node whose own comment carries a matching @pest-mutate-ignore marker, including when the traverser still leaves that node (temporary)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-ignore-annotated-statement.patch",
+                        "Map a class constant mutant to the tests covering its containing class, since a constant initializer has no executable coverage line (temporary)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-class-constant-coverage.patch",
                         "Create the mutations directory and fail on a mutated source that cannot be written, so a run cannot score mutants it never applied (temporary; see #2812)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-write-mutated-source.patch",
                         "Drop the parallel runner's options (--passthru-php, --processes and the rest) from each mutant child so a parallel run given one cannot score every mutant killed (temporary; see #2926, #2947)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-drop-parallel-runner-options.patch",
-                        "Widen or refuse a mutant child's filter that PCRE cannot compile, or that would pass cmd.exe's command-line limit on Windows, so it cannot score a kill without running a test (temporary; see #2578, #3114)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-windows-filter-length.patch"
+                        "Widen or refuse a mutant child's filter that PCRE cannot compile, or that would pass cmd.exe's command-line limit on Windows, so it cannot score a kill without running a test (temporary; see #2578, #3114)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-windows-filter-length.patch",
+                        "Propagate a mutation into isolated test processes and reject a test report that ran no tests, so an isolated run cannot score a mutant killed without running a test (temporary; see UAMS-Web/UAMSWP-Logo-List#82)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-isolated-processes.patch",
+                        "Size a mutant child's time limit from the serial work the initial suite stands for, so a --parallel run cannot score a mutant a timeout that no test caused (temporary; see UAMS-Web/patches-pest-plugin-mutate#2)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout.patch",
+                        "Keep Patchwork in front of the mutation stream wrapper after a pass-through read, so a function a test mocks is still redefined in a mutant child that logs to junit (temporary; see UAMS-Web/patches-pest-plugin-mutate#31)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-stream-wrapper-patchwork.patch",
+                        "Run a mutant child again when it times out once, and score a timeout only when the second attempt times out too, so a transient slowdown of the machine cannot keep --min=100 out of reach (temporary; see UAMS-Web/patches-pest-plugin-mutate#30)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout-retry.patch"
                     }
                 }
             },
@@ -13657,7 +13664,8 @@
                 "issues": "https://github.com/UAMS-Web/patches-pest-plugin-mutate/issues",
                 "source": "https://github.com/UAMS-Web/patches-pest-plugin-mutate"
             },
-            "time": "2026-11-10T21:43:23+00:00"
+            "time": "2026-11-14T04:35:19+00:00",
+            "published-time": "2026-11-14T16:39:33+00:00"
         }
     ],
     "aliases": [],
@@ -13672,5 +13680,5 @@
     "platform-overrides": {
         "php": "8.4.27"
     },
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }
