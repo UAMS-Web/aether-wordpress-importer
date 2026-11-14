@@ -656,11 +656,13 @@ class EntryCreator
                     $this->contentProcessor
                 );
 
-                // Generate an entry ID in the TablePressEntryCreator format, for the report
-                [, $entryId] = SlugGenerator::generateSlugAndId(
+                // Generate an entry ID in the TablePressEntryCreator format, for the report.
+                // Index the pair rather than destructuring it: a mutant that removes the
+                // one list item becomes `[,] = ...`, which PHP refuses to compile (#577).
+                $entryId = SlugGenerator::generateSlugAndId(
                     "{$site}_tablepress-{$exportId}",
                     $postId
-                );
+                )[1];
 
                 // Define the expected entry file path, on the tree this run writes to
                 $entryPath = ContentRoot::collectionEntry(
