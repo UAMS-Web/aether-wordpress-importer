@@ -572,6 +572,9 @@ trait ProcessesConditionalMappings
                     $combinedData
                 );
                 if ($result !== null) {
+                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                    // mutant has no test to fail and aborts the mutation run instead (#556)
+                    // @pest-mutate-ignore: RemoveArrayItem
                     [$resolvedAttribute] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
@@ -597,6 +600,9 @@ trait ProcessesConditionalMappings
                     $combinedData
                 );
                 if ($result !== null) {
+                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                    // mutant has no test to fail and aborts the mutation run instead (#556)
+                    // @pest-mutate-ignore: RemoveArrayItem
                     [$resolvedAttribute] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
@@ -627,6 +633,9 @@ trait ProcessesConditionalMappings
                     $combinedData
                 );
                 if ($result !== null) {
+                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                    // mutant has no test to fail and aborts the mutation run instead (#556)
+                    // @pest-mutate-ignore: RemoveArrayItem
                     [$resolvedAttribute] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute

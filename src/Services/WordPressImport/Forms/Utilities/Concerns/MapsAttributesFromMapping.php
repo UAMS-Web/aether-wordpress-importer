@@ -340,6 +340,9 @@ trait MapsAttributesFromMapping
                             $data
                         );
                         if ($result !== null) {
+                            // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                            // mutant has no test to fail and aborts the mutation run instead (#556)
+                            // @pest-mutate-ignore: RemoveArrayItem
                             [$statamicAttr] = $result;
                         }
                     }
