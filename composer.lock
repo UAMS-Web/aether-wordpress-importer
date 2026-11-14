@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3e0d9cc4171fa9b24d6f9b580d9c3b44",
+    "content-hash": "7153e507da72b175eb44c09dd4011246",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -13613,16 +13613,16 @@
         },
         {
             "name": "uams-web/patches-pest-plugin-mutate",
-            "version": "v1.2.0",
+            "version": "v1.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/UAMS-Web/patches-pest-plugin-mutate.git",
-                "reference": "5e35040f3075b692a0ed543253c79900f69f12e5"
+                "reference": "76509d1440bc4201692aed8cc7b12b4552aeff84"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/UAMS-Web/patches-pest-plugin-mutate/zipball/5e35040f3075b692a0ed543253c79900f69f12e5",
-                "reference": "5e35040f3075b692a0ed543253c79900f69f12e5",
+                "url": "https://api.github.com/repos/UAMS-Web/patches-pest-plugin-mutate/zipball/76509d1440bc4201692aed8cc7b12b4552aeff84",
+                "reference": "76509d1440bc4201692aed8cc7b12b4552aeff84",
                 "shasum": ""
             },
             "require": {
@@ -13643,7 +13643,8 @@
                         "Drop the parallel runner's options (--passthru-php, --processes and the rest) from each mutant child so a parallel run given one cannot score every mutant killed (temporary; see #2926, #2947)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-drop-parallel-runner-options.patch",
                         "Widen or refuse a mutant child's filter that PCRE cannot compile, or that would pass cmd.exe's command-line limit on Windows, so it cannot score a kill without running a test (temporary; see #2578, #3114)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-windows-filter-length.patch",
                         "Propagate a mutation into isolated test processes and reject a test report that ran no tests, so an isolated run cannot score a mutant killed without running a test (temporary; see UAMS-Web/UAMSWP-Logo-List#82)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-isolated-processes.patch",
-                        "Size a mutant child's time limit from the serial work the initial suite stands for, so a --parallel run cannot score a mutant a timeout that no test caused (temporary; see UAMS-Web/patches-pest-plugin-mutate#2)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout.patch"
+                        "Size a mutant child's time limit from the serial work the initial suite stands for, so a --parallel run cannot score a mutant a timeout that no test caused (temporary; see UAMS-Web/patches-pest-plugin-mutate#2)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout.patch",
+                        "Keep Patchwork in front of the mutation stream wrapper after a pass-through read, so a function a test mocks is still redefined in a mutant child that logs to junit (temporary; see UAMS-Web/patches-pest-plugin-mutate#31)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-stream-wrapper-patchwork.patch"
                     }
                 }
             },
@@ -13662,7 +13663,7 @@
                 "issues": "https://github.com/UAMS-Web/patches-pest-plugin-mutate/issues",
                 "source": "https://github.com/UAMS-Web/patches-pest-plugin-mutate"
             },
-            "time": "2026-11-12T13:14:40+00:00"
+            "time": "2026-11-13T20:06:05+00:00"
         }
     ],
     "aliases": [],
