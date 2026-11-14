@@ -939,11 +939,15 @@ function partsNote(result) {
 }
 
 export function formatDuration(ms) {
-    if (ms < 60_000) {
-        return `${(ms / 1000).toFixed(1)}s`
+    // Choose the branch on the value as printed, so 59,950 ms (which prints as 60.0) takes the minute form.
+    const tenths = (ms / 1000).toFixed(1)
+    if (Number(tenths) < 60) {
+        return `${tenths}s`
     }
-    const minutes = Math.floor(ms / 60_000)
-    const seconds = Math.round((ms % 60_000) / 1000)
+    // Round once, then derive both fields, so a remainder that rounds to 60 carries into the minute.
+    const total = Math.round(ms / 1000)
+    const minutes = Math.floor(total / 60)
+    const seconds = total % 60
     return `${minutes}m ${String(seconds).padStart(2, '0')}s`
 }
 
