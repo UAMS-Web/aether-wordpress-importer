@@ -89,6 +89,7 @@
             "@php scripts/setup-git-hooks.php"
         ],
         "test": "pest --testsuite=Unit,Integration",
+        "mutate": "pest --testsuite=Unit,Integration --mutate --path=src",
         "stan": "phpstan analyse --memory-limit=-1",
         "ci": [
             "@stan",
