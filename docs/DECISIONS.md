@@ -1580,3 +1580,11 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: keeping mutation off in CI and running it locally only.** It keeps every pull request green, but drops the per-change check the chain exists to give.
 
 **Rejected: a weekly full pass with a longer limit.** At the rate measured, the full pass is on the order of 36 hours on one runner (an estimate from one file's mutant density), past a hosted job's 6-hour maximum.
+
+## Pull requests' mutation runs get 240 minutes, on the shared chain at `v0.13.0` (#573)
+
+**Decided 2026-11-14, on #573.** `ci.yml` calls the shared chain at `v0.13.0` and passes `mutate-timeout-minutes: 240`, so the `mutate` job on a pull request or a push runs for up to 240 minutes instead of the chain's default 45. No other input moves, and none had to for `v0.13.0` to start: the tag adds `mutate-timeout-minutes`, `mutate-ignore`, `guard`, `guard-patterns`, `dev-lint` and `dev-lint-exclude`, all off or at their old behavior unless passed, and its `Read the PHP pin` step now refuses a `config.platform.php` that is not a version, which `8.4.27` is. #574 carries the same change for its own run. The #519 entry above keeps the 45-minute limit it was decided under; this entry replaces that limit and nothing else in it.
+
+**Why.** A pull request mutates the whole of every PHP file it changes, so one that moves or splits a large file mutates all of it. #574's split of `FieldtypeMappingTrait.php` (#556) touches about 3,770 mutants, about 200 minutes at the 3.2 seconds per mutant measured on #536. Its first run was cancelled at 45 minutes, which made `CI` red. 240 minutes covers it with room for coverage and stays under the chain's 360-minute cap.
+
+**Rejected: merging #574 over a red `CI`.** It leaves the next pull request that moves a large file in the same place, and makes a red required check something to step around.
