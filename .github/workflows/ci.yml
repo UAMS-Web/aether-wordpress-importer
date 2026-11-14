@@ -93,10 +93,11 @@ jobs:
   # The shared chain. Keep the reference a release tag.
   checks:
     if: vars.RUN_REMOTE_CI != 'false'
-    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.10.1
+    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.13.0
     with:
       all-platform-jobs: 'composer-validate pint rector phpstan'
       mutate: true
+      mutate-timeout-minutes: 240
 
   mutate-ignore-breadth:
     name: Mutation annotation breadth (${{ matrix.os }})
