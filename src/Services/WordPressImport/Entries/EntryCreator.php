@@ -671,21 +671,9 @@ class EntryCreator
                     "{$site}_tablepress-{$exportId}"
                 );
 
-                // ---
-                // Remove any file at the old slug ({site}_tablepress-{exportId}-{postId}).
-                // TablePressEntryCreator::saveEntry() removes it too, but reads the export
-                // ID back out of the entry ID and so misses one with a hyphen (#286).
-                // ---
-                $incorrectPath = ContentRoot::collectionEntry(
-                    'tables',
-                    $site,
-                    "{$site}_tablepress-{$exportId}-{$postId}"
-                );
-
-                if (LaravelFileFacade::exists($incorrectPath)) {
-                    LaravelFileFacade::delete($incorrectPath);
-                }
-
+                // The file at the old slug ({site}_tablepress-{exportId}-{postId}) is
+                // removed by TablePressEntryCreator::deleteOldSlugFile(), which takes
+                // both IDs and so handles an export ID with a hyphen (#286, #577).
                 $retryCount = 5;
                 $retryDelay = 300000; // 300ms
                 $fileExists = false;
