@@ -1,5 +1,5 @@
 {
-    "_hash": "a5e95338d549b3697b760a6b58ed3a38d2aec22a7d167487603a130132e24853",
+    "_hash": "f00742f5dbf29b3d44e292be2f2f681167a2f76f434ada022709213ac175b526",
     "patches": {
         "pestphp/pest-plugin-mutate": [
             {
@@ -74,9 +74,49 @@
             },
             {
                 "package": "pestphp/pest-plugin-mutate",
-                "description": "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)",
-                "url": "patches/pest-plugin-mutate-ignore-annotated-statement.patch",
-                "sha256": "f1e3002fa811837b5c430e65509dffedd10750a4a959ebb950fc9104583b4104",
+                "description": "Select tests for a mutated scalar function default, so it is not scored without a test running it (temporary; see UAMS-Web/uams-2020#673)",
+                "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-function-defaults.patch",
+                "sha256": "04e7c1c42edb2ef07da615e5ac57b2236384e8c2ca8aa27323a69ed5aef37a7e",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Propagate a mutation into isolated test processes and reject a test report that ran no tests, so an isolated run cannot score a mutant killed without running a test (temporary; see UAMS-Web/UAMSWP-Logo-List#82)",
+                "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-isolated-processes.patch",
+                "sha256": "9a221ef2a7a363db405e299a4f4eab83667b39503bc8eac9718c09ce2291c16c",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Map a class constant mutant to the tests covering its containing class, since a constant initializer has no executable coverage line (temporary)",
+                "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-class-constant-coverage.patch",
+                "sha256": "e09b3535c7a69db85b35366fd1c0aa676a5cf98d0671d8245323516f8018b8f4",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Skip a node whose own comment carries a matching @pest-mutate-ignore marker, including when the traverser still leaves that node (temporary)",
+                "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-ignore-annotated-statement.patch",
+                "sha256": "70378c227b12c6218eeb4f7ee5e2d0de5396bfb9165cff5683de7be5bdd6ff44",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Size a mutant child's time limit from the serial work the initial suite stands for, so a --parallel run cannot score a mutant a timeout that no test caused (temporary; see UAMS-Web/patches-pest-plugin-mutate#2)",
+                "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout.patch",
+                "sha256": "ff9e004e545e2b93cb051af4dafe109cb3427869d1294543aec06a26bac7c2b1",
                 "depth": 1,
                 "extra": {
                     "provenance": "patches-file:patches.json"
