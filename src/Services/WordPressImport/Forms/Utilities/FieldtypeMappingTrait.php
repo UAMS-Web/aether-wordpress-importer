@@ -1316,12 +1316,7 @@ trait FieldtypeMappingTrait
                             $specificBasedOnAttributeValue[$excludeFieldtype]
                         );
                         foreach ($fieldtypeMappings as $attributeName => $attributeValueMappings) {
-                            $normalizedAttributeName = self::normalizeArrayKey(
-                                $attributeName
-                            );
-                            if ($normalizedAttributeName === null) {
-                                continue;
-                            }
+                            $normalizedAttributeName = $attributeName;
 
                             $attributeValueMappings = self::asArray(
                                 $attributeValueMappings
@@ -1420,12 +1415,7 @@ trait FieldtypeMappingTrait
                             }
 
                             foreach ($configToUse as $otherAttrName => $valueMappings) {
-                                $normalizedOtherAttrName = self::normalizeArrayKey(
-                                    $otherAttrName
-                                );
-                                if ($normalizedOtherAttrName === null) {
-                                    continue;
-                                }
+                                $normalizedOtherAttrName = $otherAttrName;
 
                                 $valueMappings = self::asArray($valueMappings);
                                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -1505,23 +1495,13 @@ trait FieldtypeMappingTrait
                                             $currentValueMappings
                                         )
                                     ) {
+                                        // The attribute is a key of the data this loop walks, so only the original
+                                        // field data can leave it unset.
                                         if ($originalFieldData !== null) {
                                             if (
                                                 self::isFieldOptionNotSet(
                                                     $attrName,
                                                     $originalFieldData
-                                                )
-                                            ) {
-                                                $keyTranslationArray = self::asArray(
-                                                    $currentValueMappings['#not_set'] ?? null
-                                                );
-                                                break;
-                                            }
-                                        } else {
-                                            if (
-                                                self::isAttributeNotSet(
-                                                    $attrName,
-                                                    $data
                                                 )
                                             ) {
                                                 $keyTranslationArray = self::asArray(
@@ -1582,12 +1562,7 @@ trait FieldtypeMappingTrait
                         } else {
                             // Legacy structure
                             foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                                $normalizedOtherAttrName = self::normalizeArrayKey(
-                                    $otherAttrName
-                                );
-                                if ($normalizedOtherAttrName === null) {
-                                    continue;
-                                }
+                                $normalizedOtherAttrName = $otherAttrName;
 
                                 $valueMappings = self::asArray($valueMappings);
                                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -1667,23 +1642,13 @@ trait FieldtypeMappingTrait
                                             $currentValueMappings
                                         )
                                     ) {
+                                        // The attribute is a key of the data this loop walks, so only the original
+                                        // field data can leave it unset.
                                         if ($originalFieldData !== null) {
                                             if (
                                                 self::isFieldOptionNotSet(
                                                     $attrName,
                                                     $originalFieldData
-                                                )
-                                            ) {
-                                                $keyTranslationArray = self::asArray(
-                                                    $currentValueMappings['#not_set'] ?? null
-                                                );
-                                                break;
-                                            }
-                                        } else {
-                                            if (
-                                                self::isAttributeNotSet(
-                                                    $attrName,
-                                                    $data
                                                 )
                                             ) {
                                                 $keyTranslationArray = self::asArray(
@@ -1952,23 +1917,13 @@ trait FieldtypeMappingTrait
                         foreach ($fieldtypeMappings as $pattern => $calcExpression) {
                             // Check for '#not_set' special case first
                             if ($pattern === '#not_set') {
-                                // If we have original field data, check if the attribute is not set in field options
+                                // The attribute is a key of the data this loop walks, so only the original
+                                // field data can leave it unset.
                                 if ($originalFieldData !== null) {
                                     if (
                                         self::isFieldOptionNotSet(
                                             $attrName,
                                             $originalFieldData
-                                        )
-                                    ) {
-                                        $expression = $calcExpression;
-                                        break;
-                                    }
-                                } else { // Otherwise
-                                    // Fallback to checking if the attribute is not set in the current data
-                                    if (
-                                        self::isAttributeNotSet(
-                                            $attrName,
-                                            $data
                                         )
                                     ) {
                                         $expression = $calcExpression;
@@ -2413,7 +2368,8 @@ trait FieldtypeMappingTrait
                     foreach ($fieldtypeMappings as $pattern => $targetAttribute) {
                         // Check for '#not_set' special case first
                         if ($pattern === '#not_set') {
-                            // If we have original field data, check if the attribute is not set in field options
+                            // The attribute is a key of the data this loop walks, so only the original
+                            // field data can leave it unset.
                             if ($originalFieldData !== null) {
                                 if (
                                     self::isFieldOptionNotSet(
@@ -2426,42 +2382,6 @@ trait FieldtypeMappingTrait
                                         self::stringValue($targetAttribute) ?? '',
                                         // The pattern is `#not_set`, which holds no `*`, so the matched value is never read
                                         // @pest-mutate-ignore: EmptyStringToNotEmpty
-                                        '',
-                                        $pattern
-                                    );
-                                    // Apply value_substitution_regex to the attribute value before assigning
-                                    $finalValue = '';
-                                    if (
-                                        isset($config['value_substitution_regex'])
-                                        && \is_array($config['value_substitution_regex'])
-                                    ) {
-                                        $finalValue = self::applyValueSubstitutionRegex(
-                                            '',
-                                            $config['value_substitution_regex']
-                                        );
-                                    }
-
-                                    // A target that is not text resolves to empty and names no attribute,
-                                    // so nothing is written, as an empty target writes nothing elsewhere (#458)
-                                    if ($resolvedTargetAttribute !== '') {
-                                        $mappedData[$resolvedTargetAttribute] = $finalValue;
-                                    }
-
-                                    // Set mappedValue to ensure statamic_other_field_value gets applied
-                                    $mappedValue = $finalValue;
-                                    break; // Use the first matching pattern
-                                }
-                            } else { // Otherwise
-                                // Fallback to checking if the attribute is not set in the current data
-                                if (
-                                    self::isAttributeNotSet(
-                                        $attrName,
-                                        $data
-                                    )
-                                ) {
-                                    // Replace wildcards in the target attribute
-                                    $resolvedTargetAttribute = self::resolveWildcards(
-                                        self::stringValue($targetAttribute) ?? '',
                                         '',
                                         $pattern
                                     );
@@ -5032,10 +4952,7 @@ trait FieldtypeMappingTrait
                         $fieldtype
                     );
                     foreach ($expectedKeys as $expectedKey) {
-                        $normalizedExpectedKey = self::normalizeArrayKey($expectedKey);
-                        if ($normalizedExpectedKey === null) {
-                            continue;
-                        }
+                        $normalizedExpectedKey = $expectedKey;
 
                         if (
                             ! self::arrayKeyExists(
@@ -5131,10 +5048,7 @@ trait FieldtypeMappingTrait
                     )
                 );
                 foreach ($fieldtypeMappings as $attributeName => $attributeValueMappings) {
-                    $normalizedAttributeName = self::normalizeArrayKey($attributeName);
-                    if ($normalizedAttributeName === null) {
-                        continue;
-                    }
+                    $normalizedAttributeName = $attributeName;
 
                     // Get the value of the attribute from the field data
                     $attributeValue = $data[$normalizedAttributeName] ?? null;
@@ -5328,10 +5242,7 @@ trait FieldtypeMappingTrait
                         $specificConfig[$fieldtype]
                     );
                     foreach ($fieldtypeMappings as $attributeName => $attributeValueMappings) {
-                        $normalizedAttributeName = self::normalizeArrayKey($attributeName);
-                        if ($normalizedAttributeName === null) {
-                            continue;
-                        }
+                        $normalizedAttributeName = $attributeName;
 
                         // Get the value of the attribute from the field data
                         $attributeValue = $data[$normalizedAttributeName] ?? null;
@@ -5589,10 +5500,7 @@ trait FieldtypeMappingTrait
 
                 // Then, check the traditional structure where default contains attribute names as keys
                 foreach ($defaultConfig as $attributeName => $attributeValueMappings) {
-                    $normalizedAttributeName = self::normalizeArrayKey($attributeName);
-                    if ($normalizedAttributeName === null) {
-                        continue;
-                    }
+                    $normalizedAttributeName = $attributeName;
 
                     // Get the value of the attribute from the field data
                     $attributeValue = $data[$normalizedAttributeName] ?? null;
@@ -5715,10 +5623,7 @@ trait FieldtypeMappingTrait
                 $valueTransformations['based_on_other_attribute_value']
             );
             foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
                 $valueMappingsArray = self::normalizeMixedToArray($valueMappings);
@@ -6717,10 +6622,7 @@ trait FieldtypeMappingTrait
 
             // Check if this attribute is mapped to Statamic's 'preset' attribute
             if ($statamicTarget === 'preset') {
-                $normalizedAttr = self::normalizeArrayKey($attr);
-                if ($normalizedAttr === null) {
-                    continue;
-                }
+                $normalizedAttr = $attr;
 
                 // Retrieve the value from the parent field for this attribute
                 $value = self::mappingValue(
@@ -6889,10 +6791,7 @@ trait FieldtypeMappingTrait
                 }
 
                 foreach ($configToUse as $otherAttrName => $valueMappings) {
-                    $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-                    if ($normalizedOtherAttrName === null) {
-                        continue;
-                    }
+                    $normalizedOtherAttrName = $otherAttrName;
 
                     $valueMappingsArray = self::asArray($valueMappings);
 
@@ -6950,10 +6849,7 @@ trait FieldtypeMappingTrait
             } else { // Otherwise
                 // Legacy structure - process each based_on_other_attribute_value configuration
                 foreach ($basedOnConfig as $otherAttrName => $valueMappings) {
-                    $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-                    if ($normalizedOtherAttrName === null) {
-                        continue;
-                    }
+                    $normalizedOtherAttrName = $otherAttrName;
 
                     $valueMappingsArray = self::asArray($valueMappings);
 
@@ -7018,10 +6914,7 @@ trait FieldtypeMappingTrait
         ) {
             foreach (self::asArray($mapping['attributes']) as $attr => $attrMapValue) {
                 $attrMap = self::asArray($attrMapValue);
-                $normalizedAttr = self::normalizeArrayKey($attr);
-                if ($normalizedAttr === null) {
-                    continue;
-                }
+                $normalizedAttr = $attr;
 
                 $attrValue = self::mappingValue(
                     $parsedField,
@@ -7400,10 +7293,7 @@ trait FieldtypeMappingTrait
             }
 
             if ($isPresetAttribute) {
-                $normalizedAttr = self::normalizeArrayKey($attr);
-                if ($normalizedAttr === null) {
-                    continue;
-                }
+                $normalizedAttr = $attr;
 
                 // Retrieve the value from the parent field for this attribute
                 $value = self::mappingValue(
@@ -9393,12 +9283,7 @@ trait FieldtypeMappingTrait
                     }
 
                     foreach ($configToUse as $otherAttrName => $valueMappings) {
-                        $normalizedOtherAttrName = self::normalizeArrayKey(
-                            $otherAttrName
-                        );
-                        if ($normalizedOtherAttrName === null) {
-                            continue;
-                        }
+                        $normalizedOtherAttrName = $otherAttrName;
 
                         $valueMappings = self::asArray($valueMappings);
                         $otherAttrValue = $dataArray[$normalizedOtherAttrName] ?? null;
@@ -9512,12 +9397,7 @@ trait FieldtypeMappingTrait
                 } else { // Otherwise
                     // Legacy structure
                     foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                        $normalizedOtherAttrName = self::normalizeArrayKey(
-                            $otherAttrName
-                        );
-                        if ($normalizedOtherAttrName === null) {
-                            continue;
-                        }
+                        $normalizedOtherAttrName = $otherAttrName;
 
                         $valueMappings = self::asArray($valueMappings);
                         $otherAttrValue = $dataArray[$normalizedOtherAttrName] ?? null;
@@ -10648,12 +10528,7 @@ trait FieldtypeMappingTrait
                 );
 
                 foreach ($fieldtypeMappings as $otherAttrName => $valueMappings) {
-                    $normalizedOtherAttrName = self::normalizeArrayKey(
-                        $otherAttrName
-                    );
-                    if ($normalizedOtherAttrName === null) {
-                        continue;
-                    }
+                    $normalizedOtherAttrName = $otherAttrName;
 
                     $result = self::processValueMappings(
                         self::asArray($valueMappings),
@@ -10684,12 +10559,7 @@ trait FieldtypeMappingTrait
             );
 
             foreach ($defaultConfig as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $result = self::processValueMappings(
                     self::asArray($valueMappings),
@@ -10725,12 +10595,7 @@ trait FieldtypeMappingTrait
             )
         ) {
             foreach ($configArray as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $result = self::processValueMappings(
                     self::asArray($valueMappings),
@@ -11444,12 +11309,7 @@ trait FieldtypeMappingTrait
 
             // Process each based_on_other_attribute_value configuration
             foreach ($configToUse as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $valueMappingsArray = self::asArray($valueMappings);
                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -11472,12 +11332,7 @@ trait FieldtypeMappingTrait
         } else { // Otherwise
             // Legacy structure - process each based_on_other_attribute_value configuration
             foreach ($basedOnConfig as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $valueMappingsArray = self::asArray($valueMappings);
                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -12433,10 +12288,7 @@ trait FieldtypeMappingTrait
         array $parsedField
     ): ?string {
         foreach ($configToUse as $otherAttrName => $valueMappings) {
-            $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-            if ($normalizedOtherAttrName === null) {
-                continue;
-            }
+            $normalizedOtherAttrName = $otherAttrName;
 
             $valueMappingsArray = self::asArray($valueMappings);
             $otherAttrValue = self::mappingValue(
