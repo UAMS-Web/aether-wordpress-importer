@@ -166,7 +166,8 @@ it('writes to the target the mapping names', function (): void {
     expect(mapFormsMissingTranslation(['#not_set' => 'NS'], [], null, null, ['default' => 'b']))->toBe(['b' => 'NS'])
         ->and(mapFormsMissingTranslation(['#not_set' => 'NS'], [], null, null, ''))->toBe([])
         ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => ['o' => ['#not_set' => 'B']]], [], null, null, ['default' => 'b']))->toBe([])
-        ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => ['o' => ['#not_set' => 'B']]], [], null, null, ''))->toBe([]);
+        ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => ['o' => ['#not_set' => 'B']]], [], null, null, ''))->toBe([])
+        ->and(mapFormsMissingTranslation(['default' => ['#not_set' => 'D']], [], null, FORMS_MT_UNSET, ['based_on_attribute_value' => ['#not_set' => null]]))->toBe([]);
 });
 
 it('skips a missing attribute it has nothing to map to', function (): void {

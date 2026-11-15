@@ -30,7 +30,11 @@ trait FieldtypeMappingTrait
      * @var array<string, array<string>>
      */
     protected static array $validationLists = [
+        // A property default is not a line coverage records, so a mutation run picks no
+        // test to run against these items; the visibility mapping tests read the list
+        // @pest-mutate-ignore: RemoveArrayItem
         'visibility_values' => [
+            // @pest-mutate-ignore: RemoveArrayItem
             'hidden',
         ],
     ];
@@ -2870,12 +2874,7 @@ trait FieldtypeMappingTrait
                         );
 
                         // Only process if expected_keys equals ['key', 'value']
-                        if (
-                            $expectedKeys === [
-                                'key',
-                                'value',
-                            ]
-                        ) {
+                        if ($expectedKeys === ['key', 'value']) {
                             $selectedChoice = array_find(self::asArray($data['choices']), fn ($choice): bool => \is_array($choice)
                             && isset($choice['isSelected'])
                             && $choice['isSelected'] === true);
@@ -3688,13 +3687,10 @@ trait FieldtypeMappingTrait
                     }
 
                     // Check based_on_other_attribute_value whatever the tables above held, since the
-                    // pass below reads it first. A special case can sit at the top of an attribute's
-                    // table or under one of its exact values, where an empty key is read as well (#542).
+                    // pass below reads it first. The pass writes only from the table one of an
+                    // attribute's entries picks, special or exact, so each of those tables is read,
+                    // with its empty key (#542).
                     foreach ($basedOnOtherAttributeValue as $valueMappings) {
-                        if (self::holdsMissingAttributeCase($valueMappings)) {
-                            $hasNotSetCases = true;
-                        }
-
                         foreach (self::asArray($valueMappings) as $currentValueMappings) {
                             if (
                                 self::holdsMissingAttributeCase($currentValueMappings)
