@@ -1144,6 +1144,9 @@ trait FieldtypeMappingTrait
                             $data
                         );
                         if ($result !== null) {
+                            // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                            // mutant has no test to fail and aborts the mutation run instead (#540)
+                            // @pest-mutate-ignore: RemoveArrayItem
                             [$statamicAttr] = $result;
                         }
                     }
@@ -7354,6 +7357,9 @@ trait FieldtypeMappingTrait
 
                 // Every pair the helper returns reports a match, so its attribute is always used
                 if ($result !== null) {
+                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                    // mutant has no test to fail and aborts the mutation run instead (#540)
+                    // @pest-mutate-ignore: RemoveArrayItem
                     [$processedAttribute] = $result;
                     $processedConfig['statamic_attribute'] = $processedAttribute;
                     $processedMappings[$attrName] = $processedConfig;
@@ -10869,6 +10875,9 @@ trait FieldtypeMappingTrait
                 $combinedData
             );
             if ($result !== null) {
+                // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                // mutant has no test to fail and aborts the mutation run instead (#540)
+                // @pest-mutate-ignore: RemoveArrayItem
                 [$resolvedAttribute] = $result;
                 if ($resolvedAttribute === null) {
                     return null; // Skip this attribute
