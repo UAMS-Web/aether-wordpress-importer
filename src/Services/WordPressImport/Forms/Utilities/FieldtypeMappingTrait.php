@@ -31,12 +31,22 @@ trait FieldtypeMappingTrait
      */
     protected static array $validationLists = [
         // A property default is not a line coverage records, so a mutation run picks no
-        // test to run against these items; the visibility mapping tests read the list
+        // test to run against this item; the visibility mapping tests read the list
         // @pest-mutate-ignore: RemoveArrayItem
-        'visibility_values' => [
-            // @pest-mutate-ignore: RemoveArrayItem
-            'hidden',
-        ],
+        'visibility_values' => self::VISIBILITY_VALUES,
+    ];
+
+    /**
+     * The values a visibility attribute is checked against, kept apart from
+     * `$validationLists` so each default carries its own annotation.
+     *
+     * @var list<string>
+     */
+    private const array VISIBILITY_VALUES = [
+        // A constant is not a line coverage records either, so a mutation run picks no
+        // test to run against this item; the visibility mapping tests read the list
+        // @pest-mutate-ignore: RemoveArrayItem
+        'hidden',
     ];
 
     /**
