@@ -104,7 +104,11 @@ jobs:
     name: Mutation annotation breadth (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
-    timeout-minutes: 60
+    # The check reads a whole file twice per annotation, so its time grows with annotations
+    # times file length. `FieldtypeMappingTrait.php` (about 12,300 lines, 105 annotations)
+    # took 29 to 38 minutes on ubuntu and passed 60 on windows (#540). Return this to 60
+    # once the split (#556) breaks the trait into small files.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
