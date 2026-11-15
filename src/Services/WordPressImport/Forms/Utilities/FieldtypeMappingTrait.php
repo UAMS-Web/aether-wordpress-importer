@@ -3666,24 +3666,12 @@ trait FieldtypeMappingTrait
                     )
                 ) {
                     $hasNotSetCases = true;
-                } elseif (
-                    self::arrayKeyExists(
-                        'default',
-                        $translationConfig
-                    )
-                    || self::arrayKeyExists(
-                        'specific',
-                        $translationConfig
-                    )
-                    || self::arrayKeyExists(
-                        'based_on_other_attribute_value',
-                        $translationConfig
-                    )
-                ) { // Check for complex structure with #not_set or #not_empty
-
+                } else { // Check for complex structure with #not_set or #not_empty
                     $defaultTranslations = self::asArray($translationConfig['default'] ?? null);
-                    $specificTranslations = self::asArray($translationConfig['specific'] ?? null);
                     $basedOnOtherAttributeValue = self::asArray($translationConfig['based_on_other_attribute_value'] ?? null);
+
+                    // A fieldtype table is not read here: an earlier pass has written its special
+                    // cases, and this pass would write the same values again.
 
                     // Check default translations
                     if (
@@ -3697,41 +3685,22 @@ trait FieldtypeMappingTrait
                         )
                     ) {
                         $hasNotSetCases = true;
-                    } elseif ($excludeFieldtype !== null && $excludeFieldtype !== '' && isset($specificTranslations[$excludeFieldtype])) { // Check specific translations
-                        $fieldtypeTranslations = $specificTranslations[$excludeFieldtype];
-                        if (
-                            self::arrayKeyExists(
-                                '#not_set',
-                                $fieldtypeTranslations
-                            )
-                            || self::arrayKeyExists(
-                                '#not_empty',
-                                $fieldtypeTranslations
-                            )
-                        ) {
+                    }
+
+                    // Check based_on_other_attribute_value whatever the tables above held, since the
+                    // pass below reads it first. A special case can sit at the top of an attribute's
+                    // table or under one of its exact values, where an empty key is read as well (#542).
+                    foreach ($basedOnOtherAttributeValue as $valueMappings) {
+                        if (self::holdsMissingAttributeCase($valueMappings)) {
                             $hasNotSetCases = true;
                         }
-                    } elseif ($basedOnOtherAttributeValue !== []) { // Check based_on_other_attribute_value
-                        foreach ($basedOnOtherAttributeValue as $valueMappings) {
+
+                        foreach (self::asArray($valueMappings) as $currentValueMappings) {
                             if (
-                                self::arrayKeyExists(
-                                    '#not_set',
-                                    $valueMappings
-                                )
-                                || self::arrayKeyExists(
-                                    '#not_empty',
-                                    $valueMappings
-                                )
-                                || self::arrayKeyExists(
-                                    '#empty',
-                                    $valueMappings
-                                )
+                                self::holdsMissingAttributeCase($currentValueMappings)
+                                || self::arrayKeyExists('', $currentValueMappings)
                             ) {
                                 $hasNotSetCases = true;
-                                // Equivalent: the loop only ever sets the flag to true, so reading the
-                                // remaining tables changes nothing
-                                // @pest-mutate-ignore: BreakToContinue
-                                break;
                             }
                         }
                     }
@@ -12247,6 +12216,18 @@ trait FieldtypeMappingTrait
             $normalizedKey,
             $array
         );
+    }
+
+    /**
+     * Whether a translation table holds a case for an attribute's absence or emptiness.
+     *
+     * @param  mixed  $table  The candidate translation table
+     */
+    private static function holdsMissingAttributeCase(mixed $table): bool
+    {
+        return self::arrayKeyExists('#not_set', $table)
+            || self::arrayKeyExists('#not_empty', $table)
+            || self::arrayKeyExists('#empty', $table);
     }
 
     /**

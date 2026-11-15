@@ -8,7 +8,8 @@ declare(strict_types=1);
  * The final pass of `mapAttributesFromMapping()` visits each mapped attribute
  * the data lacks whose `value_translation` holds a `#not_set`, `#not_empty`
  * or `#empty` entry, plainly, by `default` or fieldtype, or under
- * `based_on_other_attribute_value`. It picks the table that applies, and each
+ * `based_on_other_attribute_value`, at the top of an attribute's table or under
+ * one of its exact values (#542). It picks the table that applies, and each
  * special entry of that table that matches (`#not_set` against the original
  * field or the data, `#not_empty` and `#empty` against both, and a `null`
  * entry always) has the attribute mapped again with no value. A string picked
@@ -109,6 +110,7 @@ it('picks the default or fieldtype table', function (
     'an empty fieldtype' => [['default' => ['#not_set' => 'D'], 'specific' => ['' => ['#not_set' => 'P']]], '', null, ['a' => 'D']],
     'only the fieldtype' => [['specific' => ['radio' => ['#not_set' => 'P']]], 'radio', null, ['a' => 'P']],
     'a string for the fieldtype' => [['specific' => ['radio' => 'S']], 'radio', null, []],
+    'a fieldtype with no table' => [['default' => [], 'specific' => ['radio' => ['#not_set' => 'P']]], 'select', null, []],
 ]);
 
 it('picks a table by another attribute', function (
@@ -128,7 +130,13 @@ it('picks a table by another attribute', function (
     'an exact value after a special entry' => [['p' => ['#not_set' => ['#not_set' => 'C']], 'o' => ['v' => ['#not_set' => 'B']]], ['o' => 'v', 'p' => 'w'], null, ['a' => 'B']],
     'no exact value after a special entry' => [['p' => ['#not_set' => ['#not_set' => 'C']], 'o' => ['z' => ['#not_set' => 'B']]], ['o' => 'v', 'p' => 'w'], null, []],
     'the first attribute that matches' => [['o' => ['#not_set' => ['#not_set' => 'B']], 'p' => ['#not_set' => ['#not_set' => 'C']]], [], null, ['a' => 'B']],
-    'only exact values' => [['o' => ['v' => ['#not_set' => 'B']]], ['o' => 'v'], null, []],
+    'only an exact value (#542)' => [['o' => ['v' => ['#not_set' => 'B']]], ['o' => 'v'], null, ['a' => 'B']],
+    'only an exact value, an unset option (#542)' => [['o' => ['v' => ['#not_set' => 'B']]], ['o' => 'v'], FORMS_MT_UNSET, ['a' => 'B']],
+    'only an exact value, a set option' => [['o' => ['v' => ['#not_set' => 'B']]], ['o' => 'v'], FORMS_MT_SET, []],
+    'only an exact value, #not_empty' => [['o' => ['v' => ['#not_empty' => 'B']]], ['o' => 'v'], FORMS_MT_SET, ['a' => 'B']],
+    'only an exact value, #empty' => [['o' => ['v' => ['#empty' => 'B']]], ['o' => 'v'], FORMS_MT_EMPTY, ['a' => 'B']],
+    'only an exact value, an empty key' => [['o' => ['v' => ['' => 'B']]], ['o' => 'v'], null, ['a' => 'B']],
+    'only an exact value, another key' => [['o' => ['v' => ['x' => 'B']]], ['o' => 'v'], null, []],
     '#not_set for this attribute, an unset option' => [['o' => ['#not_empty' => ['#not_set' => 'B']]], ['o' => 'v'], FORMS_MT_UNSET, ['a' => 'B']],
     '#not_set for this attribute, a set option' => [['o' => ['#not_empty' => ['#not_set' => 'B']]], ['o' => 'v'], FORMS_MT_SET, []],
     '#not_empty for this attribute, a set option' => [['o' => ['#not_empty' => ['#not_empty' => 'B']]], ['o' => 'v'], FORMS_MT_SET, ['a' => 'B']],
@@ -145,6 +153,13 @@ it('prefers a table by another attribute and does not fall back from one', funct
 
     expect(mapFormsMissingTranslation(['based_on_other_attribute_value' => $table, 'specific' => ['radio' => ['#not_set' => 'P']]], [], 'radio'))->toBe(['a' => 'B'])
         ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => $table, 'default' => ['#not_set' => 'D']], ['o' => 'v']))->toBe([]);
+});
+
+it('reads a table by another attribute whatever the fieldtype table holds (#542)', function (): void {
+    $table = ['o' => ['v' => ['#not_set' => 'B']]];
+
+    expect(mapFormsMissingTranslation(['based_on_other_attribute_value' => $table, 'specific' => ['radio' => ['x' => 'P']]], ['o' => 'v'], 'radio'))->toBe(['a' => 'B'])
+        ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => $table, 'specific' => ['zz' => ['#not_set' => 'N']]], ['o' => 'v'], 'zz'))->toBe(['a' => 'B']);
 });
 
 it('writes to the target the mapping names', function (): void {
