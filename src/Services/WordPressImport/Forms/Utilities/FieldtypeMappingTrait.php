@@ -42,7 +42,7 @@ trait FieldtypeMappingTrait
      *
      * @var list<string>
      */
-    private const array VISIBILITY_VALUES = [
+    protected const array VISIBILITY_VALUES = [
         // A constant is not a line coverage records either, so a mutation run picks no
         // test to run against this item; the visibility mapping tests read the list
         // @pest-mutate-ignore: RemoveArrayItem
