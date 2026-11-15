@@ -2513,26 +2513,13 @@ trait FieldtypeMappingTrait
                         $fieldValuesMap = self::asArray($fieldValues);
                         // Check for '#not_set' special case first
                         if ($pattern === '#not_set') {
-                            // If we have original field data, check if the attribute is not set in field options
+                            // The attribute is a key of the data this loop walks, so only the original
+                            // field data can leave it unset.
                             if ($originalFieldData !== null) {
                                 if (
                                     self::isFieldOptionNotSet(
                                         $attrName,
                                         $originalFieldData
-                                    )
-                                ) {
-                                    foreach ($fieldValuesMap as $fieldName => $fieldValue) {
-                                        $mappedData[$fieldName] = $fieldValue;
-                                    }
-
-                                    break; // Use the first matching pattern
-                                }
-                            } else { // Otherwise
-                                // Fallback to checking if the attribute is not set in the current data
-                                if (
-                                    self::isAttributeNotSet(
-                                        $attrName,
-                                        $data
                                     )
                                 ) {
                                     foreach ($fieldValuesMap as $fieldName => $fieldValue) {
@@ -2589,26 +2576,13 @@ trait FieldtypeMappingTrait
                             $fieldValuesMap = self::asArray($fieldValues);
                             // Check for '#not_set' special case first
                             if ($pattern === '#not_set') {
-                                // If we have original field data, check if the attribute is not set in field options
+                                // The attribute is a key of the data this loop walks, so only the original
+                                // field data can leave it unset.
                                 if ($originalFieldData !== null) {
                                     if (
                                         self::isFieldOptionNotSet(
                                             $attrName,
                                             $originalFieldData
-                                        )
-                                    ) {
-                                        foreach ($fieldValuesMap as $fieldName => $fieldValue) {
-                                            $mappedData[$fieldName] = $fieldValue;
-                                        }
-
-                                        break; // Use the first matching pattern
-                                    }
-                                } else { // Otherwise
-                                    // Fallback to checking if the attribute is not set in the current data
-                                    if (
-                                        self::isAttributeNotSet(
-                                            $attrName,
-                                            $data
                                         )
                                     ) {
                                         foreach ($fieldValuesMap as $fieldName => $fieldValue) {
@@ -2655,26 +2629,13 @@ trait FieldtypeMappingTrait
                         $fieldValuesMap = self::asArray($fieldValues);
                         // Check for '#not_set' special case first
                         if ($pattern === '#not_set') {
-                            // If we have original field data, check if the attribute is not set in field options
+                            // The attribute is a key of the data this loop walks, so only the original
+                            // field data can leave it unset.
                             if ($originalFieldData !== null) {
                                 if (
                                     self::isFieldOptionNotSet(
                                         $attrName,
                                         $originalFieldData
-                                    )
-                                ) {
-                                    foreach ($fieldValuesMap as $fieldName => $fieldValue) {
-                                        $mappedData[$fieldName] = $fieldValue;
-                                    }
-
-                                    break; // Use the first matching pattern
-                                }
-                            } else { // Otherwise
-                                // Fallback to checking if the attribute is not set in the current data
-                                if (
-                                    self::isAttributeNotSet(
-                                        $attrName,
-                                        $data
                                     )
                                 ) {
                                     foreach ($fieldValuesMap as $fieldName => $fieldValue) {
@@ -2827,23 +2788,13 @@ trait FieldtypeMappingTrait
                 foreach ($typeMappings as $pattern => $newType) {
                     // Check for '#not_set' special case first
                     if ($pattern === '#not_set') {
-                        // If we have original field data, check if the attribute is not set in field options
+                        // The attribute is a key of the data this loop walks, so only the original
+                        // field data can leave it unset.
                         if ($originalFieldData !== null) {
                             if (
                                 self::isFieldOptionNotSet(
                                     $attrName,
                                     $originalFieldData
-                                )
-                            ) {
-                                $mappedData['type'] = $newType;
-                                break; // Use the first matching pattern
-                            }
-                        } else { // Otherwise
-                            // Fallback to checking if the attribute is not set in the current data
-                            if (
-                                self::isAttributeNotSet(
-                                    $attrName,
-                                    $data
                                 )
                             ) {
                                 $mappedData['type'] = $newType;
