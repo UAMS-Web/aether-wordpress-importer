@@ -4376,17 +4376,6 @@ trait FieldtypeMappingTrait
             $fieldData['type'] ?? null
         );
 
-        // Check if fieldAttributeMapping is defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'fieldAttributeMapping'
-            )
-        ) {
-            // Return empty array since no mappings are available
-            return [];
-        }
-
         // Get standard attribute mappings from trait
         $mappedAttributes = static::mapAttributesFromMapping(
             $fieldData,
@@ -4970,6 +4959,9 @@ trait FieldtypeMappingTrait
     /**
      * Resolve value transformations based on fieldtype and attribute values.
      *
+     * Each attribute read here is a key of the data, so a `#not_set` case never
+     * applies and is not looked up.
+     *
      * @param  array<int|string, mixed>  $valueTransformations  The value transformations configuration
      * @param  array<int|string, mixed>  $data  The field data
      * @param  string  $key  The key to get transformations for
@@ -5043,7 +5035,7 @@ trait FieldtypeMappingTrait
 
             // Check for flat structure first (direct based_on_attribute_value)
             // This handles the case where based_on_attribute_value is used directly in value_transformations
-            foreach ($data as $attrName => $attrValue) {
+            foreach ($data as $attrValue) {
                 $notEmptyConfig = self::mappingValue(
                     $basedOnAttributeValue,
                     '#not_empty'
@@ -5057,28 +5049,6 @@ trait FieldtypeMappingTrait
                 ) {
                     $transformationValue = self::mappingValue(
                         self::asArray($notEmptyConfig),
-                        $key
-                    );
-
-                    return \is_array($transformationValue) ? $transformationValue : [$key => $transformationValue];
-                }
-
-                $notSetConfig = self::mappingValue(
-                    $basedOnAttributeValue,
-                    '#not_set'
-                );
-                if (
-                    self::arrayKeyExists(
-                        $key,
-                        self::asArray($notSetConfig)
-                    )
-                    && ! self::arrayKeyExists(
-                        $attrName,
-                        $data
-                    )
-                ) {
-                    $transformationValue = self::mappingValue(
-                        self::asArray($notSetConfig),
                         $key
                     );
 
@@ -5109,7 +5079,7 @@ trait FieldtypeMappingTrait
             // This handles the case where the key is the transformation type (like 'based_on_attribute_value')
             if ($key === 'based_on_attribute_value') {
                 // Check each attribute in the data to see if any match the conditions
-                foreach ($data as $attrName => $attrValue) {
+                foreach ($data as $attrValue) {
                     $flatNotEmptyConfig = self::mappingValue(
                         $basedOnAttributeValue,
                         '#not_empty'
@@ -5121,29 +5091,6 @@ trait FieldtypeMappingTrait
                     ) {
                         return self::normalizeTransformationConfig(
                             self::asArray($flatNotEmptyConfig),
-                            $key
-                        );
-                    }
-
-                    $flatNotSetConfig = self::mappingValue(
-                        $basedOnAttributeValue,
-                        '#not_set'
-                    );
-                    if (
-                        (
-                            // The attribute name is a key of the data being read, so the
-                            // `! arrayKeyExists()` check below is always false and this branch
-                            // never applies, whatever this check reads.
-                            // @pest-mutate-ignore: NotIdenticalToIdentical
-                            $flatNotSetConfig !== null
-                        )
-                        && ! self::arrayKeyExists(
-                            $attrName,
-                            $data
-                        )
-                    ) {
-                        return self::normalizeTransformationConfig(
-                            self::asArray($flatNotSetConfig),
                             $key
                         );
                     }
@@ -5301,7 +5248,7 @@ trait FieldtypeMappingTrait
 
                 // First, check if the default config contains attribute values directly
                 // This handles the case where default contains attribute values as keys
-                foreach ($data as $attrName => $attrValue) {
+                foreach ($data as $attrValue) {
                     $defaultNotEmptyConfig = self::mappingValue(
                         $defaultConfig,
                         '#not_empty'
@@ -5332,45 +5279,6 @@ trait FieldtypeMappingTrait
                             return self::normalizeTransformationConfig(
                                 self::mappingValue(
                                     self::asArray($defaultNotEmptyConfig),
-                                    $key
-                                ),
-                                $key
-                            );
-                        }
-                    }
-
-                    $defaultNotSetConfig = self::mappingValue(
-                        $defaultConfig,
-                        '#not_set'
-                    );
-                    if (
-                        self::arrayKeyExists(
-                            '#not_set',
-                            $defaultConfig
-                        )
-                        && ! self::arrayKeyExists(
-                            $attrName,
-                            $data
-                        )
-                    ) {
-                        // Check if the key is the transformation type
-                        if ($key === 'based_on_attribute_value') {
-                            return self::normalizeTransformationConfig(
-                                self::asArray($defaultNotSetConfig),
-                                $key
-                            );
-                        }
-
-                        // Check if the transformation config contains the key
-                        if (
-                            self::arrayKeyExists(
-                                $key,
-                                self::asArray($defaultNotSetConfig)
-                            )
-                        ) {
-                            return self::normalizeTransformationConfig(
-                                self::mappingValue(
-                                    self::asArray($defaultNotSetConfig),
                                     $key
                                 ),
                                 $key
@@ -5767,6 +5675,8 @@ trait FieldtypeMappingTrait
             $key = array_key_first($rule);
             $normalizedKey = self::normalizeArrayKey($key);
             if ($normalizedKey === null) {
+                // A rule with one key always has a first key, so this never runs
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -6277,6 +6187,8 @@ trait FieldtypeMappingTrait
             $string
         );
         if (! \is_string($string)) {
+            // preg_replace() fails only on a bad pattern, and this pattern is fixed
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $string = '';
         }
 
@@ -6317,6 +6229,8 @@ trait FieldtypeMappingTrait
             $string
         );
         if (! \is_string($string)) {
+            // preg_replace() fails only on a bad pattern, and this pattern is fixed
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $string = '';
         }
 
@@ -6336,16 +6250,6 @@ trait FieldtypeMappingTrait
      */
     public static function getMappedFieldAttributes(): array
     {
-        // Check if fieldAttributeMapping is defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'fieldAttributeMapping'
-            )
-        ) {
-            return [];
-        }
-
         // Initialize array to collect mapped attribute names
         $mappedAttributes = [];
 
@@ -6445,16 +6349,6 @@ trait FieldtypeMappingTrait
         if (
             $formTitle === null
             || $fieldLabel === null
-        ) {
-            return $mappedAttributes;
-        }
-
-        // Check if fieldAttributeMapping is defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'fieldAttributeMapping'
-            )
         ) {
             return $mappedAttributes;
         }
@@ -7483,15 +7377,11 @@ trait FieldtypeMappingTrait
                     $preset
                 );
 
+                // Every pair the helper returns reports a match, so its attribute is always used
                 if ($result !== null) {
-                    [$processedAttribute, $matchFound] = $result;
-                    if ($matchFound === true) {
-                        $processedConfig['statamic_attribute'] = $processedAttribute;
-                        $processedMappings[$attrName] = $processedConfig;
-                    } else { // Otherwise
-                        // Keep the original config if no match was found
-                        $processedMappings[$attrName] = $attrConfigArray;
-                    }
+                    [$processedAttribute] = $result;
+                    $processedConfig['statamic_attribute'] = $processedAttribute;
+                    $processedMappings[$attrName] = $processedConfig;
                 } else { // Otherwise
                     // Keep the original config if no processing was needed
                     $processedMappings[$attrName] = $attrConfigArray;
@@ -7701,16 +7591,6 @@ trait FieldtypeMappingTrait
         ?string $pluginName = null,
         array $allFields = []
     ): array {
-        // Return early if subfield mapping is not defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'subfieldMapping'
-            )
-        ) {
-            return [];
-        }
-
         // Extract the subfield label from the input data for mapping lookup
         $label = self::stringValue(
             self::mappingValue(
@@ -7807,12 +7687,7 @@ trait FieldtypeMappingTrait
 
         // Get the mapping config for the current fieldtype
         // Use the field attribute mapping (not subfield mapping) for preset translation
-        $fieldAttributeMapping = property_exists(
-            static::class,
-            'fieldAttributeMapping'
-        )
-            ? static::$fieldAttributeMapping
-            : [];
+        $fieldAttributeMapping = static::$fieldAttributeMapping;
         $statamicPreset = self::getStatamicPresetValue(
             $parentField,
             $fieldAttributeMapping
@@ -7981,16 +7856,6 @@ trait FieldtypeMappingTrait
     }
 
     /**
-     * Get the fieldtype mapping array for the implementing class.
-     *
-     * @return array<int|string, mixed> The mapping array for fieldtypes
-     */
-    public static function getMapping(): array
-    {
-        return static::$mapping;
-    }
-
-    /**
      * Resolve field-attribute options mapping when defined on the implementing class.
      *
      * @return array<int|string, mixed> The options mapping array, or empty when
@@ -8024,15 +7889,6 @@ trait FieldtypeMappingTrait
      */
     public static function getSubfieldMapping(): array
     {
-        if (
-            ! property_exists(
-                static::class,
-                'subfieldMapping'
-            )
-        ) {
-            return [];
-        }
-
         return static::$subfieldMapping;
     }
 
