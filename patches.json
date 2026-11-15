@@ -10,25 +10,15 @@
         "and be applied against its vendor tree. Reading a dependency's patches FILE is an",
         "unimplemented TODO in the resolver, so this form stays correctly root-only.",
         "",
-        "The first seven entries are the shared patches of uams-web/patches-pest-plugin-mutate",
-        "(require-dev), listed here by vendor/ path because this repository is a package: the",
-        "plugin does not apply a require-dev dependency's own extra.patches. They keep the",
-        "package's order and description keys, and change only in the change that adopts a",
-        "new package release (#521). Their narrative and removal criteria live in the",
+        "Every entry is a shared patch of uams-web/patches-pest-plugin-mutate (require-dev),",
+        "listed here by vendor/ path because this repository is a package: the plugin does",
+        "not apply a require-dev dependency's own extra.patches. They keep the package's",
+        "order and description keys, and change only in the change that adopts a new",
+        "package release (#521, #568). Their narrative and removal criteria live in the",
         "package's README; their upstream tracking tickets live there too.",
         "",
-        "pest-plugin-mutate-ignore-annotated-statement.patch is this repository's own and is",
-        "applied after the shared seven, against whose output it is cut (#521): the shared",
-        "annotation-parsing patch edits the same lines of src/Support/NodeVisitor.php and",
-        "fixes a different defect. The traverser still calls NodeVisitor::leaveNode() on a",
-        "node whose enterNode() returned DONT_TRAVERSE_CURRENT_AND_CHILDREN, so a",
-        "`@pest-mutate-ignore` marker above a statement did not suppress a mutator that",
-        "targets the statement itself (wordpress-importer-archive#1401). The patch remembers",
-        "the marked node and skips it in leaveNode().",
-        "",
-        "REMOVAL CRITERION: drop it (and, if it is the last root patch, move the shared seven",
-        "out with the package) once a tagged pestphp/pest-plugin-mutate release on the 5.x line",
-        "ships the fix, or once the shared package carries it. Tracked in #1423."
+        "This repository's own pest-plugin-mutate-ignore-annotated-statement.patch retired",
+        "in #568: the package carries it from v1.1.0, under the same file name."
     ],
     "patches": {
         "pestphp/pest-plugin-mutate": {
@@ -39,7 +29,13 @@
             "Widen or refuse a mutant child's filter that PCRE cannot compile, or that would pass cmd.exe's command-line limit on Windows, so it cannot score a kill without running a test (temporary; see #2578, #3114)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-windows-filter-length.patch",
             "Create the mutations directory and fail on a mutated source that cannot be written, so a run cannot score mutants it never applied (temporary; see #2812)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-write-mutated-source.patch",
             "Drop the parallel runner's options (--passthru-php, --processes and the rest) from each mutant child so a parallel run given one cannot score every mutant killed (temporary; see #2926, #2947)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-drop-parallel-runner-options.patch",
-            "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)": "patches/pest-plugin-mutate-ignore-annotated-statement.patch"
+            "Select tests for a mutated scalar function default, so it is not scored without a test running it (temporary; see UAMS-Web/uams-2020#673)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-function-defaults.patch",
+            "Propagate a mutation into isolated test processes and reject a test report that ran no tests, so an isolated run cannot score a mutant killed without running a test (temporary; see UAMS-Web/UAMSWP-Logo-List#82)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-isolated-processes.patch",
+            "Map a class constant mutant to the tests covering its containing class, since a constant initializer has no executable coverage line (temporary)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-class-constant-coverage.patch",
+            "Skip a node whose own comment carries a matching @pest-mutate-ignore marker, including when the traverser still leaves that node (temporary)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-ignore-annotated-statement.patch",
+            "Size a mutant child's time limit from the serial work the initial suite stands for, so a --parallel run cannot score a mutant a timeout that no test caused (temporary; see UAMS-Web/patches-pest-plugin-mutate#2)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout.patch",
+            "Keep Patchwork in front of the mutation stream wrapper after a pass-through read, so a function a test mocks is still redefined in a mutant child that logs to junit (temporary; see UAMS-Web/patches-pest-plugin-mutate#31)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-stream-wrapper-patchwork.patch",
+            "Run a mutant child again when it times out once, and score a timeout only when the second attempt times out too, so a transient slowdown of the machine cannot keep --min=100 out of reach (temporary; see UAMS-Web/patches-pest-plugin-mutate#30)": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout-retry.patch"
         }
     }
 }
