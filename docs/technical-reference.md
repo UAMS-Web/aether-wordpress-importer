@@ -1182,6 +1182,11 @@ The contract it implements is documented in `UAMS-Web/uamswp-migration-api`, not
   - `setMigrationApiSource()`: Points this run at the migration API. Called by the import command when `--source=api`; the loader is a container singleton so the command and `Selector` share one instance.
   - `loadSettings()`: Reads and parses from whichever source is configured.
 
+### WxrMaterializer
+
+- **Purpose**: Writes migration API content out as WXR part files, so a `--source=api` run imports through the same parser and entry creators as an export.
+- **File Path**: `src/Services/WordPressImport/MigrationApi/WxrMaterializer.php`, with three traits under `src/Services/WordPressImport/MigrationApi/Traits/` that keep each file small enough for one pull request's mutation run (#552): `WxrMaterializerAttachmentsTrait` (reading a scoped run's attachments by reference), `WxrMaterializerUnservedContentTrait` (the unserved content report and the redirect plugin rules) and `WxrMaterializerXmlWriterTrait` (writing each part's channel, authors, taxonomies and items).
+
 ### MigrationApiException
 
 - **Purpose**: The single error type every migration API failure surfaces as.
