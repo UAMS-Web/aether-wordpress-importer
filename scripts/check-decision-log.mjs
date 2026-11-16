@@ -20,9 +20,10 @@
  *
  * That check, delivered with the `decision-log` skill, keys on
  * `^## (\d{4}-\d{2}-\d{2})` and enforces date order and the blank line before
- * each entry heading. This log was undated until #580, which gave every heading
- * the date its decision closed and put the entries oldest first, so that check
- * now reads the whole file and owns the order.
+ * each entry heading. This log was undated until #580, which dated every heading
+ * and put the entries oldest first, so that check now reads the whole file and
+ * owns the order. A heading's date is the decision date where the entry records
+ * one, and otherwise the day the entry was first recorded.
  *
  * This guard keeps the structural faults a union merge can introduce that the
  * order check does not look for. What is left is structure.
