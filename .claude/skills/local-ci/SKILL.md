@@ -80,6 +80,7 @@ Gating a workflow that still runs in Actions is in [Gating the Actions workflow]
 | `chain` | `true` stops at the first failure and reports the later jobs as skipped, naming the failing job. The default `false` runs every selected job and reports all of them, so one run surfaces everything rather than one failure per run. |
 | `statusContext` | The context `--commit-status` posts under, `"local-ci"` by default. A non-empty string of at most 255 characters with no control characters. Name the same string in any branch rule that requires the status. |
 | `guard.deny` | Regular expressions (JavaScript syntax; the strings are JSON, so a backslash is doubled). When set, a `guard` job runs first on every run and fails when any tracked file matches, naming the files. The same list is what the pre-commit hook checks over staged files. The name `guard` is then reserved. |
+| `registeredPatches` | `false` turns off the job the runner adds by default (below). Default `true`. |
 | `prepare` | Steps that bring a reused `--branch` slot in line with the commit before any job runs: `residue`, `submodules` and `patches`. Optional. See [Preparing a reused slot](#preparing-a-reused-slot-prepare). |
 | `jobs[].name` | Short and unique: letters, digits, `.`, `_`, `-`. It is what `--jobs` and the summary use. |
 | `jobs[].run` | A shell command, run from the repository root. When its first word is `php`, or starts with `vendor/bin/`, it runs under the resolved PHP (`vendor/bin/pint --test` becomes `<php> vendor/bin/pint --test`), so the version the config names is the one that runs, and so Windows' `.bat` shims in `vendor/bin` are never spawned directly. Any other command (`composer validate`, `node --test "scripts/*.test.mjs"`) runs as written. The shell is `/bin/sh` on macOS and Linux and `cmd.exe` on Windows, so a command that must run everywhere avoids pipes and shell-specific syntax; `each` exists for the common case. |
@@ -178,6 +179,16 @@ The `requires` field and the existing `run`, `paths`, `each` and `always` fields
 - **A `requires` path can name a build output.** The `browser` job lists `public/build/manifest.json`, so without a prior `npm run build` it is skipped with the file named rather than failing on stale assets.
 - **`mutate-ignore-breadth` belongs in every repository that runs Pest's `--mutate`.** It runs the `pest-testing` skill's breadth check, which measures how many mutants each `@pest-mutate-ignore` annotation removes and fails on one that removes more than one of a named mutator or none at all, and on a mention of the marker outside an annotation that removes mutants. It reads the installed `pest-plugin-mutate`, so `requires` names it and a repository without the plugin skips the job rather than failing it; a repository that never mutates leaves the job out. Its `paths` include `tests/mutate-ignore-breadth.baseline.json`, the baseline the check reads when it exists.
 - **Not expressed.** The `spell` jobs run the repository's own `npm run spell`, which owns any zero-files-checked floor. The `mutate` job declares `"mutation": {"minScore": 100}`, which carries the mutation smoke's non-zero-count and score assertions (see `jobs[].mutation`).
+
+## A job the runner adds on its own: `patches-registered`
+
+When `composer.lock` locks a package named `uams-web/patches-*` (in `packages` or `packages-dev`), the runner adds one job to the config it read, `patches-registered`, which runs `node .claude/skills/upstream-patch-lifecycle/scripts/check-registered-patches.mjs` on every run (`always`, so a plain run selects it too) and needs only `node` (UAMS-Web/uams-claude-skills#770). The check fails, naming each file, when a locked patches package declares a patch the root `patches.json` or `extra.patches` omits; the `upstream-patch-lifecycle` skill describes it.
+
+- **No edit to `local-ci.json` is needed**, which matters because the sync never writes that file: a repository gains the check by locking a patches package, and a later change to the check reaches it with the next sync.
+- **No patches package locked, no new job.** A repository without `composer.lock`, or whose lock names none, sees the config exactly as written. A `composer.lock` that is not JSON stops the run, naming the file, since the runner cannot then say whether the job applies.
+- **Opt out with `"registeredPatches": false`** at the top level of `local-ci.json`. With the key absent or `true` the job runs.
+- **A job of the same name in `local-ci.json` stands in place of the added one**, so a repository that pinned its own command keeps it and the check never runs twice.
+- **A deleted checker fails the job**, never skips it: the job needs `node`, not the script, as the `synced-files` job does. A repository that carries no copy of the `upstream-patch-lifecycle` skill but locks a patches package fails until it either receives the skill or sets the opt-out.
 
 ## Recording the verdict on the pull request (`--comment`)
 
