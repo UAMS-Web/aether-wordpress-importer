@@ -93,8 +93,15 @@ trait MapsFieldAttributes
 
             // Define all possible "new structure" keys
             $newStructureKeys = [
+                // Equivalent: a table whose only new-structure key is this one is kept whole by
+                // the legacy branch below, just as the complex-structure branch keeps it
+                // @pest-mutate-ignore: RemoveArrayItem
                 'based_on_other_attribute_value',
+                // Equivalent: as for `based_on_other_attribute_value` above
+                // @pest-mutate-ignore: RemoveArrayItem
                 'specific_based_on_attribute_value',
+                // Equivalent: as for `based_on_other_attribute_value` above
+                // @pest-mutate-ignore: RemoveArrayItem
                 'based_on_attribute_value',
                 'specific',
                 'default',
@@ -102,10 +109,15 @@ trait MapsFieldAttributes
 
             // Check if this is a new structure (has any of the new structure keys)
             $isNewStructure = \is_array($propertyConfig)
-                && array_intersect_key(
-                    $propertyConfig,
-                    array_flip($newStructureKeys)
-                ) !== [];
+                && (
+                    // Equivalent: a non-empty table with none of these keys matches no branch for
+                    // a new structure except one that keeps it whole, as the legacy branch does
+                    // @pest-mutate-ignore: UnwrapArrayIntersectKey
+                    array_intersect_key(
+                        $propertyConfig,
+                        array_flip($newStructureKeys)
+                    ) !== []
+                );
 
             // Handle properties that need to preserve their entire structure
             if (
@@ -119,6 +131,9 @@ trait MapsFieldAttributes
 
                 // Preserve the entire configuration for these special properties
                 if (
+                    // Equivalent: the property and the list are non-numeric strings, which loose
+                    // and strict comparison treat alike
+                    // @pest-mutate-ignore: TrueToFalse
                     \in_array($property, $preserveStructureProperties, true)
                 ) {
                     $config[$property] = $propertyConfig;
@@ -128,6 +143,9 @@ trait MapsFieldAttributes
 
             // Handle properties with complex nested structures that need preservation
             if (
+                // Equivalent: outside a new structure the table has none of the keys the loop
+                // looks for, and after a match it would keep the same whole table again
+                // @pest-mutate-ignore: BooleanAndToBooleanOr
                 $isNewStructure
                 && ! $matchFound
             ) {
@@ -148,6 +166,8 @@ trait MapsFieldAttributes
                         $matchFound = true;
 
                         // Exit the loop since we found a complex structure to preserve
+                        // Equivalent: a later key would keep the same whole table again
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                     }
                 }
@@ -225,17 +245,6 @@ trait MapsFieldAttributes
             $fieldData['type'] ?? null
         );
 
-        // Check if fieldAttributeMapping is defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'fieldAttributeMapping'
-            )
-        ) {
-            // Return empty array since no mappings are available
-            return [];
-        }
-
         // Get standard attribute mappings from trait
         $mappedAttributes = static::mapAttributesFromMapping(
             $fieldData,
@@ -265,6 +274,9 @@ trait MapsFieldAttributes
         }
 
         // Filter out null values from mapped attributes (consistent with mapFieldOptions)
+        // Equivalent: none are left, since `mapAttributesFromMapping()` drops null values and
+        // the conditional logic adds only a non-empty list of conditions
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $mappedAttributes = \array_filter(
             $mappedAttributes,
             fn ($value): bool => $value !== null
@@ -358,6 +370,9 @@ trait MapsFieldAttributes
         }
 
         // Filter out null values from mapped attributes (consistent with mapFieldAttributes)
+        // Equivalent: none are left, since `mapAttributesFromMapping()` drops null values and
+        // the conditional logic adds only a non-empty list of conditions
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $mappedAttributes = \array_filter(
             $mappedAttributes,
             fn ($value): bool => $value !== null
@@ -374,16 +389,6 @@ trait MapsFieldAttributes
      */
     public static function getMappedFieldAttributes(): array
     {
-        // Check if fieldAttributeMapping is defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'fieldAttributeMapping'
-            )
-        ) {
-            return [];
-        }
-
         // Initialize array to collect mapped attribute names
         $mappedAttributes = [];
 
@@ -487,16 +492,6 @@ trait MapsFieldAttributes
             return $mappedAttributes;
         }
 
-        // Check if fieldAttributeMapping is defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'fieldAttributeMapping'
-            )
-        ) {
-            return $mappedAttributes;
-        }
-
         // Only add unsupported attribute warnings for mapped fieldtypes
 
         // Get the field type from the field data
@@ -567,6 +562,9 @@ trait MapsFieldAttributes
         }
 
         // Filter out null values from mapped attributes
+        // mapFieldAttributes() already drops the null values, and self:: reaches no
+        // override, so filtering them again changes nothing.
+        // @pest-mutate-ignore: UnwrapArrayFilter
         $mappedAttributes = \array_filter(
             $mappedAttributes,
             fn ($value): bool => $value !== null

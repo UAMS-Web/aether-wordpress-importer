@@ -111,6 +111,9 @@ trait ProcessesModifierPatterns
                 $value = $resultProcessor($value);
             }
 
+            // Every branch above sets a match, and each step below waits for no
+            // match, so without this return the same value and flag come back
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [
                 'value' => $value,
                 'matchFound' => $matchFound,
@@ -682,6 +685,9 @@ trait ProcessesModifierPatterns
         mixed $value,
         array $translationConfig
     ): mixed {
+        // A value that is not an array cannot equal an array search below, so
+        // without this return the method still returns false
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! \is_array($value)) {
             return false;
         }

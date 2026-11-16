@@ -61,15 +61,14 @@ trait MapsSubfieldAttributes
                     $preset
                 );
 
+                // Every pair the helper returns reports a match, so its attribute is always used
                 if ($result !== null) {
-                    [$processedAttribute, $matchFound] = $result;
-                    if ($matchFound === true) {
-                        $processedConfig['statamic_attribute'] = $processedAttribute;
-                        $processedMappings[$attrName] = $processedConfig;
-                    } else { // Otherwise
-                        // Keep the original config if no match was found
-                        $processedMappings[$attrName] = $attrConfigArray;
-                    }
+                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                    // mutant has no test to fail and aborts the mutation run instead (#540)
+                    // @pest-mutate-ignore: RemoveArrayItem
+                    [$processedAttribute] = $result;
+                    $processedConfig['statamic_attribute'] = $processedAttribute;
+                    $processedMappings[$attrName] = $processedConfig;
                 } else { // Otherwise
                     // Keep the original config if no processing was needed
                     $processedMappings[$attrName] = $attrConfigArray;
@@ -209,6 +208,9 @@ trait MapsSubfieldAttributes
                         'default'
                     );
                     if ($defaultAttribute !== null) {
+                        // Without this return the default block below reads the same default and
+                        // returns the same pair.
+                        // @pest-mutate-ignore: RemoveEarlyReturn
                         return [
                             self::replacePlaceholders(
                                 self::normalizeMixedToString($defaultAttribute),
@@ -276,16 +278,6 @@ trait MapsSubfieldAttributes
         ?string $pluginName = null,
         array $allFields = []
     ): array {
-        // Return early if subfield mapping is not defined in the implementing class
-        if (
-            ! property_exists(
-                static::class,
-                'subfieldMapping'
-            )
-        ) {
-            return [];
-        }
-
         // Extract the subfield label from the input data for mapping lookup
         $label = self::stringValue(
             self::mappingValue(
@@ -382,12 +374,7 @@ trait MapsSubfieldAttributes
 
         // Get the mapping config for the current fieldtype
         // Use the field attribute mapping (not subfield mapping) for preset translation
-        $fieldAttributeMapping = property_exists(
-            static::class,
-            'fieldAttributeMapping'
-        )
-            ? static::$fieldAttributeMapping
-            : [];
+        $fieldAttributeMapping = static::$fieldAttributeMapping;
         $statamicPreset = self::getStatamicPresetValue(
             $parentField,
             $fieldAttributeMapping
@@ -424,7 +411,11 @@ trait MapsSubfieldAttributes
             // If the class exists, instantiate and configure it
             if (
                 $fieldtypeClass !== null
-                && $fieldtypeClass !== ''
+                && (
+                    // An empty class name fails class_exists() below anyway.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $fieldtypeClass !== ''
+                )
                 && class_exists($fieldtypeClass)
             ) {
                 $fieldtypeInstance = new $fieldtypeClass;
@@ -669,6 +660,9 @@ trait MapsSubfieldAttributes
         string $fieldId
     ): string {
         // Convert to lowercase and trim whitespace
+        // The whitespace trim() removes becomes underscores below, and those are
+        // trimmed from the ends, so the handle is the same without it.
+        // @pest-mutate-ignore: UnwrapTrim
         $handle = \strtolower(\trim($fieldName));
 
         // Replace non-alphanumeric characters with underscores

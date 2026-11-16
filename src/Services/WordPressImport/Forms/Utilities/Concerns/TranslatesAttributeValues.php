@@ -194,6 +194,10 @@ trait TranslatesAttributeValues
 
         // Return a whole result as an int, so a calculation feeding an integer
         // field such as `character_limit` does not write `1198.0`
+        // A finite float equals its floor, its ceiling and its rounding exactly
+        // when it is whole, and PHP compares a float with an int as two floats, so
+        // the float cast changes nothing
+        // @pest-mutate-ignore: FloorToCiel,FloorToRound,RemoveDoubleCast
         return $result === \floor($result)
             && \abs($result) < (float) PHP_INT_MAX
             ? (int) $result
@@ -268,6 +272,9 @@ trait TranslatesAttributeValues
     ) {
         $configArray = self::mappingConfig($config);
         $dataArray = self::asArray($data);
+        // A fieldtype that is not a string reads as none, and only a table keyed
+        // by the very text put in place of '' could tell another default apart
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $excludeFieldtypeString = self::stringValue($excludeFieldtype) ?? '';
 
         // Check if value_translation configuration exists
@@ -402,12 +409,7 @@ trait TranslatesAttributeValues
                     }
 
                     foreach ($configToUse as $otherAttrName => $valueMappings) {
-                        $normalizedOtherAttrName = self::normalizeArrayKey(
-                            $otherAttrName
-                        );
-                        if ($normalizedOtherAttrName === null) {
-                            continue;
-                        }
+                        $normalizedOtherAttrName = $otherAttrName;
 
                         $valueMappings = self::asArray($valueMappings);
                         $otherAttrValue = $dataArray[$normalizedOtherAttrName] ?? null;
@@ -521,12 +523,7 @@ trait TranslatesAttributeValues
                 } else { // Otherwise
                     // Legacy structure
                     foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                        $normalizedOtherAttrName = self::normalizeArrayKey(
-                            $otherAttrName
-                        );
-                        if ($normalizedOtherAttrName === null) {
-                            continue;
-                        }
+                        $normalizedOtherAttrName = $otherAttrName;
 
                         $valueMappings = self::asArray($valueMappings);
                         $otherAttrValue = $dataArray[$normalizedOtherAttrName] ?? null;
@@ -736,12 +733,8 @@ trait TranslatesAttributeValues
                 );
             } elseif (\is_string($value)) { // If no exact match, try pattern matching for wildcard patterns
                 foreach ($translationArray as $pattern => $replacement) {
-                    // Skip special cases that were already handled
-                    if (
-                        in_array($pattern, ['#not_set', '#not_empty', '#empty'], true)
-                    ) {
-                        continue;
-                    }
+                    // The special cases (`#not_set`, `#not_empty`, `#empty`) hold no
+                    // `*`, so the wildcard check below passes over them
 
                     // Normalize the pattern key to a string so wildcard
                     // detection and matching operate on string-only inputs.
@@ -801,6 +794,9 @@ trait TranslatesAttributeValues
 
         // Check if all elements are arrays with 'search' and 'replace' keys
         foreach ($translationArray as $item) {
+            // Without this return, an item that is not an array has no `search`
+            // key below, which returns false as well
+            // @pest-mutate-ignore: RemoveEarlyReturn
             if (! \is_array($item)) {
                 return false;
             }
@@ -952,7 +948,9 @@ trait TranslatesAttributeValues
             return \json_encode($value) === $search;
         }
 
-        // Handle array-to-array matching
+        // Handle array-to-array matching. Read as an `or`, the check lets through
+        // only one array and one non-array, which are never identical
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         if (\is_array($value) && \is_array($search)) {
             // Check for exact array match (same elements, same order)
             return $value === $search;
@@ -974,12 +972,16 @@ trait TranslatesAttributeValues
         mixed $originalValue,
         $searchPattern
     ) {
-        // If replacement is null, return null (exclude the value)
+        // If replacement is null, return null (exclude the value). Without this
+        // return, a null falls through to the last return, which returns it too
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($replace === null) {
             return null;
         }
 
-        // If replacement is an array, return it as-is
+        // If replacement is an array, return it as-is. Without this return, an
+        // array falls through to the last return, which returns it as-is too
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (\is_array($replace)) {
             return $replace;
         }
@@ -1116,6 +1118,9 @@ trait TranslatesAttributeValues
                 $translationConfig['#empty'] = null;
             }
 
+            // None of the keys the code below reads is present here, so without
+            // this return the configuration comes back unchanged as well
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $translationConfig;
         }
 

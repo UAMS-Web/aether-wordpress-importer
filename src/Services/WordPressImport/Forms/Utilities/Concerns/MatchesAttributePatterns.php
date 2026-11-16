@@ -121,6 +121,9 @@ trait MatchesAttributePatterns
         $caseSensitiveValue = \is_bool($caseSensitiveValueRaw) && $caseSensitiveValueRaw;
 
         // If nested_attribute is empty, no match
+        // A string pattern is not an array, so every check below passes it by and
+        // the method returns false anyway.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty,RemoveEarlyReturn
         if ($nestedAttribute === '') {
             return false;
         }
@@ -153,6 +156,9 @@ trait MatchesAttributePatterns
             }
 
             // If attrValue is scalar, no match
+            // Without this return a value that is not an array fails the list check
+            // below, which returns false too.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -174,6 +180,8 @@ trait MatchesAttributePatterns
             }
 
             // If attrValue is associative array or scalar, no match
+            // Without this return the method reaches its final return false.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -233,6 +241,9 @@ trait MatchesAttributePatterns
                         )
                     ) {
                         $found = true;
+                        // Going on to the next key once the match is found leaves $found true,
+                        // so the pattern key matches the same either way.
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                     }
                 }
@@ -285,6 +296,9 @@ trait MatchesAttributePatterns
                                 )
                             ) {
                                 $found = true;
+                                // Leaving only the inner loop, or moving to the next item, leaves $found
+                                // true, so the pattern key matches the same either way.
+                                // @pest-mutate-ignore: BreakToContinue,DecrementInteger
                                 break 2;
                             }
                         }
@@ -353,6 +367,9 @@ trait MatchesAttributePatterns
                             )
                         ) {
                             $found = true;
+                            // Going on to the next key once the match is found leaves $found true,
+                            // so the pattern key matches the same either way.
+                            // @pest-mutate-ignore: BreakToContinue
                             break;
                         }
                     }
@@ -388,6 +405,10 @@ trait MatchesAttributePatterns
             $attrNumeric = \is_numeric($attrValue) ? (float) $attrValue : $attrValue;
             $patternNumeric = \is_numeric($patternValue) ? (float) $patternValue : $patternValue;
 
+            // Read as an `or`, the check lets through one number, compared as a
+            // float, and one value that is not numeric and so not a float; they are
+            // never identical, and the comparisons below also find them unequal
+            // @pest-mutate-ignore: BooleanAndToBooleanOr
             if (
                 \is_numeric($attrValue)
                 && \is_numeric($patternValue)

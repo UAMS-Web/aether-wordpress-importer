@@ -97,9 +97,23 @@ trait FieldtypeMappingTrait
      * @var array<string, array<string>>
      */
     protected static array $validationLists = [
-        'visibility_values' => [
-            'hidden',
-        ],
+        // A property default is not a line coverage records, so a mutation run picks no
+        // test to run against this item; the visibility mapping tests read the list
+        // @pest-mutate-ignore: RemoveArrayItem
+        'visibility_values' => self::VISIBILITY_VALUES,
+    ];
+
+    /**
+     * The values a visibility attribute is checked against, kept apart from
+     * `$validationLists` so each default carries its own annotation.
+     *
+     * @var list<string>
+     */
+    protected const array VISIBILITY_VALUES = [
+        // A constant is not a line coverage records either, so a mutation run picks no
+        // test to run against this item; the visibility mapping tests read the list
+        // @pest-mutate-ignore: RemoveArrayItem
+        'hidden',
     ];
 
     /**
@@ -375,6 +389,8 @@ trait FieldtypeMappingTrait
         array $data
     ): bool {
         if (self::normalizeArrayKey($attrName) === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
@@ -399,6 +415,8 @@ trait FieldtypeMappingTrait
         array $fieldData
     ): bool {
         if (self::normalizeArrayKey($attrName) === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
@@ -416,6 +434,8 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
+            // Without the return, the key lookup below reads no table and answers the same
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true; // If parsing fails, consider it not set
         }
 
@@ -443,6 +463,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -472,6 +494,8 @@ trait FieldtypeMappingTrait
             \is_array($value)
             && $value === []
         ) {
+            // An empty list has no value, so the check below returns false too
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -508,6 +532,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -525,6 +551,8 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
+            // Without the return, the key lookup below reads no table and answers the same
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false; // If parsing fails, count it as empty
         }
 
@@ -555,6 +583,8 @@ trait FieldtypeMappingTrait
             \is_array($value)
             && $value === []
         ) {
+            // An empty list has no value, so the check below returns false too
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -678,6 +708,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -713,6 +745,8 @@ trait FieldtypeMappingTrait
         $normalizedAttrName = self::normalizeArrayKey($attrName);
 
         if ($normalizedAttrName === null) {
+            // An attribute name that cannot be a key fails the key lookup below the same way
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -730,6 +764,8 @@ trait FieldtypeMappingTrait
             true
         );
         if (! \is_array($fieldOptions)) {
+            // Without the return, the key lookup below reads no table and answers the same
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false; // If parsing fails, consider it not empty
         }
 
@@ -785,6 +821,9 @@ trait FieldtypeMappingTrait
             ! \in_array(
                 $fieldtype,
                 $fieldtypesWithSubfields,
+                // The fieldtype is text or null and neither listed name is numeric, so
+                // a loose comparison answers the same as a strict one
+                // @pest-mutate-ignore: TrueToFalse
                 true
             )
         ) {
@@ -825,16 +864,6 @@ trait FieldtypeMappingTrait
     }
 
     /**
-     * Get the fieldtype mapping array for the implementing class.
-     *
-     * @return array<int|string, mixed> The mapping array for fieldtypes
-     */
-    public static function getMapping(): array
-    {
-        return static::$mapping;
-    }
-
-    /**
      * Resolve field-attribute options mapping when defined on the implementing class.
      *
      * @return array<int|string, mixed> The options mapping array, or empty when
@@ -848,6 +877,9 @@ trait FieldtypeMappingTrait
                 'fieldAttributeOptionsMapping'
             )
         ) {
+            // Without the property, get_class_vars() has no entry for it, and the
+            // fallback below gives the same empty array.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -865,15 +897,6 @@ trait FieldtypeMappingTrait
      */
     public static function getSubfieldMapping(): array
     {
-        if (
-            ! property_exists(
-                static::class,
-                'subfieldMapping'
-            )
-        ) {
-            return [];
-        }
-
         return static::$subfieldMapping;
     }
 
@@ -958,10 +981,7 @@ trait FieldtypeMappingTrait
         array $parsedField
     ): ?string {
         foreach ($configToUse as $otherAttrName => $valueMappings) {
-            $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-            if ($normalizedOtherAttrName === null) {
-                continue;
-            }
+            $normalizedOtherAttrName = $otherAttrName;
 
             $valueMappingsArray = self::asArray($valueMappings);
             $otherAttrValue = self::mappingValue(
@@ -1007,21 +1027,6 @@ trait FieldtypeMappingTrait
                     self::mappingValue(
                         $valueMappingsArray,
                         '#not_empty'
-                    )
-                );
-            }
-
-            if (
-                self::arrayKeyExists(
-                    '',
-                    $valueMappingsArray
-                )
-                && $otherAttrValue === ''
-            ) {
-                return self::resolveOptionalStringMappingValue(
-                    self::mappingValue(
-                        $valueMappingsArray,
-                        ''
                     )
                 );
             }
@@ -1131,6 +1136,18 @@ trait FieldtypeMappingTrait
     }
 
     /**
+     * Whether a translation table holds a case for an attribute's absence or emptiness.
+     *
+     * @param  mixed  $table  The candidate translation table
+     */
+    private static function holdsMissingAttributeCase(mixed $table): bool
+    {
+        return self::arrayKeyExists('#not_set', $table)
+            || self::arrayKeyExists('#not_empty', $table)
+            || self::arrayKeyExists('#empty', $table);
+    }
+
+    /**
      * Normalize candidate array keys for safe lookup operations.
      *
      * @param  mixed  $key  The candidate key value
@@ -1183,6 +1200,9 @@ trait FieldtypeMappingTrait
     private static function numericChoiceCount(
         int|string $index
     ): ?int {
+        // An int index is numeric too, and the cast below leaves it unchanged, so
+        // without this return the one below gives the same count
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (\is_int($index)) {
             return $index + 1;
         }

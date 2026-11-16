@@ -177,9 +177,21 @@ trait MapsNotSetAttributes
                 // Skip if there is no Statamic attribute to map to and no other field value mappings
                 if (
                     ! isset($config['statamic_attribute'])
-                    && ! isset($attrConfigArr['statamic_other_field_value'])
+                    && (
+                        // Equivalent: this pass never reads `statamic_other_field_value`. Every write
+                        // below needs a target, an attribute-value table or a type table, so when all
+                        // three are absent, skipping the attribute or not gives the same result
+                        // @pest-mutate-ignore: RemoveNot
+                        ! isset($attrConfigArr['statamic_other_field_value'])
+                    )
                     && ! isset($attrConfigArr['statamic_other_field_value_based_on_attribute_value'])
-                    && ! isset($attrConfigArr['statamic_other_field_value_based_on_nested_attribute_value'])
+                    && (
+                        // Equivalent: this pass never reads the nested-attribute table. Every write
+                        // below needs a target, an attribute-value table or a type table, so when all
+                        // three are absent, skipping the attribute or not gives the same result
+                        // @pest-mutate-ignore: RemoveNot
+                        ! isset($attrConfigArr['statamic_other_field_value_based_on_nested_attribute_value'])
+                    )
                     && ! isset($attrConfigArr['statamic_type_based_on_attribute_value'])
                 ) {
                     continue;
@@ -367,10 +379,17 @@ trait MapsNotSetAttributes
                             // Replace wildcards in the target attribute
                             $resolvedTargetAttribute = self::resolveWildcards(
                                 self::stringValue($targetAttribute) ?? '',
+                                // Equivalent: the pattern `#not_set` holds no `*`, so the matched
+                                // value is never read
+                                // @pest-mutate-ignore: EmptyStringToNotEmpty
                                 '',
                                 '#not_set'
                             );
-                            $mappedData[$resolvedTargetAttribute] = '';
+                            // A target that is not text resolves to empty and names no attribute,
+                            // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                            if ($resolvedTargetAttribute !== '') {
+                                $mappedData[$resolvedTargetAttribute] = '';
+                            }
                         }
                     }
                 }
@@ -647,24 +666,12 @@ trait MapsNotSetAttributes
                     )
                 ) {
                     $hasNotSetCases = true;
-                } elseif (
-                    self::arrayKeyExists(
-                        'default',
-                        $translationConfig
-                    )
-                    || self::arrayKeyExists(
-                        'specific',
-                        $translationConfig
-                    )
-                    || self::arrayKeyExists(
-                        'based_on_other_attribute_value',
-                        $translationConfig
-                    )
-                ) { // Check for complex structure with #not_set or #not_empty
-
+                } else { // Check for complex structure with #not_set or #not_empty
                     $defaultTranslations = self::asArray($translationConfig['default'] ?? null);
-                    $specificTranslations = self::asArray($translationConfig['specific'] ?? null);
                     $basedOnOtherAttributeValue = self::asArray($translationConfig['based_on_other_attribute_value'] ?? null);
+
+                    // A fieldtype table is not read here: an earlier pass has written its special
+                    // cases, and this pass would write the same values again.
 
                     // Check default translations
                     if (
@@ -678,38 +685,19 @@ trait MapsNotSetAttributes
                         )
                     ) {
                         $hasNotSetCases = true;
-                    } elseif ($excludeFieldtype !== null && $excludeFieldtype !== '' && isset($specificTranslations[$excludeFieldtype])) { // Check specific translations
-                        $fieldtypeTranslations = $specificTranslations[$excludeFieldtype];
-                        if (
-                            self::arrayKeyExists(
-                                '#not_set',
-                                $fieldtypeTranslations
-                            )
-                            || self::arrayKeyExists(
-                                '#not_empty',
-                                $fieldtypeTranslations
-                            )
-                        ) {
-                            $hasNotSetCases = true;
-                        }
-                    } elseif ($basedOnOtherAttributeValue !== []) { // Check based_on_other_attribute_value
-                        foreach ($basedOnOtherAttributeValue as $valueMappings) {
+                    }
+
+                    // Check based_on_other_attribute_value whatever the tables above held, since the
+                    // pass below reads it first. The pass writes only from the table one of an
+                    // attribute's entries picks, special or exact, so each of those tables is read,
+                    // with its empty key (#542).
+                    foreach ($basedOnOtherAttributeValue as $valueMappings) {
+                        foreach (self::asArray($valueMappings) as $currentValueMappings) {
                             if (
-                                self::arrayKeyExists(
-                                    '#not_set',
-                                    $valueMappings
-                                )
-                                || self::arrayKeyExists(
-                                    '#not_empty',
-                                    $valueMappings
-                                )
-                                || self::arrayKeyExists(
-                                    '#empty',
-                                    $valueMappings
-                                )
+                                self::holdsMissingAttributeCase($currentValueMappings)
+                                || self::arrayKeyExists('', $currentValueMappings)
                             ) {
                                 $hasNotSetCases = true;
-                                break;
                             }
                         }
                     }
@@ -928,6 +916,9 @@ trait MapsNotSetAttributes
                             ) {
                                 // Resolve the statamic_attribute before using it as an array key
                                 $resolvedMapping = self::processAttributeMapping(
+                                    // processAttributeMapping() takes an integer name too, and uses it only as an
+                                    // array key, where PHP stores '5' as 5, so the cast changes nothing
+                                    // @pest-mutate-ignore: RemoveStringCast
                                     (string) $attrName,
                                     null,
                                     $config,
@@ -951,6 +942,10 @@ trait MapsNotSetAttributes
                             ) {
                                 // Resolve the statamic_attribute before using it as an array key
                                 $resolvedMapping = self::processAttributeMapping(
+                                    // Equivalent: from here the name is only used as an array key, and PHP
+                                    // stores a numeric string key such as '5' as the integer 5, so the cast
+                                    // changes nothing
+                                    // @pest-mutate-ignore: RemoveStringCast
                                     (string) $attrName,
                                     null,
                                     $config,
@@ -984,6 +979,10 @@ trait MapsNotSetAttributes
                         ) {
                             // Resolve the statamic_attribute before using it as an array key
                             $resolvedMapping = self::processAttributeMapping(
+                                // Equivalent: from here the name is only used as an array key, and PHP
+                                // stores a numeric string key such as '5' as the integer 5, so the cast
+                                // changes nothing
+                                // @pest-mutate-ignore: RemoveStringCast
                                 (string) $attrName,
                                 null,
                                 $config,
@@ -1016,6 +1015,10 @@ trait MapsNotSetAttributes
                         ) {
                             // Resolve the statamic_attribute before using it as an array key
                             $resolvedMapping = self::processAttributeMapping(
+                                // Equivalent: from here the name is only used as an array key, and PHP
+                                // stores a numeric string key such as '5' as the integer 5, so the cast
+                                // changes nothing
+                                // @pest-mutate-ignore: RemoveStringCast
                                 (string) $attrName,
                                 null,
                                 $config,
@@ -1041,6 +1044,10 @@ trait MapsNotSetAttributes
                     ) {
                         // Resolve the statamic_attribute before using it as an array key
                         $resolvedMapping = self::processAttributeMapping(
+                            // Equivalent: from here the name is only used as an array key, and PHP
+                            // stores a numeric string key such as '5' as the integer 5, so the cast
+                            // changes nothing
+                            // @pest-mutate-ignore: RemoveStringCast
                             (string) $attrName,
                             null,
                             $config,

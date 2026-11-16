@@ -160,6 +160,9 @@ trait TransformsMappedValues
             return null;
         }
 
+        // Equivalent: index 0 holds the same number followed by its unit, and a float cast
+        // reads the leading number, so it gives the same size
+        // @pest-mutate-ignore: DecrementInteger
         $size = (float) $matches[1];
         $unit = \strtoupper($matches[2]);
 
@@ -224,6 +227,8 @@ trait TransformsMappedValues
         string $unit
     ): int {
         $multipliers = [
+            // Equivalent: a unit with no entry falls back to 1 below, the value for `B`
+            // @pest-mutate-ignore: RemoveArrayItem
             'B' => 1,
             'KB' => 1000,
             'MB' => 1000 * 1000,
@@ -246,6 +251,8 @@ trait TransformsMappedValues
         string $targetUnit
     ): int|float {
         $divisors = [
+            // Equivalent: a unit with no entry falls back to 1 below, the value for `B`
+            // @pest-mutate-ignore: RemoveArrayItem
             'B' => 1,
             'KB' => 1000,
             'MB' => 1000 * 1000,
@@ -263,6 +270,9 @@ trait TransformsMappedValues
 
     /**
      * Resolve value transformations based on fieldtype and attribute values.
+     *
+     * Each attribute read here is a key of the data, so a `#not_set` case never
+     * applies and is not looked up.
      *
      * @param  array<int|string, mixed>  $valueTransformations  The value transformations configuration
      * @param  array<int|string, mixed>  $data  The field data
@@ -293,10 +303,7 @@ trait TransformsMappedValues
                     )
                 );
                 foreach ($fieldtypeMappings as $attributeName => $attributeValueMappings) {
-                    $normalizedAttributeName = self::normalizeArrayKey($attributeName);
-                    if ($normalizedAttributeName === null) {
-                        continue;
-                    }
+                    $normalizedAttributeName = $attributeName;
 
                     // Get the value of the attribute from the field data
                     $attributeValue = $data[$normalizedAttributeName] ?? null;
@@ -340,7 +347,7 @@ trait TransformsMappedValues
 
             // Check for flat structure first (direct based_on_attribute_value)
             // This handles the case where based_on_attribute_value is used directly in value_transformations
-            foreach ($data as $attrName => $attrValue) {
+            foreach ($data as $attrValue) {
                 $notEmptyConfig = self::mappingValue(
                     $basedOnAttributeValue,
                     '#not_empty'
@@ -354,28 +361,6 @@ trait TransformsMappedValues
                 ) {
                     $transformationValue = self::mappingValue(
                         self::asArray($notEmptyConfig),
-                        $key
-                    );
-
-                    return \is_array($transformationValue) ? $transformationValue : [$key => $transformationValue];
-                }
-
-                $notSetConfig = self::mappingValue(
-                    $basedOnAttributeValue,
-                    '#not_set'
-                );
-                if (
-                    self::arrayKeyExists(
-                        $key,
-                        self::asArray($notSetConfig)
-                    )
-                    && ! self::arrayKeyExists(
-                        $attrName,
-                        $data
-                    )
-                ) {
-                    $transformationValue = self::mappingValue(
-                        self::asArray($notSetConfig),
                         $key
                     );
 
@@ -406,7 +391,7 @@ trait TransformsMappedValues
             // This handles the case where the key is the transformation type (like 'based_on_attribute_value')
             if ($key === 'based_on_attribute_value') {
                 // Check each attribute in the data to see if any match the conditions
-                foreach ($data as $attrName => $attrValue) {
+                foreach ($data as $attrValue) {
                     $flatNotEmptyConfig = self::mappingValue(
                         $basedOnAttributeValue,
                         '#not_empty'
@@ -418,23 +403,6 @@ trait TransformsMappedValues
                     ) {
                         return self::normalizeTransformationConfig(
                             self::asArray($flatNotEmptyConfig),
-                            $key
-                        );
-                    }
-
-                    $flatNotSetConfig = self::mappingValue(
-                        $basedOnAttributeValue,
-                        '#not_set'
-                    );
-                    if (
-                        $flatNotSetConfig !== null
-                        && ! self::arrayKeyExists(
-                            $attrName,
-                            $data
-                        )
-                    ) {
-                        return self::normalizeTransformationConfig(
-                            self::asArray($flatNotSetConfig),
                             $key
                         );
                     }
@@ -484,10 +452,7 @@ trait TransformsMappedValues
                         $specificConfig[$fieldtype]
                     );
                     foreach ($fieldtypeMappings as $attributeName => $attributeValueMappings) {
-                        $normalizedAttributeName = self::normalizeArrayKey($attributeName);
-                        if ($normalizedAttributeName === null) {
-                            continue;
-                        }
+                        $normalizedAttributeName = $attributeName;
 
                         // Get the value of the attribute from the field data
                         $attributeValue = $data[$normalizedAttributeName] ?? null;
@@ -595,7 +560,7 @@ trait TransformsMappedValues
 
                 // First, check if the default config contains attribute values directly
                 // This handles the case where default contains attribute values as keys
-                foreach ($data as $attrName => $attrValue) {
+                foreach ($data as $attrValue) {
                     $defaultNotEmptyConfig = self::mappingValue(
                         $defaultConfig,
                         '#not_empty'
@@ -626,45 +591,6 @@ trait TransformsMappedValues
                             return self::normalizeTransformationConfig(
                                 self::mappingValue(
                                     self::asArray($defaultNotEmptyConfig),
-                                    $key
-                                ),
-                                $key
-                            );
-                        }
-                    }
-
-                    $defaultNotSetConfig = self::mappingValue(
-                        $defaultConfig,
-                        '#not_set'
-                    );
-                    if (
-                        self::arrayKeyExists(
-                            '#not_set',
-                            $defaultConfig
-                        )
-                        && ! self::arrayKeyExists(
-                            $attrName,
-                            $data
-                        )
-                    ) {
-                        // Check if the key is the transformation type
-                        if ($key === 'based_on_attribute_value') {
-                            return self::normalizeTransformationConfig(
-                                self::asArray($defaultNotSetConfig),
-                                $key
-                            );
-                        }
-
-                        // Check if the transformation config contains the key
-                        if (
-                            self::arrayKeyExists(
-                                $key,
-                                self::asArray($defaultNotSetConfig)
-                            )
-                        ) {
-                            return self::normalizeTransformationConfig(
-                                self::mappingValue(
-                                    self::asArray($defaultNotSetConfig),
                                     $key
                                 ),
                                 $key
@@ -745,10 +671,7 @@ trait TransformsMappedValues
 
                 // Then, check the traditional structure where default contains attribute names as keys
                 foreach ($defaultConfig as $attributeName => $attributeValueMappings) {
-                    $normalizedAttributeName = self::normalizeArrayKey($attributeName);
-                    if ($normalizedAttributeName === null) {
-                        continue;
-                    }
+                    $normalizedAttributeName = $attributeName;
 
                     // Get the value of the attribute from the field data
                     $attributeValue = $data[$normalizedAttributeName] ?? null;
@@ -871,10 +794,7 @@ trait TransformsMappedValues
                 $valueTransformations['based_on_other_attribute_value']
             );
             foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
                 $valueMappingsArray = self::normalizeMixedToArray($valueMappings);
@@ -1062,9 +982,13 @@ trait TransformsMappedValues
                 continue; // Skip invalid rules
             }
 
+            // The rule has exactly one key here, so its first key is its last.
+            // @pest-mutate-ignore: ArrayKeyFirstToArrayKeyLast
             $key = array_key_first($rule);
             $normalizedKey = self::normalizeArrayKey($key);
             if ($normalizedKey === null) {
+                // A rule with one key always has a first key, so this never runs
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -1085,11 +1009,15 @@ trait TransformsMappedValues
                             $fieldId
                         );
                     } elseif ($value === '#count') {
+                        // implode() writes the integer as the same digits.
+                        // @pest-mutate-ignore: RemoveStringCast
                         $parts[] = (string) $count;
                     } else { // Otherwise
                         $parts[] = self::normalizeMixedToString($value);
                     }
 
+                    // Inside a switch, `continue` ends the case the same way `break` does
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case 'attribute_value_sluggified':
@@ -1098,6 +1026,8 @@ trait TransformsMappedValues
                         self::normalizeMixedToString($value)
                     );
                     $parts[] = self::sluggifyValue($attributeValue);
+                    // Inside a switch, `continue` ends the case the same way `break` does
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case 'attribute_value_snake_case':
@@ -1106,6 +1036,8 @@ trait TransformsMappedValues
                         self::normalizeMixedToString($value)
                     );
                     $parts[] = self::snakeCaseValue($attributeValue);
+                    // Inside a switch, `continue` ends the case the same way `break` does
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
         }

@@ -86,17 +86,6 @@ trait ProcessesConditionalMappings
             return [$valueMappings['#empty'], true];
         }
 
-        // Check for empty string case
-        if (
-            self::arrayKeyExists(
-                '',
-                $valueMappings
-            )
-            && $otherAttrValue === ''
-        ) {
-            return [$valueMappings[''], true];
-        }
-
         return null;
     }
 
@@ -168,6 +157,9 @@ trait ProcessesConditionalMappings
         $matchFound = false;
         $result = null;
         $configArray = self::mappingConfig($config);
+        // A fieldtype that is not a string reads as none, and only a table keyed
+        // by the very text put in place of '' could tell another default apart
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $excludeFieldtypeString = self::stringValue($excludeFieldtype) ?? '';
 
         // Check if config is an array
@@ -200,12 +192,7 @@ trait ProcessesConditionalMappings
                 );
 
                 foreach ($fieldtypeMappings as $otherAttrName => $valueMappings) {
-                    $normalizedOtherAttrName = self::normalizeArrayKey(
-                        $otherAttrName
-                    );
-                    if ($normalizedOtherAttrName === null) {
-                        continue;
-                    }
+                    $normalizedOtherAttrName = $otherAttrName;
 
                     $result = self::processValueMappings(
                         self::asArray($valueMappings),
@@ -236,12 +223,7 @@ trait ProcessesConditionalMappings
             );
 
             foreach ($defaultConfig as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $result = self::processValueMappings(
                     self::asArray($valueMappings),
@@ -257,11 +239,19 @@ trait ProcessesConditionalMappings
 
         // Legacy structure - process each based_on_other_attribute_value configuration directly (if match not found)
         if (
-            ! $matchFound
-            && $configArray !== []
-            && ! self::arrayKeyExists(
-                'specific',
-                $configArray
+            (
+                (
+                    // A match needs a `specific` or `default` table, which the
+                    // checks below rule out, so read as an `or`, this lets through
+                    // only an empty table, whose loop below matches nothing
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    ! $matchFound
+                    && $configArray !== []
+                )
+                && ! self::arrayKeyExists(
+                    'specific',
+                    $configArray
+                )
             )
             && ! self::arrayKeyExists(
                 'default',
@@ -269,12 +259,7 @@ trait ProcessesConditionalMappings
             )
         ) {
             foreach ($configArray as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $result = self::processValueMappings(
                     self::asArray($valueMappings),
@@ -322,6 +307,9 @@ trait ProcessesConditionalMappings
         $matchFound = false;
         $result = null;
         $configArray = self::mappingConfig($config);
+        // A fieldtype that is not a string reads as none, and only a table keyed
+        // by the very text put in place of '' could tell another default apart
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $excludeFieldtypeString = self::stringValue($excludeFieldtype) ?? '';
 
         // Check if config is an array
@@ -391,11 +379,19 @@ trait ProcessesConditionalMappings
 
         // Legacy structure - process each based_on_attribute_value configuration directly (if match not found)
         if (
-            ! $matchFound
-            && $configArray !== []
-            && ! self::arrayKeyExists(
-                'specific',
-                $configArray
+            (
+                (
+                    // A match needs a `specific` or `default` table, which the
+                    // checks below rule out, so read as an `or`, this lets through
+                    // only an empty table, whose loop below matches nothing
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    ! $matchFound
+                    && $configArray !== []
+                )
+                && ! self::arrayKeyExists(
+                    'specific',
+                    $configArray
+                )
             )
             && ! self::arrayKeyExists(
                 'default',
@@ -474,11 +470,17 @@ trait ProcessesConditionalMappings
         ?string $preset = null
     ): ?array {
         $normalizedAttrName = self::normalizeArrayKey($attrName);
+        // A name that is not a key reads no configuration below, so without this
+        // return the missing statamic_attribute returns null as well
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($normalizedAttrName === null) {
             return null;
         }
 
-        // Skip if this attribute is not in processedMappings
+        // Skip if this attribute is not in processedMappings. Without this
+        // return, an absent or null entry reads as no configuration below, and
+        // its missing statamic_attribute returns null as well
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! isset($processedMappings[$normalizedAttrName])) {
             return null;
         }
@@ -498,6 +500,9 @@ trait ProcessesConditionalMappings
             $attrConfig,
             'statamic_attribute'
         );
+        // processAttributeMapping() returns null for a missing statamic_attribute
+        // too, before it reads anything else
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if ($statamicAttr === null) {
             return null;
         }
@@ -557,95 +562,29 @@ trait ProcessesConditionalMappings
             $resolvedAttribute = null;
             $finalValue = $attrValue;
 
-            // 1. based_on_attribute_value.specific
-            if (
-                self::arrayKeyExists(
-                    'specific',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
-                    // mutant has no test to fail and aborts the mutation run instead (#556)
-                    // @pest-mutate-ignore: RemoveArrayItem
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
+            // 1. based_on_attribute_value: processBasedOnAttributeValue() reads its
+            // specific, default and legacy tables itself, in that order, so one call
+            // covers all three, and an empty table matches nothing
+            $result = self::processBasedOnAttributeValue(
+                $basedOnAttributeValueArray,
+                null,
+                $attrName,
+                $attrValue,
+                $combinedData
+            );
+            if ($result !== null) {
+                // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
+                // mutant has no test to fail and aborts the mutation run instead (#540)
+                // @pest-mutate-ignore: RemoveArrayItem
+                [$resolvedAttribute] = $result;
+                if ($resolvedAttribute === null) {
+                    return null; // Skip this attribute
                 }
+
+                // Don't return yet - continue to check for value_translation
             }
 
-            // 2. based_on_attribute_value.default
-            if (
-                $resolvedAttribute === null
-                && self::arrayKeyExists(
-                    'default',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
-                    // mutant has no test to fail and aborts the mutation run instead (#556)
-                    // @pest-mutate-ignore: RemoveArrayItem
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
-                }
-            }
-
-            // 3. based_on_attribute_value (legacy)
-            if (
-                $resolvedAttribute === null
-                && $basedOnAttributeValueArray !== []
-                && ! self::arrayKeyExists(
-                    'default',
-                    $basedOnAttributeValueArray
-                )
-                && ! self::arrayKeyExists(
-                    'specific',
-                    $basedOnAttributeValueArray
-                )
-            ) {
-                $result = self::processBasedOnAttributeValue(
-                    $basedOnAttributeValueArray,
-                    null,
-                    $attrName,
-                    $attrValue,
-                    $combinedData
-                );
-                if ($result !== null) {
-                    // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
-                    // mutant has no test to fail and aborts the mutation run instead (#556)
-                    // @pest-mutate-ignore: RemoveArrayItem
-                    [$resolvedAttribute] = $result;
-                    if ($resolvedAttribute === null) {
-                        return null; // Skip this attribute
-                    }
-
-                    // Don't return yet - continue to check for value_translation
-                }
-            }
-
-            // 4. based_on_other_attribute_value.specific
+            // 2. based_on_other_attribute_value.specific
             $basedOnOtherAttributeValue = self::asArray(
                 self::mappingValue(
                     $statamicAttrArray,
@@ -671,7 +610,14 @@ trait ProcessesConditionalMappings
                     $attrValue
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $finalValue] = $result;
+                    [
+                        $resolvedAttribute,
+                        // processBasedOnOtherAttributeValueMapping() returns the
+                        // attribute value it was given as the second item, which is
+                        // what $finalValue already holds
+                        // @pest-mutate-ignore: RemoveArrayItem
+                        $finalValue,
+                    ] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -680,7 +626,7 @@ trait ProcessesConditionalMappings
                 }
             }
 
-            // 5. based_on_other_attribute_value.default
+            // 3. based_on_other_attribute_value.default
             if (
                 $resolvedAttribute === null
                 && self::arrayKeyExists(
@@ -700,7 +646,14 @@ trait ProcessesConditionalMappings
                     $attrValue
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $finalValue] = $result;
+                    [
+                        $resolvedAttribute,
+                        // processBasedOnOtherAttributeValueMapping() returns the
+                        // attribute value it was given as the second item, which is
+                        // what $finalValue already holds
+                        // @pest-mutate-ignore: RemoveArrayItem
+                        $finalValue,
+                    ] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -709,7 +662,7 @@ trait ProcessesConditionalMappings
                 }
             }
 
-            // 6. based_on_other_attribute_value (legacy)
+            // 4. based_on_other_attribute_value (legacy)
             if (
                 $resolvedAttribute === null
                 && $basedOnOtherAttributeValue !== []
@@ -728,7 +681,14 @@ trait ProcessesConditionalMappings
                     $attrValue
                 );
                 if ($result !== null) {
-                    [$resolvedAttribute, $finalValue] = $result;
+                    [
+                        $resolvedAttribute,
+                        // processBasedOnOtherAttributeValueMapping() returns the
+                        // attribute value it was given as the second item, which is
+                        // what $finalValue already holds
+                        // @pest-mutate-ignore: RemoveArrayItem
+                        $finalValue,
+                    ] = $result;
                     if ($resolvedAttribute === null) {
                         return null; // Skip this attribute
                     }
@@ -781,6 +741,10 @@ trait ProcessesConditionalMappings
 
         // Otherwise
         // Handle simple string statamic_attribute
+        // stringValue() returns a string unchanged and null for anything else,
+        // and normalizeMixedToString() returns that same string, so the right side
+        // alone gives the same name
+        // @pest-mutate-ignore: CoalesceRemoveLeft
         $statamicAttrString = self::stringValue($statamicAttr)
             ?? self::normalizeMixedToString($statamicAttr);
         $finalValue = self::processSimpleStatamicAttribute(
@@ -834,12 +798,7 @@ trait ProcessesConditionalMappings
 
             // Process each based_on_other_attribute_value configuration
             foreach ($configToUse as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $valueMappingsArray = self::asArray($valueMappings);
                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -862,12 +821,7 @@ trait ProcessesConditionalMappings
         } else { // Otherwise
             // Legacy structure - process each based_on_other_attribute_value configuration
             foreach ($basedOnConfig as $otherAttrName => $valueMappings) {
-                $normalizedOtherAttrName = self::normalizeArrayKey(
-                    $otherAttrName
-                );
-                if ($normalizedOtherAttrName === null) {
-                    continue;
-                }
+                $normalizedOtherAttrName = $otherAttrName;
 
                 $valueMappingsArray = self::asArray($valueMappings);
                 $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;

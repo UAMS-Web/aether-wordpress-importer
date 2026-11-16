@@ -53,10 +53,7 @@ trait ResolvesFieldtypes
 
             // Check if this attribute is mapped to Statamic's 'preset' attribute
             if ($statamicTarget === 'preset') {
-                $normalizedAttr = self::normalizeArrayKey($attr);
-                if ($normalizedAttr === null) {
-                    continue;
-                }
+                $normalizedAttr = $attr;
 
                 // Retrieve the value from the parent field for this attribute
                 $value = self::mappingValue(
@@ -114,7 +111,13 @@ trait ResolvesFieldtypes
 
         // If no Statamic fieldtype handle was found, return null
         if (
-            in_array($statamicType, [null, '', false], true)
+            in_array($statamicType, [null, false], true)
+            || (
+                // No mapping resolves a fieldtype to an empty handle, and one would name
+                // no class below, so the result would be null either way
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $statamicType === ''
+            )
         ) {
             return null;
         }
@@ -219,10 +222,7 @@ trait ResolvesFieldtypes
                 }
 
                 foreach ($configToUse as $otherAttrName => $valueMappings) {
-                    $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-                    if ($normalizedOtherAttrName === null) {
-                        continue;
-                    }
+                    $normalizedOtherAttrName = $otherAttrName;
 
                     $valueMappingsArray = self::asArray($valueMappings);
 
@@ -232,7 +232,7 @@ trait ResolvesFieldtypes
                         $normalizedOtherAttrName
                     );
 
-                    // Check if we have a mapping for this value
+                    // Check if we have a mapping for this value, the empty string included
                     if (self::arrayKeyExists($otherAttrValue, $valueMappingsArray)) {
                         return self::resolveFieldtypeMappingValue(
                             self::mappingValue(
@@ -273,22 +273,6 @@ trait ResolvesFieldtypes
                             self::mappingValue(
                                 $valueMappingsArray,
                                 '#not_empty'
-                            )
-                        );
-                    }
-
-                    // Check for empty string case
-                    if (
-                        self::arrayKeyExists(
-                            '',
-                            $valueMappingsArray
-                        )
-                        && $otherAttrValue === ''
-                    ) {
-                        return self::resolveFieldtypeMappingValue(
-                            self::mappingValue(
-                                $valueMappingsArray,
-                                ''
                             )
                         );
                     }
@@ -296,10 +280,7 @@ trait ResolvesFieldtypes
             } else { // Otherwise
                 // Legacy structure - process each based_on_other_attribute_value configuration
                 foreach ($basedOnConfig as $otherAttrName => $valueMappings) {
-                    $normalizedOtherAttrName = self::normalizeArrayKey($otherAttrName);
-                    if ($normalizedOtherAttrName === null) {
-                        continue;
-                    }
+                    $normalizedOtherAttrName = $otherAttrName;
 
                     $valueMappingsArray = self::asArray($valueMappings);
 
@@ -309,7 +290,7 @@ trait ResolvesFieldtypes
                         $normalizedOtherAttrName
                     );
 
-                    // Check if we have a mapping for this value
+                    // Check if we have a mapping for this value, the empty string included
                     if (self::arrayKeyExists($otherAttrValue, $valueMappingsArray)) {
                         return self::resolveFieldtypeMappingValue(
                             self::mappingValue(
@@ -350,22 +331,6 @@ trait ResolvesFieldtypes
                             self::mappingValue(
                                 $valueMappingsArray,
                                 '#not_empty'
-                            )
-                        );
-                    }
-
-                    // Check for empty string case
-                    if (
-                        self::arrayKeyExists(
-                            '',
-                            $valueMappingsArray
-                        )
-                        && $otherAttrValue === ''
-                    ) {
-                        return self::resolveFieldtypeMappingValue(
-                            self::mappingValue(
-                                $valueMappingsArray,
-                                ''
                             )
                         );
                     }
@@ -380,10 +345,7 @@ trait ResolvesFieldtypes
         ) {
             foreach (self::asArray($mapping['attributes']) as $attr => $attrMapValue) {
                 $attrMap = self::asArray($attrMapValue);
-                $normalizedAttr = self::normalizeArrayKey($attr);
-                if ($normalizedAttr === null) {
-                    continue;
-                }
+                $normalizedAttr = $attr;
 
                 $attrValue = self::mappingValue(
                     $parsedField,
@@ -693,6 +655,10 @@ trait ResolvesFieldtypes
         );
 
         // Process placeholders in the attributes
+        // Read as an `or`, the loop runs for an empty table, which writes nothing,
+        // or without a site handle, which replaces nothing and writes each key and
+        // value back unchanged.
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         if ($attributes !== [] && $siteHandle !== null) {
             $processedAttributes = [];
             foreach ($attributes as $key => $value) {
@@ -758,10 +724,7 @@ trait ResolvesFieldtypes
             }
 
             if ($isPresetAttribute) {
-                $normalizedAttr = self::normalizeArrayKey($attr);
-                if ($normalizedAttr === null) {
-                    continue;
-                }
+                $normalizedAttr = $attr;
 
                 // Retrieve the value from the parent field for this attribute
                 $value = self::mappingValue(
@@ -771,6 +734,9 @@ trait ResolvesFieldtypes
 
                 // If the value is not set, return null
                 if ($value === null) {
+                    // Without this return every branch below reads the null value and returns
+                    // null.
+                    // @pest-mutate-ignore: RemoveEarlyReturn
                     return null;
                 }
 

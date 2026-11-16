@@ -51,6 +51,9 @@ trait FormatsMappedValues
                 $count
             );
 
+            // Without this return the string reaches the fallback below, which replaces
+            // the same placeholders with the same string.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $complexArray;
         }
 
@@ -218,6 +221,9 @@ trait FormatsMappedValues
                 '.'
             )
         ) {
+            // Without this return the loop below reads the one-part path the same way,
+            // and gives null when the key is missing.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $data[$path] ?? null;
         }
 
@@ -261,6 +267,9 @@ trait FormatsMappedValues
     ): mixed {
         // Handle null values
         if ($value === null) {
+            // Without this return null is neither an array nor a string and is returned
+            // unchanged below.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -308,6 +317,10 @@ trait FormatsMappedValues
         $dateString = \trim($dateString);
 
         // Handle empty strings
+        // No date pattern below matches an empty string, so it is returned unchanged
+        // without the early return, and a non-date string returned early instead
+        // would be returned unchanged as well.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty,RemoveEarlyReturn
         if ($dateString === '') {
             return $dateString;
         }
@@ -400,6 +413,8 @@ trait FormatsMappedValues
     ): mixed {
         // Handle null values
         if ($value === null) {
+            // Without this return null falls through to the final return unchanged.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -438,6 +453,8 @@ trait FormatsMappedValues
         $value
     ): string {
         if ($value === null) {
+            // Without this return null becomes an empty string below and stays empty.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return '';
         }
 
@@ -453,6 +470,8 @@ trait FormatsMappedValues
             $string
         );
         if (! \is_string($string)) {
+            // preg_replace() fails only on a bad pattern, and this pattern is fixed
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $string = '';
         }
 
@@ -476,6 +495,8 @@ trait FormatsMappedValues
         $value
     ): string {
         if ($value === null) {
+            // Without this return null becomes an empty string below and stays empty.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return '';
         }
 
@@ -491,6 +512,8 @@ trait FormatsMappedValues
             $string
         );
         if (! \is_string($string)) {
+            // preg_replace() fails only on a bad pattern, and this pattern is fixed
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $string = '';
         }
 
@@ -548,6 +571,8 @@ trait FormatsMappedValues
                     $fieldData
                 )
             ) {
+                // $separateValue is only read for its truth below, which the cast keeps
+                // @pest-mutate-ignore: RemoveBooleanCast
                 $separateValue = (bool) self::mappingValue(
                     $fieldData,
                     $separateValueFieldOption
@@ -569,6 +594,8 @@ trait FormatsMappedValues
                 \is_array($fieldOptions)
                 && isset($fieldOptions['separate_value'])
             ) {
+                // $separateValue is only read for its truth below, which the cast keeps
+                // @pest-mutate-ignore: RemoveBooleanCast
                 $separateValue = (bool) $fieldOptions['separate_value'];
             }
         }
@@ -682,6 +709,9 @@ trait FormatsMappedValues
                     'radio',
                     'checkbox',
                 ],
+                // A string or null compares with these two non-numeric strings the
+                // same way loosely as strictly
+                // @pest-mutate-ignore: TrueToFalse
                 true
             )
         ) {
@@ -817,6 +847,9 @@ trait FormatsMappedValues
         array $config
     ): mixed {
         // Check if trim_characters configuration exists
+        // Without trim_characters the list below is empty, and an empty list
+        // returns the value unchanged as well
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! isset($config['trim_characters'])) {
             return $value;
         }
@@ -827,6 +860,9 @@ trait FormatsMappedValues
                 'trim_characters'
             )
         );
+        // The list is only tested for emptiness and joined below, and neither
+        // reads its keys, so reindexing it changes nothing
+        // @pest-mutate-ignore: UnwrapArrayValues
         $characterStrings = \array_values(
             \array_filter(
                 \array_map(

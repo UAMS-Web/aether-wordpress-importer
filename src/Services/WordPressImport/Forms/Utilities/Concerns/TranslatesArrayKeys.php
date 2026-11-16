@@ -99,12 +99,7 @@ trait TranslatesArrayKeys
                         $specificBasedOnAttributeValue[$excludeFieldtype]
                     );
                     foreach ($fieldtypeMappings as $attributeName => $attributeValueMappings) {
-                        $normalizedAttributeName = self::normalizeArrayKey(
-                            $attributeName
-                        );
-                        if ($normalizedAttributeName === null) {
-                            continue;
-                        }
+                        $normalizedAttributeName = $attributeName;
 
                         $attributeValueMappings = self::asArray(
                             $attributeValueMappings
@@ -203,12 +198,7 @@ trait TranslatesArrayKeys
                         }
 
                         foreach ($configToUse as $otherAttrName => $valueMappings) {
-                            $normalizedOtherAttrName = self::normalizeArrayKey(
-                                $otherAttrName
-                            );
-                            if ($normalizedOtherAttrName === null) {
-                                continue;
-                            }
+                            $normalizedOtherAttrName = $otherAttrName;
 
                             $valueMappings = self::asArray($valueMappings);
                             $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -288,23 +278,13 @@ trait TranslatesArrayKeys
                                         $currentValueMappings
                                     )
                                 ) {
+                                    // The attribute is a key of the data this loop walks, so only the original
+                                    // field data can leave it unset.
                                     if ($originalFieldData !== null) {
                                         if (
                                             self::isFieldOptionNotSet(
                                                 $attrName,
                                                 $originalFieldData
-                                            )
-                                        ) {
-                                            $keyTranslationArray = self::asArray(
-                                                $currentValueMappings['#not_set'] ?? null
-                                            );
-                                            break;
-                                        }
-                                    } else {
-                                        if (
-                                            self::isAttributeNotSet(
-                                                $attrName,
-                                                $data
                                             )
                                         ) {
                                             $keyTranslationArray = self::asArray(
@@ -365,12 +345,7 @@ trait TranslatesArrayKeys
                     } else {
                         // Legacy structure
                         foreach ($basedOnOtherAttributeValue as $otherAttrName => $valueMappings) {
-                            $normalizedOtherAttrName = self::normalizeArrayKey(
-                                $otherAttrName
-                            );
-                            if ($normalizedOtherAttrName === null) {
-                                continue;
-                            }
+                            $normalizedOtherAttrName = $otherAttrName;
 
                             $valueMappings = self::asArray($valueMappings);
                             $otherAttrValue = $data[$normalizedOtherAttrName] ?? null;
@@ -450,23 +425,13 @@ trait TranslatesArrayKeys
                                         $currentValueMappings
                                     )
                                 ) {
+                                    // The attribute is a key of the data this loop walks, so only the original
+                                    // field data can leave it unset.
                                     if ($originalFieldData !== null) {
                                         if (
                                             self::isFieldOptionNotSet(
                                                 $attrName,
                                                 $originalFieldData
-                                            )
-                                        ) {
-                                            $keyTranslationArray = self::asArray(
-                                                $currentValueMappings['#not_set'] ?? null
-                                            );
-                                            break;
-                                        }
-                                    } else {
-                                        if (
-                                            self::isAttributeNotSet(
-                                                $attrName,
-                                                $data
                                             )
                                         ) {
                                             $keyTranslationArray = self::asArray(
@@ -749,10 +714,7 @@ trait TranslatesArrayKeys
                         $fieldtype
                     );
                     foreach ($expectedKeys as $expectedKey) {
-                        $normalizedExpectedKey = self::normalizeArrayKey($expectedKey);
-                        if ($normalizedExpectedKey === null) {
-                            continue;
-                        }
+                        $normalizedExpectedKey = $expectedKey;
 
                         if (
                             ! self::arrayKeyExists(
@@ -915,11 +877,11 @@ trait TranslatesArrayKeys
     ): array {
         // Get the choices configuration from the implementing class
         $choicesConfig = static::$fieldAttributeMapping['choices'] ?? null;
-        if (
-            $choicesConfig === null
-            || $choicesConfig === []
-            || ! isset($choicesConfig['expected_keys'])
-        ) {
+        // A null or empty configuration has no `expected_keys` either. Without the
+        // return, a configuration without `expected_keys` reads no pattern below and
+        // falls back to the same keys
+        // @pest-mutate-ignore: RemoveEarlyReturn
+        if (! isset($choicesConfig['expected_keys'])) {
             // Fallback to default keys if no configuration exists
             return ['key', 'value'];
         }
@@ -930,6 +892,10 @@ trait TranslatesArrayKeys
                 'expected_keys'
             )
         );
+        // A `default` entry is returned by processModifierPatternsWithReturn()
+        // itself, so the fallback is read only when there is none, and then the
+        // left side is null anyway
+        // @pest-mutate-ignore: CoalesceRemoveLeft
         $defaultExpectedKeys = self::asArray(
             self::mappingValue(
                 $expectedKeysConfig,
@@ -1017,6 +983,9 @@ trait TranslatesArrayKeys
         string $string
     ): string {
         // Convert to lowercase and trim whitespace
+        // Every character trim() removes is replaced with an underscore below, and
+        // leading and trailing underscores are trimmed, so the result is the same
+        // @pest-mutate-ignore: UnwrapTrim
         $handle = \strtolower(\trim($string));
 
         // Replace non-alphanumeric characters with underscores

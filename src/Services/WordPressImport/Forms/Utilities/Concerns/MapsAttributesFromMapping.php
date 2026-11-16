@@ -129,6 +129,9 @@ trait MapsAttributesFromMapping
             // Normalize the attribute name to a string for downstream helpers
             // and offset lookups that expect string keys. Numeric string keys
             // are normalized back to integers automatically on array access.
+            // Every helper it reaches takes an int as well, and compares it only with
+            // names that are not numeric, so an integer name maps the same uncast.
+            // @pest-mutate-ignore: RemoveStringCast
             $attrName = (string) $attrName;
 
             // Get the appropriate configuration based on fieldtype
@@ -151,7 +154,12 @@ trait MapsAttributesFromMapping
             // Skip if there is no Statamic attribute to map to and no other field value mappings
             if (
                 ! isset($config['statamic_attribute'])
-                && ! isset($config['statamic_other_field_value'])
+                && (
+                    // Without a target the value is never read, and statamic_other_field_value
+                    // applies only to a value that was read, so skipping it changes nothing
+                    // @pest-mutate-ignore: RemoveNot
+                    ! isset($config['statamic_other_field_value'])
+                )
                 && ! isset($config['statamic_other_field_value_based_on_attribute_value'])
                 && ! isset($config['statamic_other_field_value_based_on_nested_attribute_value'])
                 && ! isset($config['statamic_type_based_on_attribute_value']
@@ -308,11 +316,20 @@ trait MapsAttributesFromMapping
                         }
                     }
 
-                    // Check for based_on_attribute_value (legacy)
+                    // Check for based_on_attribute_value (legacy): a table with neither a
+                    // `default` nor a `specific` key. Read as an `or`, this lets through a
+                    // table with one of the keys, which the steps above already read without
+                    // a match and which matches nothing again.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $hasNeitherBasedOnAttributeValueKey = ! isset($basedOnAttributeValue['default'])
+                        && ! isset($basedOnAttributeValue['specific']);
+                    // Read as an `or`, this lets through an empty table, which matches
+                    // nothing, or a table the steps above already read without a match.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $isLegacyBasedOnAttributeValue = $basedOnAttributeValue !== []
+                        && $hasNeitherBasedOnAttributeValueKey;
                     if (
-                        $basedOnAttributeValue !== []
-                        && ! isset($basedOnAttributeValue['default'])
-                        && ! isset($basedOnAttributeValue['specific'])
+                        $isLegacyBasedOnAttributeValue
                         && ! $matchFound
                     ) {
                         $result = self::processBasedOnAttributeValue(
@@ -327,11 +344,20 @@ trait MapsAttributesFromMapping
                         }
                     }
 
-                    // Check for based_on_other_attribute_value (legacy)
+                    // Check for based_on_other_attribute_value (legacy): a table with neither a
+                    // `default` nor a `specific` key. Read as an `or`, this lets through a
+                    // table with one of the keys, which the steps above already read without
+                    // a match and which matches nothing again.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $hasNeitherBasedOnOtherAttributeValueKey = ! isset($basedOnOtherAttributeValue['default'])
+                        && ! isset($basedOnOtherAttributeValue['specific']);
+                    // Read as an `or`, this lets through an empty table, which matches
+                    // nothing, or a table the steps above already read without a match.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
+                    $isLegacyBasedOnOtherAttributeValue = $basedOnOtherAttributeValue !== []
+                        && $hasNeitherBasedOnOtherAttributeValueKey;
                     if (
-                        $basedOnOtherAttributeValue !== []
-                        && ! isset($basedOnOtherAttributeValue['default'])
-                        && ! isset($basedOnOtherAttributeValue['specific'])
+                        $isLegacyBasedOnOtherAttributeValue
                         && ! $matchFound
                     ) {
                         $result = self::processBasedOnOtherAttributeValue(
@@ -341,7 +367,7 @@ trait MapsAttributesFromMapping
                         );
                         if ($result !== null) {
                             // Removing the only item leaves `[] = $result;`, which PHP refuses to compile, so the
-                            // mutant has no test to fail and aborts the mutation run instead (#556)
+                            // mutant has no test to fail and aborts the mutation run instead (#540)
                             // @pest-mutate-ignore: RemoveArrayItem
                             [$statamicAttr] = $result;
                         }
@@ -569,7 +595,10 @@ trait MapsAttributesFromMapping
 
                 // Handle different value_calculation structures
                 if (\is_string($calculationConfig)) {
-                    // Simple string expression - only apply if value is numeric
+                    // Simple string expression - only apply if value is numeric. Read
+                    // as an `or`, the check lets a value that is not numeric through,
+                    // and applyValueCalculation() returns such a value unchanged.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
                     if (
                         $mappedValue !== null
                         && \is_numeric($mappedValue)
@@ -597,23 +626,13 @@ trait MapsAttributesFromMapping
                         foreach ($fieldtypeMappings as $pattern => $calcExpression) {
                             // Check for '#not_set' special case first
                             if ($pattern === '#not_set') {
-                                // If we have original field data, check if the attribute is not set in field options
+                                // The attribute is a key of the data this loop walks, so only the original
+                                // field data can leave it unset.
                                 if ($originalFieldData !== null) {
                                     if (
                                         self::isFieldOptionNotSet(
                                             $attrName,
                                             $originalFieldData
-                                        )
-                                    ) {
-                                        $expression = $calcExpression;
-                                        break;
-                                    }
-                                } else { // Otherwise
-                                    // Fallback to checking if the attribute is not set in the current data
-                                    if (
-                                        self::isAttributeNotSet(
-                                            $attrName,
-                                            $data
                                         )
                                     ) {
                                         $expression = $calcExpression;
@@ -844,16 +863,9 @@ trait MapsAttributesFromMapping
                     $attrName,
                     $attrValue
                 );
+                // A plain `true` or `false` is its own answer: processModifierPatterns()
+                // reports a match for any value that is not a table
                 $shouldPreserveNewlines = $modifierResult['value'];
-                $matchFound = $modifierResult['matchFound'];
-
-                // Legacy boolean check
-                if (
-                    ! $matchFound
-                    && $preserveNewlinesConfig === true
-                ) {
-                    $shouldPreserveNewlines = true;
-                }
 
                 // Apply newline preservation if needed
                 if ($shouldPreserveNewlines === true) {
@@ -1027,6 +1039,9 @@ trait MapsAttributesFromMapping
                 if (
                     $mappedValue !== null
                     && ! self::validateValueAgainstList(
+                        // A value that is not text fails the list either way: the only list
+                        // holds `hidden`, and neither the empty fallback nor other text is it
+                        // @pest-mutate-ignore: EmptyStringToNotEmpty
                         self::stringValue($mappedValue) ?? '',
                         $config['check_against_list']
                     )
@@ -1035,15 +1050,8 @@ trait MapsAttributesFromMapping
                 }
             }
 
-            // Alert for unsupported attributes
-            if (
-                isset($config['alert_unsupported'])
-                && $config['alert_unsupported'] === true
-                && (! in_array($attrValue, [null, '', []], true))
-            ) {
-                // This will be handled by the calling method to generate warnings
-                // We could add a flag here to indicate unsupported attributes were found
-            }
+            // `alert_unsupported` maps nothing here: mapFieldAttributesWithContext() reads
+            // it through shouldAlertUnsupportedAttribute() to report the attribute
 
             // Handle statamic_attribute.specific_based_on_attribute_value
             $statamicAttributeConfig = self::mappingConfig(
@@ -1069,7 +1077,8 @@ trait MapsAttributesFromMapping
                     foreach ($fieldtypeMappings as $pattern => $targetAttribute) {
                         // Check for '#not_set' special case first
                         if ($pattern === '#not_set') {
-                            // If we have original field data, check if the attribute is not set in field options
+                            // The attribute is a key of the data this loop walks, so only the original
+                            // field data can leave it unset.
                             if ($originalFieldData !== null) {
                                 if (
                                     self::isFieldOptionNotSet(
@@ -1080,6 +1089,8 @@ trait MapsAttributesFromMapping
                                     // Replace wildcards in the target attribute
                                     $resolvedTargetAttribute = self::resolveWildcards(
                                         self::stringValue($targetAttribute) ?? '',
+                                        // The pattern is `#not_set`, which holds no `*`, so the matched value is never read
+                                        // @pest-mutate-ignore: EmptyStringToNotEmpty
                                         '',
                                         $pattern
                                     );
@@ -1095,38 +1106,12 @@ trait MapsAttributesFromMapping
                                         );
                                     }
 
-                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
-                                    // Set mappedValue to ensure statamic_other_field_value gets applied
-                                    $mappedValue = $finalValue;
-                                    break; // Use the first matching pattern
-                                }
-                            } else { // Otherwise
-                                // Fallback to checking if the attribute is not set in the current data
-                                if (
-                                    self::isAttributeNotSet(
-                                        $attrName,
-                                        $data
-                                    )
-                                ) {
-                                    // Replace wildcards in the target attribute
-                                    $resolvedTargetAttribute = self::resolveWildcards(
-                                        self::stringValue($targetAttribute) ?? '',
-                                        '',
-                                        $pattern
-                                    );
-                                    // Apply value_substitution_regex to the attribute value before assigning
-                                    $finalValue = '';
-                                    if (
-                                        isset($config['value_substitution_regex'])
-                                        && \is_array($config['value_substitution_regex'])
-                                    ) {
-                                        $finalValue = self::applyValueSubstitutionRegex(
-                                            '',
-                                            $config['value_substitution_regex']
-                                        );
+                                    // A target that is not text resolves to empty and names no attribute,
+                                    // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                    if ($resolvedTargetAttribute !== '') {
+                                        $mappedData[$resolvedTargetAttribute] = $finalValue;
                                     }
 
-                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
                                     // Set mappedValue to ensure statamic_other_field_value gets applied
                                     $mappedValue = $finalValue;
                                     break; // Use the first matching pattern
@@ -1143,6 +1128,8 @@ trait MapsAttributesFromMapping
                                 // Replace wildcards in the target attribute
                                 $resolvedTargetAttribute = self::resolveWildcards(
                                     self::stringValue($targetAttribute) ?? '',
+                                    // The pattern is `#not_empty`, which holds no `*`, so the matched value is never read
+                                    // @pest-mutate-ignore: CoalesceRemoveLeft,EmptyStringToNotEmpty
                                     self::stringValue($attrValue) ?? '',
                                     $pattern
                                 );
@@ -1158,7 +1145,12 @@ trait MapsAttributesFromMapping
                                     );
                                 }
 
-                                $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                // A target that is not text resolves to empty and names no attribute,
+                                // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                if ($resolvedTargetAttribute !== '') {
+                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                }
+
                                 // Set mappedValue to ensure statamic_other_field_value gets applied
                                 $mappedValue = $finalValue;
                                 break; // Use the first matching pattern
@@ -1189,7 +1181,12 @@ trait MapsAttributesFromMapping
                                     );
                                 }
 
-                                $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                // A target that is not text resolves to empty and names no attribute,
+                                // so nothing is written, as an empty target writes nothing elsewhere (#458)
+                                if ($resolvedTargetAttribute !== '') {
+                                    $mappedData[$resolvedTargetAttribute] = $finalValue;
+                                }
+
                                 // Set mappedValue to ensure statamic_other_field_value gets applied
                                 $mappedValue = $finalValue;
                                 break; // Use the first matching pattern
@@ -1225,26 +1222,13 @@ trait MapsAttributesFromMapping
                         $fieldValuesMap = self::asArray($fieldValues);
                         // Check for '#not_set' special case first
                         if ($pattern === '#not_set') {
-                            // If we have original field data, check if the attribute is not set in field options
+                            // The attribute is a key of the data this loop walks, so only the original
+                            // field data can leave it unset.
                             if ($originalFieldData !== null) {
                                 if (
                                     self::isFieldOptionNotSet(
                                         $attrName,
                                         $originalFieldData
-                                    )
-                                ) {
-                                    foreach ($fieldValuesMap as $fieldName => $fieldValue) {
-                                        $mappedData[$fieldName] = $fieldValue;
-                                    }
-
-                                    break; // Use the first matching pattern
-                                }
-                            } else { // Otherwise
-                                // Fallback to checking if the attribute is not set in the current data
-                                if (
-                                    self::isAttributeNotSet(
-                                        $attrName,
-                                        $data
                                     )
                                 ) {
                                     foreach ($fieldValuesMap as $fieldName => $fieldValue) {
@@ -1301,26 +1285,13 @@ trait MapsAttributesFromMapping
                             $fieldValuesMap = self::asArray($fieldValues);
                             // Check for '#not_set' special case first
                             if ($pattern === '#not_set') {
-                                // If we have original field data, check if the attribute is not set in field options
+                                // The attribute is a key of the data this loop walks, so only the original
+                                // field data can leave it unset.
                                 if ($originalFieldData !== null) {
                                     if (
                                         self::isFieldOptionNotSet(
                                             $attrName,
                                             $originalFieldData
-                                        )
-                                    ) {
-                                        foreach ($fieldValuesMap as $fieldName => $fieldValue) {
-                                            $mappedData[$fieldName] = $fieldValue;
-                                        }
-
-                                        break; // Use the first matching pattern
-                                    }
-                                } else { // Otherwise
-                                    // Fallback to checking if the attribute is not set in the current data
-                                    if (
-                                        self::isAttributeNotSet(
-                                            $attrName,
-                                            $data
                                         )
                                     ) {
                                         foreach ($fieldValuesMap as $fieldName => $fieldValue) {
@@ -1367,26 +1338,13 @@ trait MapsAttributesFromMapping
                         $fieldValuesMap = self::asArray($fieldValues);
                         // Check for '#not_set' special case first
                         if ($pattern === '#not_set') {
-                            // If we have original field data, check if the attribute is not set in field options
+                            // The attribute is a key of the data this loop walks, so only the original
+                            // field data can leave it unset.
                             if ($originalFieldData !== null) {
                                 if (
                                     self::isFieldOptionNotSet(
                                         $attrName,
                                         $originalFieldData
-                                    )
-                                ) {
-                                    foreach ($fieldValuesMap as $fieldName => $fieldValue) {
-                                        $mappedData[$fieldName] = $fieldValue;
-                                    }
-
-                                    break; // Use the first matching pattern
-                                }
-                            } else { // Otherwise
-                                // Fallback to checking if the attribute is not set in the current data
-                                if (
-                                    self::isAttributeNotSet(
-                                        $attrName,
-                                        $data
                                     )
                                 ) {
                                     foreach ($fieldValuesMap as $fieldName => $fieldValue) {
@@ -1539,23 +1497,13 @@ trait MapsAttributesFromMapping
                 foreach ($typeMappings as $pattern => $newType) {
                     // Check for '#not_set' special case first
                     if ($pattern === '#not_set') {
-                        // If we have original field data, check if the attribute is not set in field options
+                        // The attribute is a key of the data this loop walks, so only the original
+                        // field data can leave it unset.
                         if ($originalFieldData !== null) {
                             if (
                                 self::isFieldOptionNotSet(
                                     $attrName,
                                     $originalFieldData
-                                )
-                            ) {
-                                $mappedData['type'] = $newType;
-                                break; // Use the first matching pattern
-                            }
-                        } else { // Otherwise
-                            // Fallback to checking if the attribute is not set in the current data
-                            if (
-                                self::isAttributeNotSet(
-                                    $attrName,
-                                    $data
                                 )
                             ) {
                                 $mappedData['type'] = $newType;
@@ -1580,7 +1528,14 @@ trait MapsAttributesFromMapping
             // Handle statamic_form_config
             if (
                 isset($attrConfigMap['statamic_form_config'])
-                && (! in_array($mappedValue, [null, '', []], true))
+                && $mappedValue !== ''
+                // A null or empty list would replace a value an earlier attribute wrote
+                // to the same key, and the empty values are dropped before the return
+                && (! in_array(
+                    $mappedValue,
+                    [null, []],
+                    true
+                ))
             ) {
                 $formConfigKey = self::stringValue(
                     $attrConfigMap['statamic_form_config']
@@ -1624,12 +1579,7 @@ trait MapsAttributesFromMapping
                         );
 
                         // Only process if expected_keys equals ['key', 'value']
-                        if (
-                            $expectedKeys === [
-                                'key',
-                                'value',
-                            ]
-                        ) {
+                        if ($expectedKeys === ['key', 'value']) {
                             $selectedChoice = array_find(self::asArray($data['choices']), fn ($choice): bool => \is_array($choice)
                             && isset($choice['isSelected'])
                             && $choice['isSelected'] === true);
@@ -1638,8 +1588,13 @@ trait MapsAttributesFromMapping
                                 // Get the choices configuration to determine key mapping
                                 $choicesConfig = static::$fieldAttributeMapping['choices'] ?? null;
                                 if (
-                                    $choicesConfig !== null
-                                    && $choicesConfig !== []
+                                    (
+                                        // The isset() below already fails for null and for an
+                                        // empty table, so these two read as an `or` answer the same
+                                        // @pest-mutate-ignore: BooleanAndToBooleanOr
+                                        $choicesConfig !== null
+                                        && $choicesConfig !== []
+                                    )
                                     && isset($choicesConfig['key_translation'])
                                 ) {
                                     $keyTranslationConfig = $choicesConfig['key_translation'];
@@ -1719,7 +1674,7 @@ trait MapsAttributesFromMapping
             // Now assign the transformed value to the statamic attribute
             if (
                 \is_string($statamicAttr)
-                && ($statamicAttr !== '' && $statamicAttr !== '')
+                && $statamicAttr !== ''
             ) {
                 if (
                     isset($config['as_array'])
@@ -1757,8 +1712,15 @@ trait MapsAttributesFromMapping
                         // A flat transformation config should only contain transformation keys (like as_numeric_string, as_date_iso_8601, etc.)
                         // and should not contain structural keys like 'default', 'specific', 'based_on_attribute_value', etc.
                         if (\is_array($valueTransformations)) {
-                            $isFlatConfig = ! isset($valueTransformations['default'])
+                            $isFlatConfig = (
+                                // getFieldtypeSpecificConfig() flattens a table whose only
+                                // structural keys are `default` and `specific`, so either one
+                                // reaches here only beside a key checked below, and these two
+                                // read as an `or` answer the same
+                                // @pest-mutate-ignore: BooleanAndToBooleanOr
+                                ! isset($valueTransformations['default'])
                                 && ! isset($valueTransformations['specific'])
+                            )
                                 && ! isset($valueTransformations['based_on_attribute_value'])
                                 && ! isset($valueTransformations['based_on_other_attribute_value'])
                                 && ! isset($valueTransformations['specific_based_on_attribute_value']);
