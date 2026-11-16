@@ -1,8 +1,8 @@
 # Decisions
 
-The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, newest at the bottom of its section. The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
+The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, under a heading `## YYYY-MM-DD <title>` dated the day the decision closed, oldest first (#580). The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
 
-## Versioning and releases
+## 2026-07-18 Versioning and releases
 
 Releases are **retrospective semver tags on `main`** — a changelog checkpoint, not a deploy gate or a release branch. Trunk-based flow is unchanged: vetted PRs merge to `main` continuously; a tag marks "everything merged since the last tag."
 
@@ -14,7 +14,7 @@ Releases are **retrospective semver tags on `main`** — a changelog checkpoint,
 
 See the [`cutting-releases`](../.claude/rules/cutting-releases.md) rule (the *when*) and the `writing-release-notes` skill (the *how*).
 
-## Issue triage — execution mode and hitl flavor
+## 2026-07-18 Issue triage — execution mode and hitl flavor
 
 Every open issue carries **exactly one** execution-mode label — `afk` (buildable autonomously, no design fork in its own scope) or `hitl` (a human must decide or act to complete it). Every `hitl` issue additionally carries **exactly one** flavor label:
 
@@ -25,11 +25,11 @@ Every open issue carries **exactly one** execution-mode label — `afk` (buildab
 
 Flip `hitl` → `afk` in the *same change* that records a fork's resolution. An `action-flavor` label goes with the flip; a `decision-fork` label stays, except where the ticket carried build work alongside the fork — see the entry for wordpress-importer-archive#1066 below. See the [`writing-issues`](../.claude/skills/writing-issues/SKILL.md) skill and the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule.
 
-## Test base-class selection
+## 2026-07-18 Test base-class selection
 
 Every test extends one of **three** base classes, chosen by whether it needs the booted host app: `Tests\TestCase` (full host Statamic app), `LaravelHttpTestCase` (minimal Laravel — HTTP client only), or the bare package `UAMSWeb\Aether\WordPressImporter\Tests\TestCase` (pure `PHPUnit\Framework\TestCase`). Never "fix" a PHPStan error by downgrading a host-bound test's base class — that trades a static nit for a silent runtime break. The rule and its rationale live in [`tests/CLAUDE.md`](../tests/CLAUDE.md) (refs `wordpress-importer-archive#366`, `wordpress-importer-archive#359`).
 
-## Test framework and boot model — Pest, with testbench for the light Statamic band
+## 2026-07-24 Test framework and boot model — Pest, with testbench for the light Statamic band
 
 The suite converts from class-based PHPUnit to Pest function style (#319, companion `uams-statamic-archive#916`), and adopts Statamic's testbench-based `Statamic\Testing\AddonTestCase` — but only for the tests a *minimal* Statamic can serve.
 
@@ -39,7 +39,7 @@ The suite converts from class-based PHPUnit to Pest function style (#319, compan
 
 Recorded for `wordpress-importer-archive#319` (folds in the `wordpress-importer-archive#364` testbench spike; subsumes `wordpress-importer-archive#454`). See the ticket's `## Decision` and the [`phpunit-to-pest`](../.claude/skills/phpunit-to-pest/SKILL.md) skill (the conversion process).
 
-## Safe arithmetic in form field-value calculation — a dedicated evaluator, not `eval()`
+## 2026-08-03 Safe arithmetic in form field-value calculation — a dedicated evaluator, not `eval()`
 
 `FieldtypeMappingTrait::applyValueCalculation()` replaces its `eval()` **and its regex sanitizer** with a small dedicated `SafeMathEvaluator` (closed grammar: four operators, parens, decimals, a whitelisted `round()`). The sanitizer is removed, not retained — it is the defect, not the mitigation.
 
@@ -51,7 +51,7 @@ The security framing was a red herring: the expression is never data-controlled 
 
 Recorded for `#2`.
 
-## TLS verification in importer remote fetches — on, with no opt-out
+## 2026-08-03 TLS verification in importer remote fetches — on, with no opt-out
 
 Both `CURLOPT_SSL_VERIFYPEER => false` calls in `LinkProcessor` (`:2963`, `:4104`) are removed; cURL defaults apply. A genuinely broken target certificate then fails loudly, which is signal worth having.
 
@@ -62,7 +62,7 @@ Residual, tracked separately: both calls take a WXR-controlled URL with no schem
 
 Recorded for `#4`.
 
-## Password verification — the plain-text fallback is Control-Panel-facing, not legacy
+## 2026-08-03 Password verification — the plain-text fallback is Control-Panel-facing, not legacy
 
 `PasswordVerifier`'s plain-text branch is **not** legacy import residue and must not be deleted yet. Verified: no entry in host content carries `visibility_password` at all; the importer's only writer (`BaseEntryCreator`) sets `visibility_password = Hash::make(...)` and `is_password_hashed = true` atomically in one branch; but `visibility_password` is a **Control-Panel-editable** field on 14+ blueprints via the `uamsweb_common_status` fieldset, and nothing in the host app hashes on save. The fallback is therefore the only thing making editor-authored passwords work — and the field's CP instructions ("the password is hashed and stored encrypted") are false.
 
@@ -73,7 +73,7 @@ The fix is host-side first: hash on save in `uams-statamic` and correct the inst
 
 Recorded for `#5`.
 
-## `statamic/cms` constraint — pinned exactly to the host's build
+## 2026-08-03 `statamic/cms` constraint — pinned exactly to the host's build
 
 This package pins `statamic/cms` **exactly** to the version `uams-statamic` pins (`6.26.0` when this was decided, `6.35.0` since #1290, `6.35.1` since `wordpress-importer-archive#1376`, and `6.37.0` since `wordpress-importer-archive#1429`; `composer.json` holds the current one), replacing a floating `^6.0`, so both CIs resolve the same Statamic build — the first requirement for both exercising the same `ueberdosis/tiptap-php`, the parser whose schema allowlist is what strips `<script>`, `<iframe>`, and `javascript:` out of imported WordPress content. Drift had reached sixteen Statamic minors when this was filed (`v6.10.0`/tiptap `2.1.0` here versus `v6.26.0`/tiptap `2.1.1` in the host), meaning package CI exercised a parser no UAMS content ever runs through.
 
@@ -88,24 +88,7 @@ This package pins `statamic/cms` **exactly** to the version `uams-statamic` pins
 
 Recorded for `wordpress-importer-archive#496`.
 
-## Parser fidelity — behavioral tests, not a `ueberdosis/tiptap-php` pin
-
-**`ueberdosis/tiptap-php` is deliberately left transitive in both repos.** Version alignment is a *proxy* for the property anyone actually wants — that the allowlist still strips what it is believed to strip — and the allowlist tests in `wordpress-importer-archive#492` measure that property directly, on every CI run. The per-sweep lock assertion from `wordpress-importer-archive#496` stays as a cheap backstop for drift the tests were not written to cover.
-
-Three mechanics decided it, measured 2026-08-24:
-
-- **A real import never runs this package's parser.** The importer is vendored into `uams-statamic` and invoked as `php artisan statamic:import:wordpress`, so it executes from the *host's* `vendor/`. This package's lock governs its own CI and nothing else, which makes the exposure test fidelity rather than content safety.
-- **This package only parses, never renders.** `BardParser` and `TablePressEntryCreator` call `getDocument()`; `src/` contains no `getHTML()` call. The entire `2.1.1` → `2.1.2` delta is `Utils\HTML::renderAttributes()`, on the render path, and is therefore unreachable from this package.
-- **The allowlist is identical across those versions.** `<script>`, `<iframe>`, `onerror`, `javascript:` and `data:text/html` hrefs, and `<svg onload>` all produce byte-identical JSON on both, all stripped. A control confirms a benign `href` survives, so `javascript:` is actively removed rather than the mark silently failing.
-
-- **Rejected:** pinning `ueberdosis/tiptap-php` exactly in both repos — it would have guarded a difference that does not exist, added a third constraint moved in lockstep across two repos on top of the `statamic/cms` coupling above, and still gone green on the failure that matters: a build that stops stripping `javascript:` has the same version number until someone changes it.
-- **Rejected:** pinning it in the host only — more coherent, since that is where imports execute, but it does nothing for this package's CI fidelity, which is the actual gap. Its separate merit is host-side and unrelated to the importer: `renderAttributes()` raises a `TypeError` on a non-scalar attribute value in `2.1.1` where `2.1.2` skips it, and `'0'`-valued attributes render differently. That belongs to a host ticket if it is wanted.
-
-**Accepted residual:** behavioral coverage is exactly as broad as `wordpress-importer-archive#492`'s payload list, and a host sweep that moves the parser first still goes unnoticed here until this repo's next sweep.
-
-Recorded for `wordpress-importer-archive#717`, which this closes; the acceptance criterion moves to `wordpress-importer-archive#492`.
-
-## Static analysis — larastan declined
+## 2026-08-03 Static analysis — larastan declined
 
 `larastan/larastan` is **not** adopted. Its headline value is Eloquent awareness, and `src/` contains zero Eloquent models. The database surface that does exist is negligible: one caught `Illuminate\Database\UniqueConstraintViolationException` in `Assets/AssetUtils.php`, and two `DB::table()` query-builder chains in `KnowledgeBase/ArticleEngagementSeeder.php`. Of 94 Laravel facade imports, 83 are `Log`, backing 248 call sites that Laravel's own `@method` docblocks already type; the container surface is 6 `app()` calls and no `resolve()` at all. It does not understand Statamic's magic, which is what this package actually leans on. The gate stays vanilla PHPStan at `level: max` — which in PHPStan 2.x *is* level 10, the level the host app also pins — with `phpstan-strict-rules`.
 
@@ -115,7 +98,7 @@ The parity worth having was the Pest extension, and it has already shipped: `#51
 
 Recorded for `wordpress-importer-archive#413`.
 
-## Host-app integration tests — stay on the real `default` site, with a cleanliness assert
+## 2026-08-03 Host-app integration tests — stay on the real `default` site, with a cleanliness assert
 
 The host-app integration tests continue importing into the real primary site. The blast radius they appeared to carry is already bounded: the host's `content/`, `users/`, and asset directories are **git submodules**, so a restore failure is recoverable and inspectable. The actual cause of `wordpress-importer-archive#464` was not that tests write real content — it is that `.gitmodules` sets `ignore = dirty` on the content submodule, muting the one signal that would have shown the stale residue before it was captured as a baseline.
 
@@ -129,21 +112,7 @@ Recorded for `wordpress-importer-archive#467`; supersedes nothing in `wordpress-
 
 **Superseded on the host side — the rejected third option is the one that shipped.** `uams-statamic-archive#1995` (merged 2026-08-13) redirected the content root after all: `App\Support\ContentRoot::path()` roots every content-backed Stache store, and the Eloquent asset-metadata dual-write, at a disposable mirror under `APP_ENV=testing`. The judgement above was wrong on the cost/benefit, and the host's reasoning is the better one — re-rooting makes the guarantee *structural* ("no store points at the submodule in the test env, so no test can dirty it, including tests nobody has written yet") rather than dependent on every future test remembering a per-test assert.
 
-## The `content/` cleanliness assert — a regression detector for the host's re-root, not a litter policeman
-
-`wordpress-importer-archive#570` asked for the per-test assert `wordpress-importer-archive#467` named. It shipped, but doing what the changed world leaves for it to do.
-
-Since `uams-statamic-archive#1995`, a Statamic save cannot reach the submodule at all, so an assert that policed per-test litter would be a **permanent silent pass**. What that re-root keys on is `ContentRoot::path()`, and it therefore does not cover a raw `base_path('content/…')` — of which this package still has three, one deleting files (`#622`). The host's own `ContentRoot` docblock calls a surface left pointed at `content/` while the mirror moves *destructive* rather than partial.
-
-So the assert's job is to **prove the host's structural guarantee still holds from this side of the vendor boundary**, and to fail loudly the moment a raw path writes through it.
-
-- **Rejected:** dropping the assert as superseded — it is the only thing watching the surfaces `#1995` does not cover, and `wordpress-importer-archive#622` is the evidence that those surfaces exist.
-- **Rejected:** pointing the assert at the mirror instead — the mirror is disposable by design, so litter there is harmless and detecting it proves nothing.
-- **Rejected:** porting the host gate's `KNOWN_CONTENT_LITTER` allowlist — its list is empty and kept only so a future tolerated path must be added visibly; this package has a better place for an expected write (that test's `snapshotIsolatedState()` call), and PHPStan at level max refuses the empty-list form outright.
-
-Recorded for `wordpress-importer-archive#570`; `wordpress-importer-archive#622` carries the three surfaces.
-
-## Content-heavy import tests stay host-app-bound
+## 2026-08-03 Content-heavy import tests stay host-app-bound
 
 The `WordPressImportTestTrait` band is **not** migrated to `AddonTestCase`. Their value is precisely that they run against the host's real collections, blueprints, and Stache; a scaffolded testbench replica would assert the importer works against a content model written to match our own expectations, going green on exactly the app-side drift the tests exist to catch. Migration would convert integration tests into expensive unit tests.
 
@@ -153,7 +122,7 @@ Parser-level assertions continue to be peeled down into `tests/Integration/` as 
 
 Closes the `wordpress-importer-archive#457` spike opened by `wordpress-importer-archive#319` (decision B).
 
-## Imported display toggles and tethers — derive from what was imported
+## 2026-08-03 Imported display toggles and tethers — derive from what was imported
 
 Three related mapping defaults, all resolved the same way: where the source content asserts something, the importer transcribes it rather than leaving an editor to re-key it.
 
@@ -163,7 +132,7 @@ Three related mapping defaults, all resolved the same way: where the source cont
 
 Recorded for `wordpress-importer-archive#439`, `#442`, `wordpress-importer-archive#501`.
 
-## Galleries that cannot satisfy the block contract — warn and import
+## 2026-08-03 Galleries that cannot satisfy the block contract — warn and import
 
 `GalleryParser` imports galleries that cannot satisfy `uamsweb_block_gallery`'s required-field contract and reports each one, rather than skipping or synthesizing. Of 307 `wp:acf/uams-gallery` blocks in the corpus, 198 (64%) carry no `gallery_description` and 15 carry exactly one image; those blocks render nothing until an editor completes them.
 
@@ -175,7 +144,7 @@ Recorded for `wordpress-importer-archive#439`, `#442`, `wordpress-importer-archi
 
 Recorded for `wordpress-importer-archive#512`.
 
-## Gravity Forms features with no Statamic destination — skip and warn, never emit a dead config
+## 2026-08-03 Gravity Forms features with no Statamic destination — skip and warn, never emit a dead config
 
 Three unmapped GF surfaces, resolved on one principle: where Statamic has no destination, the importer reports it and writes nothing, rather than emitting configuration that looks real and does nothing.
 
@@ -185,7 +154,7 @@ Three unmapped GF surfaces, resolved on one principle: where Statamic has no des
 
 Recorded for `wordpress-importer-archive#33`, `wordpress-importer-archive#35`, `wordpress-importer-archive#299`.
 
-## WordPress taxonomy dispositions
+## 2026-08-03 WordPress taxonomy dispositions
 
 Per-taxonomy destinations for the taxonomy import (`wordpress-importer-archive#13`):
 
@@ -206,7 +175,7 @@ Per-taxonomy destinations for the taxonomy import (`wordpress-importer-archive#1
 
 Recorded for `wordpress-importer-archive#13`.
 
-## Vanity redirect domains — Statamic is the record, the edge is the runtime
+## 2026-08-03 Vanity redirect domains — Statamic is the record, the edge is the runtime
 
 The seven redirect-only vanity domains keep the `redirects` global set as their authoring surface (editors and the importer unchanged), and a deploy-time step generates edge configuration from it. A redirect-only domain routing every request through a full Statamic boot into the 404 path, to `usort` a replicator, pays a CMS's cost for a lookup table; the store and the runtime need not be the same thing.
 
@@ -225,7 +194,7 @@ The seven redirect-only vanity domains keep the `redirects` global set as their 
 
 Recorded for `wordpress-importer-archive#133`.
 
-## News `category` to `organizations` crosswalk — machine-drafted, human-reviewed
+## 2026-08-03 News `category` to `organizations` crosswalk — machine-drafted, human-reviewed
 
 The crosswalk `#438` consumes is generated mechanically (exact slug plus fuzzy match of the 133 distinct news categories against the 181 `organizations` entries) and then confirmed, corrected, and extended by a human. A prototype resolves 22 exact and 14 fuzzy candidates, leaving 97 unmatched — consistent with most news categories denoting a topic, event, or external organization rather than a UAMS unit.
 
@@ -235,13 +204,13 @@ The verdict stays editorial; only the transcription is automated. The review mus
 
 Recorded for `#448`.
 
-## MinervaKB `mkb_faq` — no importer support
+## 2026-08-03 MinervaKB `mkb_faq` — no importer support
 
 `mkb_faq` gets no importer support. The corpus contains **zero** `mkb_faq` posts across all WordPress exports (three `mkb_faq_category` terms on one site — terms with no posts), and the `faq_items` destination (`uams-statamic#25`) does not yet exist. Any live FAQ content found later is a one-time manual port into `faq_items`, not importer work; a live check could only distinguish two flavours of "close", since importer work could not start before `#580` ships regardless.
 
 Recorded for `wordpress-importer-archive#22`; reopening is cheap if a site turns up with real volume.
 
-## Recognition-list membership is not in the WordPress export
+## 2026-08-03 Recognition-list membership is not in the WordPress export
 
 The create-versus-match-only fork for `recognition_lists` (`#434`) is **not decided**, because both branches need source data that does not exist. Verified: zero `domain="recognition-lists"` occurrences in the corpus (which carries 17 taxonomy domains, none of them this), no recognition-bearing postmeta key on `uamspeople` items, and nothing in the consolidated `uamspeople` field inventory. Every "recognition" match in the corpus is ordinary content text.
 
@@ -249,7 +218,7 @@ The membership data comes from the Find-a-Doc / UAMSHealth.com migration API, no
 
 Recorded for `#434`.
 
-## TablePress Premium — unblocked, no fork remains
+## 2026-08-03 TablePress Premium — unblocked, no fork remains
 
 `uams-statamic-archive#243` closed as completed on 2026-07-18 and shipped the destination fields via the `uamsweb_common_table_features` fieldset: `sorting_enable`, `search_enable`, `pagination_enable`, `pagination_count`, `pagination_change_enable`, `info_enable`, `horizontal_scroll_enable`, `column_filter_enable`, `column_filter_columns`, `responsive_stack_enable`, `responsive_stack_breakpoint`. `#21`'s recorded blocker state ("OPEN") was stale.
 
@@ -257,7 +226,7 @@ With the target fields named there is no design fork left: the importer maps the
 
 Recorded for `wordpress-importer-archive#21`.
 
-## An unresolvable host stays allowed by the egress guard
+## 2026-08-05 An unresolvable host stays allowed by the egress guard
 
 `OutboundUrlGuard::isAllowedHost()` allows a host that resolves to no address at all. The behavior predates the guard's IPv6 work; it was re-examined rather than inherited when `wordpress-importer-archive#547` put a test seam under resolution, and it **stands**.
 
@@ -270,7 +239,7 @@ The residual is real and named rather than papered over. Address pinning (`wordp
 
 Recorded for `wordpress-importer-archive#547` and `wordpress-importer-archive#541`.
 
-## The local-CI runner owns the CI slot — a tree nobody drives is not worth having
+## 2026-08-13 The local-CI runner owns the CI slot — a tree nobody drives is not worth having
 
 Branch work moved to stable, pre-bootstrapped worktree slots, which left one fork open: what the runner-owned `../wordpress-importer-ci` slot is actually *for* in a library repo. **The runner drives it.** `scripts/local-ci.mjs --branch` checks the branch out there, reconciles the local ref with `origin/<branch>` first, and prints `Validating: <sha> <subject>`; invoked bare it still runs in place against the current checkout.
 
@@ -284,7 +253,7 @@ Recorded for `wordpress-importer-archive#593` (shipped in PR `wordpress-importer
 
 **Superseded in part by wordpress-importer-archive#1319** (below): the private runner is retired, and the shared runner's slot is `../wordpress-importer-local-ci`. What this entry argued, that the runner drives its slot and validates the pushed head, carries over unchanged.
 
-## Trusting `data-set-*` set markup — a per-process nonce, not a constant marker
+## 2026-08-13 Trusting `data-set-*` set markup — a per-process nonce, not a constant marker
 
 `data-set-*` is a serialization this package invents and emits itself, yet nothing distinguished markup the importer generated from identical markup typed into a WordPress post. `Set::parseHTML()` copied every `data-set-attr-*` value into the stored Bard set verbatim, so a `<div data-set-type="pull_quote" data-set-attr-quote="&lt;script&gt;…">` in post content landed raw attacker HTML in a field the host app renders unescaped. **The parser now trusts only markup carrying a random token minted once per importing process** — strictly after the WXR input was written, so content being imported cannot carry it.
 
@@ -297,7 +266,21 @@ The **tag selector** matches the nonce rather than `data-set-type`. A planted di
 
 Recorded for `wordpress-importer-archive#494`.
 
-## Audio posts keep their categories — the blueprint grows the field, the importer is unchanged
+## 2026-08-14 The `content/` cleanliness assert — a regression detector for the host's re-root, not a litter policeman
+
+`wordpress-importer-archive#570` asked for the per-test assert `wordpress-importer-archive#467` named. It shipped, but doing what the changed world leaves for it to do.
+
+Since `uams-statamic-archive#1995`, a Statamic save cannot reach the submodule at all, so an assert that policed per-test litter would be a **permanent silent pass**. What that re-root keys on is `ContentRoot::path()`, and it therefore does not cover a raw `base_path('content/…')` — of which this package still has three, one deleting files (`#622`). The host's own `ContentRoot` docblock calls a surface left pointed at `content/` while the mirror moves *destructive* rather than partial.
+
+So the assert's job is to **prove the host's structural guarantee still holds from this side of the vendor boundary**, and to fail loudly the moment a raw path writes through it.
+
+- **Rejected:** dropping the assert as superseded — it is the only thing watching the surfaces `#1995` does not cover, and `wordpress-importer-archive#622` is the evidence that those surfaces exist.
+- **Rejected:** pointing the assert at the mirror instead — the mirror is disposable by design, so litter there is harmless and detecting it proves nothing.
+- **Rejected:** porting the host gate's `KNOWN_CONTENT_LITTER` allowlist — its list is empty and kept only so a future tolerated path must be added visibly; this package has a better place for an expected write (that test's `snapshotIsolatedState()` call), and PHPStan at level max refuses the empty-list form outright.
+
+Recorded for `wordpress-importer-archive#570`; `wordpress-importer-archive#622` carries the three surfaces.
+
+## 2026-08-14 Audio posts keep their categories — the blueprint grows the field, the importer is unchanged
 
 `PostEntryCreator` assembles `$data` as a **single unbranched array literal**, so `post_categories` and `post_tags` are written for all three blueprints it emits. `posts/audio` defines neither — established across its **11** direct fieldset imports and every fieldset those reach, not by grepping the handle, since a handle arrives through a fieldset without the string appearing in the blueprint. (Worth knowing if you re-derive this: fieldsets here do **not** nest through `import:` — all 11 sit at depth 1 — so the tree expands only through `field: <fieldset>.<handle>` references, and any "N fieldsets reached" figure is an artefact of which traversal rule you pick. The reproducible claim is the 11 and the absence.) So those keys landed as data no field reads. **The host app grows the field; this package writes exactly what it wrote before.** The build is `UAMS-Web/uams-statamic-archive#2026`.
 
@@ -311,7 +294,7 @@ At fifteen posts holding a newsroom bucket tag, both options are cheap, so the d
 
 Recorded for `wordpress-importer-archive#604`. The corpus figure is from the **sampled** exports, which are a sample and not a bound — live WordPress sites not yet exported may hold more.
 
-## Taxonomy navigation items — resolve through the registry by *shape*, never by taxonomy name
+## 2026-08-19 Taxonomy navigation items — resolve through the registry by *shape*, never by taxonomy name
 
 `wordpress-importer-archive#12` asked for a `(taxonomy, term_id)` to Statamic-destination lookup so navigation items could point at something other than `kbtopic`. `wordpress-importer-archive#13` had already built it (`TermDestinationRegistry`), so the ticket's real question was how far past the evidence to generalize — and the evidence is narrow. A full sweep of `_menu_item_type` across all **259** exports finds **6** taxonomy nav items: 3 `kbtopic`, already handled, and **3 `category`**. Against 4,811 `post_type` and 1,495 `custom` items. Zero `post_tag`, zero custom taxonomies, zero for the other three structured taxonomies.
 
@@ -330,7 +313,7 @@ Recorded for `wordpress-importer-archive#604`. The corpus figure is from the **s
 
 Recorded for `wordpress-importer-archive#12`. See **WordPress taxonomy dispositions** above for the `wordpress-importer-archive#13` destinations this rests on. The corpus figures are from the **sampled** exports, dated 2026-06-29 / 2026-07-28: the migration re-exports, and live sites may add taxonomy nav items — including flat ones, which skip and log rather than disappearing silently.
 
-## News-block categories — create the terms before the blocks are parsed, rather than repairing the blocks afterwards
+## 2026-08-19 News-block categories — create the terms before the blocks are parsed, rather than repairing the blocks afterwards
 
 A news block's `category` is a `post_categories` entry id (`wordpress-importer-archive#417`). Those entries are created by the term pass, which belongs to the content types that own the taxonomy — `PostEntryCreator`, `PeopleEntryCreator`, `LogoListItemEntryCreator`, and **not** `PageEntryCreator`. News blocks live in a page's `page_builder`, so on a first import the block is parsed before any category entry exists, the resolver misses, and the block is written with no `category` at all — which the host reads as "no filter", rendering every news post instead of one category's.
 
@@ -351,7 +334,7 @@ It passes `PostEntryCreator::getTaxonomyHandlesForPostImport()` rather than `['c
 
 Recorded for `wordpress-importer-archive#624`. The corpus figures are from the **sampled** exports, dated 2026-06-29 / 2026-07-28: the migration re-exports and the 28/13 split will move.
 
-## Form-ID extraction earns a consumer — reconcile against the supplied export rather than deleting the method
+## 2026-08-21 Form-ID extraction earns a consumer — reconcile against the supplied export rather than deleting the method
 
 `getFormPluginFormIdsUsed()`, surfaced as `get{Plugin}FormIdsUsed()` on all three form coordinators, **had no caller for Gravity Forms or Formidable Forms.** Form creation reads IDs recorded by the block *processors* (`FormPluginCoordinator::processFormImports()` reads `GravityFormsBlockProcessor::getFormIds()`), never the extractor; the extractor's only live consumer is `NinjaForms\UserInteractionHandler`, which prompts once per referenced form ID.
 
@@ -366,7 +349,7 @@ That is why `#632` — both extractors returning nothing from blocks, across all
 
 Recorded for `wordpress-importer-archive#658`. Corpus figures are from the sampled exports and will move as the migration re-exports.
 
-## The API-backed source materializes WXR — the seam is the file path, not the seven-method facade
+## 2026-08-21 The API-backed source materializes WXR — the seam is the file path, not the seven-method facade
 
 `wordpress-importer-archive#587` was written as "implement `XmlParser`'s public contract" — `getContentTypes()`, `getItems()`, `getAttachments()`, `getTerms()`, `getTags()`, `getCategories()`, `getBaseBlogUrl()` — so that "existing importer subsystems run unmodified." **Implementing exactly that contract would have made six entry creators silently import nothing.**
 
@@ -386,7 +369,7 @@ Whether the materialized WXR is byte-faithful enough for every consumer's XPath 
 
 Recorded for `wordpress-importer-archive#587`.
 
-## Form definitions move to the migration API, but only once it can serve all three plugins
+## 2026-08-22 Form definitions move to the migration API, but only once it can serve all three plugins
 
 The importer sources form definitions from **hand-made per-plugin export files** — 161 Gravity Forms, 12 Formidable, 4 Ninja Forms, committed to the `Exports` submodule and chosen by the operator at import time. Every one is stale from the moment it is committed, which is the defect `#358` exists to remove.
 
@@ -410,7 +393,24 @@ The measured asymmetry is what made the alternative tempting. For **Gravity Form
 
 Recorded for `#695`.
 
-## The migration API stands for the migration, and closes when WordPress is switched off
+## 2026-08-24 Parser fidelity — behavioral tests, not a `ueberdosis/tiptap-php` pin
+
+**`ueberdosis/tiptap-php` is deliberately left transitive in both repos.** Version alignment is a *proxy* for the property anyone actually wants — that the allowlist still strips what it is believed to strip — and the allowlist tests in `wordpress-importer-archive#492` measure that property directly, on every CI run. The per-sweep lock assertion from `wordpress-importer-archive#496` stays as a cheap backstop for drift the tests were not written to cover.
+
+Three mechanics decided it, measured 2026-08-24:
+
+- **A real import never runs this package's parser.** The importer is vendored into `uams-statamic` and invoked as `php artisan statamic:import:wordpress`, so it executes from the *host's* `vendor/`. This package's lock governs its own CI and nothing else, which makes the exposure test fidelity rather than content safety.
+- **This package only parses, never renders.** `BardParser` and `TablePressEntryCreator` call `getDocument()`; `src/` contains no `getHTML()` call. The entire `2.1.1` → `2.1.2` delta is `Utils\HTML::renderAttributes()`, on the render path, and is therefore unreachable from this package.
+- **The allowlist is identical across those versions.** `<script>`, `<iframe>`, `onerror`, `javascript:` and `data:text/html` hrefs, and `<svg onload>` all produce byte-identical JSON on both, all stripped. A control confirms a benign `href` survives, so `javascript:` is actively removed rather than the mark silently failing.
+
+- **Rejected:** pinning `ueberdosis/tiptap-php` exactly in both repos — it would have guarded a difference that does not exist, added a third constraint moved in lockstep across two repos on top of the `statamic/cms` coupling above, and still gone green on the failure that matters: a build that stops stripping `javascript:` has the same version number until someone changes it.
+- **Rejected:** pinning it in the host only — more coherent, since that is where imports execute, but it does nothing for this package's CI fidelity, which is the actual gap. Its separate merit is host-side and unrelated to the importer: `renderAttributes()` raises a `TypeError` on a non-scalar attribute value in `2.1.1` where `2.1.2` skips it, and `'0'`-valued attributes render differently. That belongs to a host ticket if it is wanted.
+
+**Accepted residual:** behavioral coverage is exactly as broad as `wordpress-importer-archive#492`'s payload list, and a host sweep that moves the parser first still goes unnoticed here until this repo's next sweep.
+
+Recorded for `wordpress-importer-archive#717`, which this closes; the acceptance criterion moves to `wordpress-importer-archive#492`.
+
+## 2026-08-24 The migration API stands for the migration, and closes when WordPress is switched off
 
 `uamswp-migration-api` reads unpublished content and the raw options table, so where it runs is a question about what UAMS operates rather than about what the importer can build — `#657`'s client takes its base URL from configuration and does not care. Three options: **local-only capture**, **standing deployment**, **deployment for a bounded window**.
 
@@ -433,7 +433,7 @@ Three things follow, and they are the price of the trigger rather than objection
 
 Procedure in [`docs/runbooks/migration-api-secret.md`](runbooks/migration-api-secret.md). Recorded for `wordpress-importer-archive#668`.
 
-## Cross-repo characterization tests — tag the test, grep at release time, build no machine
+## 2026-08-24 Cross-repo characterization tests — tag the test, grep at release time, build no machine
 
 A **characterization test** asserts today's behavior including a known gap, so the boundary is
 visible in the suite rather than assumed away. This codebase endorses the pattern. The cost it
@@ -470,7 +470,7 @@ the callout format stays in the `writing-release-notes` skill, and the tag's own
 
 Recorded for `wordpress-importer-archive#614`.
 
-## Team Showcase secondary taxonomies — deliberately unmapped, and the discard is reported
+## 2026-08-25 Team Showcase secondary taxonomies — deliberately unmapped, and the discard is reported
 
 The six optional secondary taxonomies across Team Showcase and its UAMSWP fork — `tshowcase-taxonomy`, `tshowcase-ctaxonomy`, `tshowcase-dtaxonomy` and the three `uamspeople-` equivalents — are recorded as having **no Statamic destination**, using a third shape (`SHAPE_UNMAPPED`) alongside `SHAPE_TAXONOMY` and `SHAPE_COLLECTION`. Their terms are not imported; the import now reports what was discarded instead of dropping it in silence.
 
@@ -484,7 +484,7 @@ The `?? SHAPE_TAXONOMY` fall-through for *unrecorded* handles is deliberately un
 
 Recorded for `wordpress-importer-archive#741`.
 
-## Departmental News Hub — designate every mapped site, and hand the schema objects to the app
+## 2026-08-26 Departmental News Hub — designate every mapped site, and hand the schema objects to the app
 
 The importer sets each migrated site's `uams_multisite_settings.department_organization` for **every**
 site its crosswalk maps, accepting that `php artisan multisite:audit-department-hubs` will then fail
@@ -524,7 +524,7 @@ because no site had ever been designated. `wordpress-importer-archive#768` is th
 
 Recorded for `wordpress-importer-archive#768`.
 
-## An imported page or post with no featured image omits the handle entirely
+## 2026-08-26 An imported page or post with no featured image omits the handle entirely
 
 `FieldMapper`'s `_thumbnail_id` case writes `featured_image_16_9` only when the imported path is neither `null` nor `''`, matching the gate `KbEntryCreator` has carried since `wordpress-importer-archive#751`. Both values are reachable: `importImageWithDisabledUploadHandling()` returns `null` on three paths, and the empty string when uploads are disabled and the attachment's extracted URL is empty — the shape of an attachment row whose file has left the media library.
 
@@ -566,7 +566,7 @@ if ($this->isRoot()) {
 
 Recorded for `wordpress-importer-archive#754`.
 
-## WP Adverts `advert` — build importer support, with the destination filed separately
+## 2026-08-27 WP Adverts `advert` — build importer support, with the destination filed separately
 
 `advert` gets importer support. The corpus carries **229** listings on one site (`inside.uams.edu/classifieds`), and unlike `mkb_faq` the board is actively posted to — 160 listings over the last 14 months, a median of 12 a month (range 3–16), most recently 2026-08-25 — with 560 advert-parented attachments and 564 image references. Auto-expiry is the plugin's normal lifecycle rather than decay (`_expiration_date` is set on all 229, and everything in the 2026-08-27 export expires by 2026-11-23), so the number that matters on any cutover date is the live board of **39**, not the cumulative 229.
 
@@ -583,7 +583,7 @@ Only the free core plugin is in use. Every meta key and post type the WP Adverts
 
 Recorded for `wordpress-importer-archive#23`.
 
-## The twelve external sites stay on WordPress — and domain-level redirects are a class nobody owns
+## 2026-08-27 The twelve external sites stay on WordPress — and domain-level redirects are a class nobody owns
 
 None of the twelve "external" production sites migrates into the Statamic multisite. `uasys.edu` is pulled into its own WordPress install and the rest are consolidated into one; all stay WordPress. **This package therefore has no work for any of them**: it imports WXR into Statamic, a WordPress-to-WordPress consolidation does not touch it, and none of the twelve has an export in the corpus.
 
@@ -611,7 +611,7 @@ The four `arpoisoncenter` occurrences are smaller than they look, and worth stat
 
 Recorded for `wordpress-importer-archive#134`.
 
-## AR ConnectNow exists twice — import the older site, drop the duplicate
+## 2026-08-27 AR ConnectNow exists twice — import the older site, drop the duplicate
 
 Two WordPress sites serve one property. Only `uamshealth.com/ar-connectnow` is imported; `uamshealth.com/arconnectnow` is dropped.
 
@@ -634,7 +634,7 @@ Three independent signals agree. It is the larger export, which is what an origi
 
 Recorded for `#793`.
 
-## An imported entry with no summary source gets `null`, never a synthesized one
+## 2026-08-28 An imported entry with no summary source gets `null`, never a synthesized one
 
 `excerpt` is a **required** field on every front-end-view blueprint (`UAMS-Web/uams-statamic-archive#1378`). The importer resolves it from the WordPress excerpt, then `_seopress_titles_desc`, then `seo_meta_description`. When a page or post carries none of the three, the importer writes **`null`** and stops there. It does not derive a summary from body copy, and it does not write an empty string.
 
@@ -649,7 +649,7 @@ The two rejected alternatives fail in opposite directions, and both fail quietly
 
 Recorded for `wordpress-importer-archive#429`.
 
-## Unsupported form fields are skipped, and `alert_unsupported` decides whether that is announced
+## 2026-08-28 Unsupported form fields are skipped, and `alert_unsupported` decides whether that is announced
 
 A form field type the mapping reports as **unmapped** produces no blueprint field, and whether the skip is announced is read from that type's own `alert_unsupported` flag: `false` means skip silently, anything else warns.
 
@@ -742,7 +742,7 @@ Recorded for `wordpress-importer-archive#815`.
 
 **Companion.** wordpress-importer-archive#922. Files: `package.json`, `package-lock.json`, `cspell.json`, `project-words.txt`, [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`scripts/local-ci.mjs`](../scripts/local-ci.mjs), and its test, whose pinned job list this changes. `node_modules/` is added to `.gitignore`. **Consequence for every tree:** `spell` is in `ALL_JOBS`, so a `local-ci` run now needs `npm install` in that worktree, and the runner names that remedy rather than failing inside `npx`.
 
-## The vanity-redirect network is served over the migration API, not hand-exported
+## 2026-09-08 The vanity-redirect network is served over the migration API, not hand-exported
 
 One WordPress network carries the vanity-URL redirects. It holds no posts or pages, so it produces no WXR export and was absent from the network inventory recorded on `#702`. Its redirect data is served over the **migration API**, which puts that network in scope for activation, secret placement and the close alongside every other.
 
@@ -758,7 +758,7 @@ One WordPress network carries the vanity-URL redirects. It holds no posts or pag
 
 Recorded for `#702`; extends `wordpress-importer-archive#133`.
 
-## The migration API credential is a per-network token the plugin issues, not a shared constant
+## 2026-09-08 The migration API credential is a per-network token the plugin issues, not a shared constant
 
 The importer authenticates to `uamswp-migration-api` with a token generated per network from the plugin's own admin page, shown once and stored hashed there. It replaces the `UAMSWP_MIGRATION_API_SECRET` constant as the credential this migration uses. Decided on `UAMS-Web/uamswp-migration-api-archive#140`, which owns the comparison and the rejected alternatives; the build is that repo's `#141`.
 
@@ -777,7 +777,7 @@ The importer authenticates to `uamswp-migration-api` with a token generated per 
 
 Recorded for `#702`; supersedes nothing in this file.
 
-## The migration API address and key are supplied per run and never stored
+## 2026-09-09 The migration API address and key are supplied per run and never stored
 
 An operator starting an import from the migration API pastes two things when the run begins: the WordPress address of the network to read, and that network's API key, taken from the plugin's admin page. Neither is held in configuration, in an environment variable, or in a command-line option, and neither survives the process. Decided on `wordpress-importer-archive#982` by the operator.
 
@@ -830,7 +830,7 @@ still uncovered         6     .cursor/**/*.md (5), src/**/README.md (1)
 
 Recorded for #980; amends *Check the prose corpus with a pinned `cspell`, and take the JavaScript surface that requires (wordpress-importer-archive#922)* above, which set the narrower scope.
 
-## A cross-site news category resolves against the syndicating site, once the host field opts in
+## 2026-09-10 A cross-site news category resolves against the syndicating site, once the host field opts in
 
 `uamsweb_block_news`'s `category` field now sets `select_across_sites: true` (`uams-statamic-archive#2165`), so `PostCategoryEntryResolver` tries the placement's own site first and the `news` site second, and writes whichever id it finds. Before that flag, resolving cross-site was strictly worse than refusing: the host dropped the id on read and the block rendered completely unfiltered while its YAML looked filtered.
 
@@ -847,7 +847,7 @@ That is corroborated independently by the host's own fieldset, whose comment bes
 
 Recorded for #628; amends *Resolve a news block's category on the first import, and group the corpus by `base_blog_url` (wordpress-importer-archive#624)* above, whose sentence stating that the resolver "scopes to the placement's own site because `post_categories` is `propagate: false`" was true when written and is superseded here. Its 28/13 corpus figures were themselves superseded by `wordpress-importer-archive#628`'s re-derivation — 104 unresolvable of 429 references across all 259 exports — and that query is recorded on the ticket rather than copied here, so it cannot go stale in two places.
 
-## The migration API key may arrive on standard input, so an unattended run is possible at all
+## 2026-09-14 The migration API key may arrive on standard input, so an unattended run is possible at all
 
 `statamic:import:wordpress --source=api` asked for the network address and its key at a prompt and refused without a terminal. That refusal was correct about the credential and wrong about the consequence: it made every unattended API run impossible, including the dual-import comparison `wordpress-importer-archive#588` asks for, which is the one check that would show the API and a WXR export producing the same content. Three ways of faking a terminal were measured on macOS and all fail — `--no-interaction` is refused by design, answers piped to the prompt raise `NonInteractiveValidationException` because Prompts detects a non-TTY, and `script -q /dev/null` cannot allocate a pty against a socket.
 
@@ -863,7 +863,7 @@ Recorded for #628; amends *Resolve a news block's category on the first import, 
 
 Recorded for #1046; extends *The migration API address and key are supplied per run and never stored* above, which settled that neither value is configured and is unchanged by this — the key is still supplied per run and still stored nowhere, and this adds a second way of supplying it.
 
-## A lane may draft the site to `organizations` crosswalk, but no site is designated on an unconfirmed row
+## 2026-09-14 A lane may draft the site to `organizations` crosswalk, but no site is designated on an unconfirmed row
 
 Authoring the map and shipping it are separable acts, and the whole risk lives in the second. A site designated onto the wrong organization opts it into a hub for that organization and renders as if it were correct, so nothing surfaces the error — the coupling `uams_multisite_settings` declares between `department_organization` and the news surface is what makes a wrong row expensive. Producing candidate rows carries none of that risk.
 
@@ -879,7 +879,7 @@ So a lane produces the crosswalk as a **reviewable artifact** rather than a ship
 
 Recorded for wordpress-importer-archive#768.
 
-## The decision-log union driver applies to the checkout performing the merge, and not to GitHub
+## 2026-09-15 The decision-log union driver applies to the checkout performing the merge, and not to GitHub
 
 `.gitattributes` carries `docs/DECISIONS.md merge=union` so two branches appending entries resolve by keeping both sides instead of conflicting. **Where that actually takes effect is not where it reads as taking effect**, and the difference decides who meets a conflict.
 
@@ -957,7 +957,7 @@ No branch total is quoted here on purpose. An earlier draft gave one, and it was
 
 Recorded for wordpress-importer-archive#1091.
 
-## A form plugin's data store is per instance, and the container shares one manager per plugin
+## 2026-09-15 A form plugin's data store is per instance, and the container shares one manager per plugin
 
 `BaseDataManager` held its loaded forms in a `static` property that no subclass redeclared, so every `DataManager` of every plugin in a process read and wrote one slot. Two constructed managers were one store; a test comparing them compared a value with itself; and a second plugin's load overwrote the first's. wordpress-importer-archive#1103 moves the store to an instance property.
 
@@ -973,7 +973,7 @@ The dead half of the old singleton — `$instance`, `setInstance()`, `clearInsta
 
 **The test that guards this writes different values into different managers.** Equal values cannot expose a shared store, so the equivalence arm in `NinjaFormsSourcingTest` — which compares two managers holding the same form — is not the guard, and its comment says so. `tests/Unit/BaseDataManagerTest.php` is: against the static store, four of its four cases fail, and the container-binding test's per-plugin case fails with them.
 
-## Merged head branches are kept on the remote, because pull-request bodies link into them
+## 2026-09-15 Merged head branches are kept on the remote, because pull-request bodies link into them
 
 `delete_branch_on_merge` stays **off**, merged head branches are not deleted, and a merge is taken without `--delete-branch`. The numeric-prefixed branches on `origin` — several hundred, and growing by one per merged ticket — are a deliberate steady state rather than accumulated drift.
 
@@ -998,7 +998,7 @@ The dead half of the old singleton — `$instance`, `setInstance()`, `clearInsta
 
 **This records an existing state and changes nothing.** No branch is deleted, no setting is flipped, and the skill's requirement is untouched. The local half is [`worktrees`](../.claude/rules/worktrees.md)'s *"Never delete the branch"* — a released slot moves off its branch without deleting it — which covers the working copy and does not reach merged heads on the remote; this entry is the remote half. The sibling filings are `UAMS-Web/uamswp-migration-api-archive#265` and `uams-statamic`'s own recorded decision.
 
-## A MinervaKB settings row is read because it was served, not because a plugin entry vouches for it (wordpress-importer-archive#1125)
+## 2026-09-15 A MinervaKB settings row is read because it was served, not because a plugin entry vouches for it (wordpress-importer-archive#1125)
 
 Where the migration API serves exactly one MinervaKB settings row and `active_plugins` names the *other* generation's entry file, the importer reads the served row. That is the pre-existing behavior, kept deliberately after wordpress-importer-archive#1124 left the case open, and wordpress-importer-archive#1125 closed as no-change.
 
@@ -1016,7 +1016,30 @@ Where the migration API serves exactly one MinervaKB settings row and `active_pl
 
 **What is not settled.** That v2 *has* run on `inside/tri` is not that it runs there *now*. If it does not, that site imports settings not matching its live behavior. The only instrument in reach that reads the filesystem is the network plugins page, and that read is wordpress-importer-archive#1130. wordpress-importer-archive#1129 already warns on all three sites when the disagreement occurs, changing no selection.
 
-## A change is breaking when it alters the declared surface, which this repository declares locally (wordpress-importer-archive#1051)
+## 2026-09-16 A resolved fork keeps its `decision-fork` label, and the tickets that lost it earlier are recorded rather than relabeled (wordpress-importer-archive#1066)
+
+**Decided in wordpress-importer-archive#1141, merged 2026-09-16**, following the operator's ruling on wordpress-importer-archive#768 that a resolved fork keeps the label. The flip is `hitl` → `afk` with `decision-fork` kept. It comes off only where a ticket carried build work alongside its fork, which [`design-decision-forks`](../.claude/rules/design-decision-forks.md) step 2 treats as malformed rather than as a second kind of fork ticket. This entry records the convention that step states; the step is the authority.
+
+**Why.** A conforming fork ticket delivers the decision and its follow-ups and nothing else (wordpress-importer-archive#871), so after the flip `decision-fork` still describes the whole ticket. Keeping it is also how a later reader tells a ticket that once carried a fork from one that never did, and that signal means nothing if half the resolved tickets have dropped it.
+
+**Rejected: remove it on every flip.** That was the rule's text until wordpress-importer-archive#1141, and it was the reading that practice had already left: wordpress-importer-archive#768 kept the label by ruling while the rule said to remove it.
+
+**Rejected: keep it without exception.** Placement reads the label, so a ticket that is mostly build work but still labeled `decision-fork` is routed as a fork to decide. #793 is the recorded instance.
+
+**Tickets resolved under the removal reading are recorded as pre-dating this decision, not relabeled.** Measured from the repository's full issue-event history (114 pages of up to 100 events, back to 2025-03-31, read on 2026-09-26): 50 tickets had `decision-fork` removed and never re-added. The probe was checked against two known cases. wordpress-importer-archive#768 was labeled, unlabeled and relabeled, and is correctly absent; wordpress-importer-archive#1089 was unlabeled under the exception, and is correctly present.
+
+- **Removed before wordpress-importer-archive#1141 merged, 48 tickets:** #2, #4, #5, #10, wordpress-importer-archive#12, wordpress-importer-archive#13, wordpress-importer-archive#21, wordpress-importer-archive#22, wordpress-importer-archive#23, wordpress-importer-archive#33, wordpress-importer-archive#35, wordpress-importer-archive#133, wordpress-importer-archive#134, wordpress-importer-archive#299, wordpress-importer-archive#413, #434, wordpress-importer-archive#439, #442, #448, wordpress-importer-archive#457, wordpress-importer-archive#467, wordpress-importer-archive#496, wordpress-importer-archive#501, wordpress-importer-archive#502, wordpress-importer-archive#512, wordpress-importer-archive#593, wordpress-importer-archive#604, wordpress-importer-archive#620, wordpress-importer-archive#624, wordpress-importer-archive#628, wordpress-importer-archive#658, wordpress-importer-archive#668, #695, wordpress-importer-archive#706, wordpress-importer-archive#717, wordpress-importer-archive#741, wordpress-importer-archive#754, wordpress-importer-archive#778, #793, wordpress-importer-archive#815, wordpress-importer-archive#831, #853, wordpress-importer-archive#861, wordpress-importer-archive#884, wordpress-importer-archive#885, wordpress-importer-archive#922, wordpress-importer-archive#982, wordpress-importer-archive#986. Twenty of them lost it within ninety seconds on 2026-08-03, which was a single sweep. Eight are still open: #10, #434, #442, #448, #695, wordpress-importer-archive#778, #793 and #853.
+- **Removed under the exception, 2 tickets:** wordpress-importer-archive#1089, the worked instance step 2 cites, and wordpress-importer-archive#1195, whose one decision criterion sat among four build criteria.
+
+Relabeling the 48 was rejected. Each would need its own reading to establish whether it carried build work, since the exception applies to exactly that shape. A bulk restore would put the label back on tickets it was rightly removed from. A pre-dating ticket without the label means only that it was resolved before this decision, not that it never carried a fork.
+
+**The sibling repositories do not carry the step #1066 assumed.** Read from each default branch on 2026-09-26. `uams-statamic`'s `design-decision-forks.md` never mentions `decision-fork` (0 occurrences against 6 of `hitl` in the same file), so it neither removes nor keeps the label. `uamswp-migration-api`'s copy says the label "is never removed once resolved", with no exception. So this repository differs from that one on build-carrying tickets only. That difference is reported rather than reconciled, since each repository may answer it differently.
+
+**Both siblings now keep the label, and one describes this repository wrongly.** Re-read on 2026-09-30. `uams-statamic` has since decided to keep `decision-fork` after the flip (`UAMS-Web/uams-statamic-archive#2499`, recorded by #2557), so all three repositories agree on the default, and only this repository's build-carrying exception differs. That rule also says this repository removes the label because a script here branches on it. Neither is true: no script or workflow here reads `decision-fork`, and the only mentions are in three issue templates. The correction is filed there as `UAMS-Web/uams-statamic-archive#2717`, which is how #1066's last criterion, telling the sibling repositories, was met.
+
+**What is not settled.** Line 5 of the rule describes `decision-fork` as a flavor of `hitl`, which fits a ticket that has left `hitl` for `afk` only loosely. wordpress-importer-archive#1141 named that tension and left it alone, and this entry does the same.
+
+## 2026-09-21 A change is breaking when it alters the declared surface, which this repository declares locally (wordpress-importer-archive#1051)
 
 **The surface is declared in [`README.md`](../README.md#public-surface) and the test is applied to a diff without consulting the consuming app.** A diff is breaking when it removes, renames, or changes the contract of the console command and its seven options, the `ServiceProvider` registration and its bindings, or a named class in the declared list. Nothing else is, however `public` it happens to be. [`.claude/rules/cutting-releases.md`](../.claude/rules/cutting-releases.md) carries the test; this settles the question that rule deferred.
 
@@ -1032,7 +1055,7 @@ Where the migration API serves exactly one MinervaKB settings row and `active_pl
 
 **What is not settled.** The declaration is a local claim about a cross-repo fact and can drift from what the app consumes; that is the accepted cost of not reading another repository on every release. The mitigation is re-measuring when the app's pin moves. The `protect.entry` middleware alias is declared and currently unconsumed — the app wires its own `App\Http\Middleware\ProtectEntry` instead — so it is declared on the strength of being exposed, not of being used.
 
-## A dataless entry a run materializes is removed, not refused, because the writer is Statamic's (wordpress-importer-archive#1160)
+## 2026-09-22 A dataless entry a run materializes is removed, not refused, because the writer is Statamic's (wordpress-importer-archive#1160)
 
 **An import that writes an entry carrying no data beyond `blueprint` has that file removed before the run ends, and the removal is reported in the end-of-run warning summary.** It is not declined at the point of writing.
 
@@ -1046,7 +1069,7 @@ Where the migration API serves exactly one MinervaKB settings row and `active_pl
 
 **What is not settled.** That the guard prevents a real materialization rather than a synthetic one is unverified, and is unreachable at a one-in-three trigger — which is why the regression coverage is written independently of it. The trigger itself remains unidentified, with the ruled-out probes recorded on wordpress-importer-archive#1160.
 
-## A scoped `--content-type` read closes over companion types in full, not over referenced ids (wordpress-importer-archive#1089)
+## 2026-09-25 A scoped `--content-type` read closes over companion types in full, not over referenced ids (wordpress-importer-archive#1089)
 
 **A run that names one content type reads that type, the post types its import depends on, and the taxonomies attached to what it reads.** The companions are `attachment`, `wp_block`, `nav_menu_item` and `tablepress_table` for every scoped run, plus `page` for `kb`. Each one is read out of the export by a type other than itself, and every one of those readers skips silently when its item is absent. Pages inline reusable blocks by looking them up, the navigation pass reads its menu from the export, `importTables()` runs after every non-table type, and a knowledge base resolves its home page from page items. Dropping any of them would import cleanly with a gap.
 
@@ -1062,7 +1085,7 @@ Where the migration API serves exactly one MinervaKB settings row and `active_pl
 
 **What is not settled.** The companion set was derived by reading every literal cross-type lookup in `src/`, and it is only as complete as that reading. A reader added later that looks up a type outside the set would reintroduce a silent gap on scoped runs, and nothing would fail to announce it.
 
-## A site whose active MinervaKB plugin is v1 and whose v1 row was not served is refused (wordpress-importer-archive#1133)
+## 2026-09-25 A site whose active MinervaKB plugin is v1 and whose v1 row was not served is refused (wordpress-importer-archive#1133)
 
 **Refused, not imported.** Where `active_plugins` names `minervakb.php` and the options endpoint does not serve `minerva-kb-options`, the loader stops with a message naming both rows and the endpoint's withheld counts. Decided by the operator on 2026-09-25. This narrows wordpress-importer-archive#1125 without reversing it: *read the served row* still stands everywhere else.
 
@@ -1078,7 +1101,7 @@ Where the migration API serves exactly one MinervaKB settings row and `active_pl
 
 **What is not settled.** The signal is still a database row, so the refusal is not free of the database-versus-disk wall wordpress-importer-archive#1125 describes. It could stop a correct site only where v2 runs while `active_plugins` still names the v1 file, and activating v2 writes its own entry. The endpoint may withhold the v1 row rather than lack it, which also refuses, and the message says so. `cancer/dev`'s v1 plugin under the v2 name remains wordpress-importer-archive#1134's.
 
-## A scoped read also closes over the types links point at, measured, and reports what it still misses (wordpress-importer-archive#1179)
+## 2026-09-25 A scoped read also closes over the types links point at, measured, and reports what it still misses (wordpress-importer-archive#1179)
 
 **A run given `--content-type` also reads `page`, `post` and `uamspeople`**, beside the companions recorded under wordpress-importer-archive#1089, and **every lookup the scope still defeats is reported** rather than lost. Decided by the operator from a four-option comparison after the gate handed wordpress-importer-archive#1179 back.
 
@@ -1096,7 +1119,7 @@ Where the migration API serves exactly one MinervaKB settings row and `active_pl
 
 **What is not settled.** The three link-target types are a corpus measurement that can go stale as content changes; the reporting surfaces that, and nothing re-measures it automatically. The census is WXR data standing in for what the API serves, and matching by URL path within a site undercounts links written in other permalink forms. Links to a `redirect_rule` target stay unconverted, as they are on `main` today, because `LinkProcessor` returns null for that type deliberately.
 
-## Scoped attachments wait for a lookup by file, because an id-only read imports the wrong image (wordpress-importer-archive#1175)
+## 2026-09-25 Scoped attachments wait for a lookup by file, because an id-only read imports the wrong image (wordpress-importer-archive#1175)
 
 **A scoped run keeps reading every attachment until the migration API can look one up by file.** Narrowing that read to referenced ids with `include[]` is blocked on [`UAMS-Web/uamswp-migration-api-archive#300`](https://github.com/UAMS-Web/uamswp-migration-api-archive/issues/300). Decided by the operator on 2026-09-25 from a four-option comparison.
 
@@ -1122,7 +1145,7 @@ The first row was the deciding one: wordpress-importer-archive#1089 split this w
 
 **What is not settled.** The measurement reads `content:encoded` alone. ACF meta, gallery shortcodes and block JSON are id-bearing shapes still to be listed under wordpress-importer-archive#1175's first criterion, and a URL-only shape among them would widen what wordpress-importer-archive#300 has to serve. The counts are not broken down by post type, and a few sites are exported twice, so the totals overcount slightly. How sized variants such as `-750x629` resolve is left to wordpress-importer-archive#300.
 
-## Page-builder URL fields are processed at import, and the deferred scan that never ran is removed (wordpress-importer-archive#1205)
+## 2026-09-25 Page-builder URL fields are processed at import, and the deferred scan that never ran is removed (wordpress-importer-archive#1205)
 
 **The deferred page-builder URL scan is removed. The three fields it existed to catch now go through `LinkProcessor` when they are parsed:** SideBySide `link_list[].url`, Gallery `more_button_url` on the ACF-block path, and the links in Gallery's `block_description`. Decided by the operator on 2026-09-25 from a three-option comparison.
 
@@ -1136,7 +1159,7 @@ The first row was the deciding one: wordpress-importer-archive#1089 split this w
 
 **What is not settled.** The census is approximate. Content already imported keeps its raw URLs until it is re-imported. Lower-confidence fields are left to a follow-up: RSS `feed_url`, and raw HTML kept in the LiveWhale and CounterList descriptions and in shortcode captions.
 
-## Flat taxonomies shared across sites become site-scoped collections, which retires the site-name title prefix (wordpress-importer-archive#1215)
+## 2026-09-25 Flat taxonomies shared across sites become site-scoped collections, which retires the site-name title prefix (wordpress-importer-archive#1215)
 
 **`post_tags`, `logos_item_labels`, `knowledge_base_tags` and `faq_categories` will be imported as structured collections, each entry written only into the site it was imported for, rather than as flat taxonomy terms.** Decided by the operator on 2026-09-25. It supersedes those four rows of the `wordpress-importer-archive#13` disposition table, which kept them flat.
 
@@ -1163,7 +1186,7 @@ Measured for the decision, on `origin/main` of this repository and of `UAMS-Web/
 
 **What is not settled.** The picker behavior is read from the fieldtype's code, not observed in a running Control Panel. What becomes of terms already imported into the four taxonomies, and of URLs under their term routes, belongs to the host conversions. `classified_categories` stays a flat taxonomy with plain titles (wordpress-importer-archive#774).
 
-## `AGENTS.md` is the single source of agent instructions, and `CLAUDE.md` only imports it (wordpress-importer-archive#1223)
+## 2026-09-25 `AGENTS.md` is the single source of agent instructions, and `CLAUDE.md` only imports it (wordpress-importer-archive#1223)
 
 **Decided by the operator on 2026-09-25.** The project instructions that lived in `CLAUDE.md` move to [`AGENTS.md`](../AGENTS.md). `CLAUDE.md` becomes an `@AGENTS.md` import plus one sentence saying where to edit.
 
@@ -1177,7 +1200,7 @@ Measured for the decision, on `origin/main` of this repository and of `UAMS-Web/
 
 **What is not settled.** `tests/CLAUDE.md` stays a Claude Code file; `AGENTS.md` tells other agents to read it. Nothing reconciles `.cursor/rules/` with `.claude/`, and where the two cover the same ground they can disagree.
 
-## A deliberate exports gitlink bump declares itself with a commit trailer (wordpress-importer-archive#1195)
+## 2026-09-25 A deliberate exports gitlink bump declares itself with a commit trailer (wordpress-importer-archive#1195)
 
 **Superseded (2026-10-25):** the exports submodule left `main` in wordpress-importer-archive#1426, so there is no gitlink to bump. The `exports-gitlink` job, its trailer and the pre-commit gitlink gate (wordpress-importer-archive#1143) went with it. See the wordpress-importer-archive#1426 entry below.
 
@@ -1193,30 +1216,7 @@ Measured for the decision, on `origin/main` of this repository and of `UAMS-Web/
 
 **What is not settled.** The trailer declares that the branch moves the gitlink, not which revision it moves it to. A branch that bumps deliberately and later reverts by accident in a second commit still passes.
 
-## A resolved fork keeps its `decision-fork` label, and the tickets that lost it earlier are recorded rather than relabeled (wordpress-importer-archive#1066)
-
-**Decided in wordpress-importer-archive#1141, merged 2026-09-16**, following the operator's ruling on wordpress-importer-archive#768 that a resolved fork keeps the label. The flip is `hitl` → `afk` with `decision-fork` kept. It comes off only where a ticket carried build work alongside its fork, which [`design-decision-forks`](../.claude/rules/design-decision-forks.md) step 2 treats as malformed rather than as a second kind of fork ticket. This entry records the convention that step states; the step is the authority.
-
-**Why.** A conforming fork ticket delivers the decision and its follow-ups and nothing else (wordpress-importer-archive#871), so after the flip `decision-fork` still describes the whole ticket. Keeping it is also how a later reader tells a ticket that once carried a fork from one that never did, and that signal means nothing if half the resolved tickets have dropped it.
-
-**Rejected: remove it on every flip.** That was the rule's text until wordpress-importer-archive#1141, and it was the reading that practice had already left: wordpress-importer-archive#768 kept the label by ruling while the rule said to remove it.
-
-**Rejected: keep it without exception.** Placement reads the label, so a ticket that is mostly build work but still labeled `decision-fork` is routed as a fork to decide. #793 is the recorded instance.
-
-**Tickets resolved under the removal reading are recorded as pre-dating this decision, not relabeled.** Measured from the repository's full issue-event history (114 pages of up to 100 events, back to 2025-03-31, read on 2026-09-26): 50 tickets had `decision-fork` removed and never re-added. The probe was checked against two known cases. wordpress-importer-archive#768 was labeled, unlabeled and relabeled, and is correctly absent; wordpress-importer-archive#1089 was unlabeled under the exception, and is correctly present.
-
-- **Removed before wordpress-importer-archive#1141 merged, 48 tickets:** #2, #4, #5, #10, wordpress-importer-archive#12, wordpress-importer-archive#13, wordpress-importer-archive#21, wordpress-importer-archive#22, wordpress-importer-archive#23, wordpress-importer-archive#33, wordpress-importer-archive#35, wordpress-importer-archive#133, wordpress-importer-archive#134, wordpress-importer-archive#299, wordpress-importer-archive#413, #434, wordpress-importer-archive#439, #442, #448, wordpress-importer-archive#457, wordpress-importer-archive#467, wordpress-importer-archive#496, wordpress-importer-archive#501, wordpress-importer-archive#502, wordpress-importer-archive#512, wordpress-importer-archive#593, wordpress-importer-archive#604, wordpress-importer-archive#620, wordpress-importer-archive#624, wordpress-importer-archive#628, wordpress-importer-archive#658, wordpress-importer-archive#668, #695, wordpress-importer-archive#706, wordpress-importer-archive#717, wordpress-importer-archive#741, wordpress-importer-archive#754, wordpress-importer-archive#778, #793, wordpress-importer-archive#815, wordpress-importer-archive#831, #853, wordpress-importer-archive#861, wordpress-importer-archive#884, wordpress-importer-archive#885, wordpress-importer-archive#922, wordpress-importer-archive#982, wordpress-importer-archive#986. Twenty of them lost it within ninety seconds on 2026-08-03, which was a single sweep. Eight are still open: #10, #434, #442, #448, #695, wordpress-importer-archive#778, #793 and #853.
-- **Removed under the exception, 2 tickets:** wordpress-importer-archive#1089, the worked instance step 2 cites, and wordpress-importer-archive#1195, whose one decision criterion sat among four build criteria.
-
-Relabeling the 48 was rejected. Each would need its own reading to establish whether it carried build work, since the exception applies to exactly that shape. A bulk restore would put the label back on tickets it was rightly removed from. A pre-dating ticket without the label means only that it was resolved before this decision, not that it never carried a fork.
-
-**The sibling repositories do not carry the step #1066 assumed.** Read from each default branch on 2026-09-26. `uams-statamic`'s `design-decision-forks.md` never mentions `decision-fork` (0 occurrences against 6 of `hitl` in the same file), so it neither removes nor keeps the label. `uamswp-migration-api`'s copy says the label "is never removed once resolved", with no exception. So this repository differs from that one on build-carrying tickets only. That difference is reported rather than reconciled, since each repository may answer it differently.
-
-**Both siblings now keep the label, and one describes this repository wrongly.** Re-read on 2026-09-30. `uams-statamic` has since decided to keep `decision-fork` after the flip (`UAMS-Web/uams-statamic-archive#2499`, recorded by #2557), so all three repositories agree on the default, and only this repository's build-carrying exception differs. That rule also says this repository removes the label because a script here branches on it. Neither is true: no script or workflow here reads `decision-fork`, and the only mentions are in three issue templates. The correction is filed there as `UAMS-Web/uams-statamic-archive#2717`, which is how #1066's last criterion, telling the sibling repositories, was met.
-
-**What is not settled.** Line 5 of the rule describes `decision-fork` as a flavor of `hitl`, which fits a ticket that has left `hitl` for `afk` only loosely. wordpress-importer-archive#1141 named that tension and left it alone, and this entry does the same.
-
-## A site serving both MinervaKB settings rows is refused, not guessed at (wordpress-importer-archive#1134)
+## 2026-09-28 A site serving both MinervaKB settings rows is refused, not guessed at (wordpress-importer-archive#1134)
 
 **Decided by the operator on 2026-09-28.** Where the options endpoint serves both `uamswp-minerva-kb-options` and `minerva-kb-options`, the settings loader stops with a message that names both rows and says how to recover. `ENTRY_FILE_ROWS` no longer chooses a row. It survives only where it can refuse (a v1 entry file with only v2's row served, #1133) or warn (a v2 entry file whose row was not served, #1129).
 
@@ -1228,7 +1228,7 @@ Relabeling the 48 was rejected. Each would need its own reading to establish whe
 
 **Rejected: remove the map and fall back to the name preference.** That is `v0.19.0`'s behavior, and it imports the orphaned v2 row on the `inside` network's Clinical Education site, which `v0.20.0` fixed.
 
-## An operator declares the MinervaKB generation with a command option (wordpress-importer-archive#1235)
+## 2026-09-28 An operator declares the MinervaKB generation with a command option (wordpress-importer-archive#1235)
 
 **Decided by the operator on 2026-09-28.** `statamic:import:wordpress --minerva-generation=v1|v2`, with `--source=api`, names the generation the site runs, as read from the network plugins page. Where both settings rows are served, the declared generation's row is read and the output says the choice came from the operator. A declared generation whose row was not served is refused, and so is a declaration where the endpoint reports no MinervaKB installed. Without the option, wordpress-importer-archive#1134's both-rows refusal stands. On a file-sourced run the option is refused rather than ignored.
 
@@ -1244,7 +1244,7 @@ Relabeling the 48 was rejected. Each would need its own reading to establish whe
 
 **What is not settled.** The declaration is only as good as the plugins-page read. Naming the wrong generation where both rows are served reads that row, and is caught only when the declared row was not served.
 
-## The MinervaKB plugin header read from disk decides the generation, and `--minerva-generation` becomes optional where it is served (wordpress-importer-archive#1262)
+## 2026-09-30 The MinervaKB plugin header read from disk decides the generation, and `--minerva-generation` becomes optional where it is served (wordpress-importer-archive#1262)
 
 **Decided in the build of #1262, on 2026-09-30.** The migration API serves `plugins` on `/options`: each active plugin path with the `Name`, `Version` and `TextDomain` its file declares, read from disk (`UAMS-Web/uamswp-migration-api` D-087). The two generations declare different Text Domains, `minerva-kb` for v1 and `uamswp-minerva-kb` for v2. Where exactly one of them is served, that generation decides which settings row is read, and the output says the choice came from disk.
 
@@ -1258,7 +1258,7 @@ Relabeling the 48 was rejected. Each would need its own reading to establish whe
 
 **Rejected: keep the option required where both rows are served.** It would ask the operator for the one fact the endpoint now reads directly.
 
-## The `.claude/` rules and skills govern every agent, and the Cursor-only style rules are removed (wordpress-importer-archive#1275)
+## 2026-10-01 The `.claude/` rules and skills govern every agent, and the Cursor-only style rules are removed (wordpress-importer-archive#1275)
 
 **Decided by the project owner on 2026-10-01.** The 21 style rules in `.cursor/rules/` are deleted, and nothing is ported into `.claude/`. wordpress-importer-archive#1223 made `AGENTS.md` the single source of agent instructions and pointed it at every `.claude/rules/` file and skill. The `.cursor/rules/` files predate that, were written separately, and Claude Code never loads them. So where one covered the same ground as a `.claude/` rule or skill, a Cursor agent could act on the stale one. `AGENTS.md` now says the `.claude/` rules and skills govern every agent.
 
@@ -1270,7 +1270,7 @@ Relabeling the 48 was rejected. Each would need its own reading to establish whe
 
 **What is not settled.** Two Cursor commands, `apply-arrow-functions` and `apply-php-type-hints`, tell Cursor to apply rule files this removes. Anything else under `.cursor/` is outside wordpress-importer-archive#1275, so they are left as they are and tracked in wordpress-importer-archive#1276.
 
-## The public repository is a new one built from a cleaned copy of history, and this repository stays private as the archive (wordpress-importer-archive#1246)
+## 2026-10-02 The public repository is a new one built from a cleaned copy of history, and this repository stays private as the archive (wordpress-importer-archive#1246)
 
 **Decided by the project owner on 2026-10-02.** History holds the WordPress export corpus that the initial commit `4670f95` added. It carries 748 distinct author emails, 257 distinct comment-author emails and 11,643 unpublished items (11,127 `draft`, 480 `private`, 32 `pending`, 4 `future`). That was measured across every ref of a mirror clone (1,766 commits), and branches and tags alone give the same counts. Switching this repository's visibility would publish all of it. So a cleaned copy of the history is published as a new repository, and this one is kept private.
 
@@ -1290,7 +1290,7 @@ The follow-up work is wordpress-importer-archive#1292 to wordpress-importer-arch
 
 **Superseded in part (2026-10-25):** the public repository is built from one commit of `main` rather than from a cleaned copy of the history. See the #1244 entry below.
 
-## The public repository takes the `wordpress-importer` name, every issue is copied with its number, and cited commits are remapped (wordpress-importer-archive#1292)
+## 2026-10-02 The public repository takes the `wordpress-importer` name, every issue is copied with its number, and cited commits are remapped (wordpress-importer-archive#1292)
 
 **Decided by the project owner on 2026-10-02**, settling what the wordpress-importer-archive#1246 entry left open.
 
@@ -1311,7 +1311,7 @@ The follow-up work is wordpress-importer-archive#1292 to wordpress-importer-arch
 4. Review the copies (wordpress-importer-archive#1301).
 5. Switch it to public (#1251).
 
-## API-sourced content is cleaned with the WXR cleaner's own pipeline, for listed sites only (wordpress-importer-archive#1303)
+## 2026-10-02 API-sourced content is cleaned with the WXR cleaner's own pipeline, for listed sites only (wordpress-importer-archive#1303)
 
 **Decided by the project owner on 2026-10-02.** `news.uams.edu`'s export is cleaned with `uams-web/wordpress-wxr-cleanup` before import. Content read through the migration API skipped that step, so the same post mapped differently depending on its source.
 
@@ -1327,8 +1327,7 @@ The follow-up work is wordpress-importer-archive#1292 to wordpress-importer-arch
 
 **Consequence for the host.** Composer reads `repositories` from the root package only, so UAMS-Web/uams-statamic needs its own `vcs` entry for the cleaner before it can install an importer release that requires it. That is UAMS-Web/uams-statamic-archive#2820.
 
-
-## The WXR cleaner is made public after its own pre-publication review, so a public install can still clean content (wordpress-importer-archive#1304)
+## 2026-10-02 The WXR cleaner is made public after its own pre-publication review, so a public install can still clean content (wordpress-importer-archive#1304)
 
 **Decided by the project owner on 2026-10-02.** The importer requires `uams-web/wordpress-wxr-cleanup` (the #1303 entry above), and that repository is private. Once this repository is public, anyone installing it could not fetch the dependency. So `UAMS-Web/wordpress-wxr-cleanup` is made public too, after a pre-publication review like this repository's own.
 
@@ -1340,7 +1339,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **The follow-ups are all in `UAMS-Web/wordpress-wxr-cleanup`:** the pre-publication review (UAMS-Web/wordpress-wxr-cleanup#2), its license (UAMS-Web/wordpress-wxr-cleanup#3), the README notice (UAMS-Web/wordpress-wxr-cleanup#4), and the switch to public itself (UAMS-Web/wordpress-wxr-cleanup#5), which blocks #1251.
 
-## The synced `.cursor/rules/` stay, and this package's review examples move into a rule of its own (wordpress-importer-archive#1320)
+## 2026-10-05 The synced `.cursor/rules/` stay, and this package's review examples move into a rule of its own (wordpress-importer-archive#1320)
 
 **Decided by the project owner on 2026-10-05.** The shared skills and rules sync (wordpress-importer-archive#1313) turned `main` red: it wrote 20 rules into `.cursor/rules/`, which `CursorRulesRetiredTest` guarded as empty, and it replaced the `adversarial-review` wording that `AdversarialReviewQuestionsTest` asserted on.
 
@@ -1355,7 +1354,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **The vocabulary the sync brought in** (`frontmatter`, `remutate`, `strpos`, `trailingslashit`, `untrailingslashit`, `upserted`, `upserts`) is added to `project-words.txt`, each with its reason. The four words the upstream em-dash removal truncated were fixed at the source (UAMS-Web/uams-claude-skills#28) and arrived through the next sync.
 
-## The shared local CI runner replaces `scripts/local-ci.mjs`, in a slot of its own (wordpress-importer-archive#1319)
+## 2026-10-13 The shared local CI runner replaces `scripts/local-ci.mjs`, in a slot of its own (wordpress-importer-archive#1319)
 
 **Decided by the project owner on 2026-10-13, through the reviewed pull request, once parity was shown.** This retires the keep decision `AGENTS.md` recorded for wordpress-importer-archive#1316: the repository kept its own runner because the shared one lacked worktree-slot checkout, runner handoff, a single-flight lock and the pull request watcher. The shared runner now ships all four, so the private runner, about 1,400 lines hand-kept as a mirror of `ci.yml`, is removed with its tests.
 
@@ -1383,7 +1382,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **Residue.** The synced rules and skills still describe `scripts/local-ci.mjs` in their repository-specific overlays (`worktrees`, `local-ci`, `pre-merge-check` and others). Those are edited in `UAMS-Web/uams-claude-skills`, not here (UAMS-Web/uams-claude-skills#273).
 
-## The Feature helpers reach their tests through a real base class, not a trait composed by `uses()` (wordpress-importer-archive#1031)
+## 2026-10-24 The Feature helpers reach their tests through a real base class, not a trait composed by `uses()` (wordpress-importer-archive#1031)
 
 **Decided by the project owner on 2026-10-24**, when the measurement for wordpress-importer-archive#1031 showed that the analysis-stub mixin was doing two jobs and the fixed plugin retired only one. `tests/Feature` files that need the import helpers now call `uses(WordPressImportTestCase::class)`, an abstract class in `tests/Feature` that extends the host app's `Tests\TestCase` and uses `WordPressImportTestTrait`. The stub at `tests/Support/IdeStubs/Tests/TestCase.php` no longer carries a `use` of the trait.
 
@@ -1396,7 +1395,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 - **Moving the mixin to a separate analysis-only stub class.** The same stand-in, in another file.
 - **Removing the mixin and ignoring `trait.unused`.** A new suppression, and PHPStan stops analyzing the trait body.
 
-## The public repository starts from one commit of `main`, and only the open issues move to it (#1244)
+## 2026-10-25 The public repository starts from one commit of `main`, and only the open issues move to it (#1244)
 
 **Decided by the project owner on 2026-10-25**, replacing the history and tracker parts of the #1246 and #1292 entries above. The publish follows the route `UAMS-Web/uamswp-migration-api` took (`UAMS-Web/uamswp-migration-api-archive#465`):
 
@@ -1419,7 +1418,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **The cost that was accepted.** The public repository's history begins at the cut. Older commits, closed issues and every pull request stay readable only in the private archive, and a citation to one of them names something a public reader cannot open.
 
-## The tests that read the export corpus find it through `WORDPRESS_IMPORTER_EXPORTS` (wordpress-importer-archive#1426)
+## 2026-10-25 The tests that read the export corpus find it through `WORDPRESS_IMPORTER_EXPORTS` (wordpress-importer-archive#1426)
 
 **Decided 2026-10-25, as the build step of the #1244 decision.** The exports submodule is removed from `main`. The two standalone tests that read the corpus take the location of a local clone of `UAMS-Web/wordpress-importer-exports` from the `WORDPRESS_IMPORTER_EXPORTS` environment variable, through `tests/Support/ExportsCorpus.php`. They skip when it is unset, and fail when it is set to something that is not a directory, so a mistyped path cannot pass as a skip.
 
@@ -1431,7 +1430,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **What is not settled.** The synced rules and skills still describe the submodule; they are edited in `UAMS-Web/uams-claude-skills`.
 
-## An `[accordion]` imports into Bard as headings and paragraphs (#118)
+## 2026-10-27 An `[accordion]` imports into Bard as headings and paragraphs (#118)
 
 **Decided 2026-10-27, on #118.** In Bard content, a WordPress `[accordion]` is flattened by the importer: each `[section title="..."]` becomes an `<h3>` holding its title, followed by its content. Bare and attributed accordions are treated the same, and the host app needs no change. `AccordionShortcodeProcessor::parse()` is unchanged, because the audio post importer reads transcripts from the section data it returns.
 
@@ -1441,7 +1440,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **Rejected: hold the bare form at `main`'s behavior and decide accordions on a ticket of their own.** It keeps #118 small, but it leaves the bare form as raw shortcode text and the attributed form as an undisplayed set, both of them wrong today.
 
-## A page builder `[caption]` imports as an image set inside a content block (#119)
+## 2026-10-27 A page builder `[caption]` imports as an image set inside a content block (#119)
 
 **Decided 2026-10-27, on #119.** The importer builds no caption page builder block. `ShortcodeProcessor::process(..., 'page_builder')` returns none for a caption, as for accordion and audio, so a `wp:shortcode` block holding one `[caption]` gives its Tiptap HTML, the same `image` set the Bard route makes, and on a page builder page that set lands inside a `uamsweb_block_content` set.
 
@@ -1451,7 +1450,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **Rejected: build it and define `uamsweb_block_caption` in the host app.** It renders only after a host change, and a page builder caption would then differ from the same caption in Bard content.
 
-## `main` requires `CI`, `Attribution footer` and `Closing keywords` (#163)
+## 2026-10-27 `main` requires `CI`, `Attribution footer` and `Closing keywords` (#163)
 
 **Decided 2026-10-27, on #163, by the project owner.** A ruleset that reaches this repository alone requires three status check contexts on `main`: `CI`, `Attribution footer` and `Closing keywords`. These are the three that the shared `required-checks-ruleset.json` template in the `code-quality` skill requires, and that the Statamic add-ons and `UAMS-Web/uamswp-migration-api` already require. The ruleset carries only the `required_status_checks` rule and layers on the two organization rulesets, `main: no deletion or force push` and `main: pull request required`. The builder applies it with `apply-required-checks-ruleset.mjs` once the workflows are on `main`, so no open pull request waits on a check its branch cannot report.
 
@@ -1467,7 +1466,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **Rejected: removing the `RUN_REMOTE_CI` gate.** It changes every job for no gain once `CI` fails when the switch skips them.
 
-## Redirect rules sharing a source keep the rule WordPress serves (#108)
+## 2026-10-27 Redirect rules sharing a source keep the rule WordPress serves (#108)
 
 **Decided 2026-10-27, on #108.** When published rules on one vanity domain share a source, the `redirect_domains` entry holds the rule WordPress tries first for that path. Every other rule with that source is shadowed. It is not written, and it is reported with the rule that serves the path, in the run's output and in the warnings summary under `redirects` / `shadowed_rules`. Before this change, the entry held whichever rule came last in the export, and the collapse showed only as an `updated` count.
 
@@ -1485,7 +1484,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Rejected: refuse the run.** The shadowed rule never answers a request, so dropping it loses nothing the domain serves. The report keeps it visible.
 
-## Remote CI runs every job on Windows as well as Linux (#186)
+## 2026-10-31 Remote CI runs every job on Windows as well as Linux (#186)
 
 **Decided 2026-10-31, on #186.** Every job in `.github/workflows/ci.yml` but `CI` is a matrix over `ubuntu-latest` and `windows-latest`, with `fail-fast: false` so that both legs report. The whole workflow runs its steps in bash, because a Windows runner defaults to PowerShell. The ruleset does not change: it requires `CI`, and `CI` still needs each job once, because a matrix job's result covers all of its legs.
 
@@ -1501,7 +1500,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Not changed: whether the local chain gates a merge.**
 
-## The mapper reads no id for a blockquote or an image (#149)
+## 2026-11-01 The mapper reads no id for a blockquote or an image (#149)
 
 **Decided 2026-11-01, on #149.** The attribute mapper copies an element's `id` onto a `bulletList` node and does not read one for a `blockquote` or an `image`, although the host app's Bard attribute config accepts an `id` on both.
 
@@ -1511,7 +1510,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Not decided here: what a `wp:quote` or an image with a real asset keeps of an `id`.** That is #374.
 
-## Remote CI runs Pest as four serial shards (#376)
+## 2026-11-02 Remote CI runs Pest as four serial shards (#376)
 
 **Decided 2026-11-02, on #376.** The `pest` job in `ci.yml` is a matrix of four shards on each operating system, each running `--shard=<i>/4` serially on its own runner. `local-ci.json` keeps the whole serial command. `CI` still needs the one `pest` job, whose result covers every leg.
 
@@ -1533,7 +1532,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Not decided here: balancing the shards.** The Windows shards took 47 to 160 seconds of test time. `pest --update-shards` could balance them, but PHPStan on Windows now sets the wall-clock time at 250 seconds, so balancing would not shorten a pull request.
 
-## A table cell link is written as an entry reference, and the host app resolves it (#395)
+## 2026-11-04 A table cell link is written as an entry reference, and the host app resolves it (#395)
 
 **Decided 2026-11-04, on #395.** The importer writes a link in a `table` set's cell to an imported page as `statamic://entry::<id>`, with its query and fragment, the same as a link anywhere else in a Bard field. The host app resolves those references in cell HTML before its table cell sanitizer runs, since the sanitizer allows only `http`, `https`, `mailto` and `tel` and would otherwise remove the `href`.
 
@@ -1541,7 +1540,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Rejected: writing the entry's URL path into the cell.** A fixed path goes out of date when the entry moves, neither that tooling nor link health can see it, and entry URLs are not reliable partway through an import.
 
-## A Forms fieldtype mapping's `set_attributes` has no `specific` part (#445)
+## 2026-11-05 A Forms fieldtype mapping's `set_attributes` has no `specific` part (#445)
 
 **Decided 2026-11-05, on #445.** `set_attributes` in a Forms fieldtype mapping keeps `default` and loses `specific`. #448 removes the lookup in `FieldtypeMappingTrait::getSetAttributesFromMapping()`, the four empty `specific` tables and their comments, and the tests that pinned the lookup.
 
@@ -1551,7 +1550,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Rejected: matching on the field's own key or id**, as the code did, with integer Gravity Forms ids fixed. That keeps a per-field override nobody has used, in a mapping every form shares, where one form's field key or id means nothing in another.
 
-## A quote or an image does not keep the element's `id` on import (#374)
+## 2026-11-07 A quote or an image does not keep the element's `id` on import (#374)
 
 **Decided 2026-11-07, on #374.** The importer carries no `id` from a `wp:quote` block, a bare `<blockquote>`, an `<img>` or an image's `<figure>`. A `wp:quote` becomes a `pull_quote` set with `align`, `quote` and `author` only; a bare blockquote becomes a paragraph with no `id`; the image set holds `type`, `image`, `align`, `caption` and `alt_override`, and its `attrs.id` is a generated row id. Tests in `ImageProcessorPipelineTest` and `TextProcessorForBardTest` pin this.
 
@@ -1559,7 +1558,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Rejected: carrying the `id`.** It needs an `id` field on the host's `pull_quote` and image sets in `uams-statamic`, and the importer mapping to fill it, for anchors nothing links to. It stays open if one appears; the follow-up that reports a fragment link aimed at a dropped `id` is what would show one.
 
-## The Gravity Forms mapping data lives in class constants under `data/`, outside `src` (#558)
+## 2026-11-13 The Gravity Forms mapping data lives in class constants under `data/`, outside `src` (#558)
 
 **Decided 2026-11-13, on #558.** The three Gravity Forms mapping arrays (`$mapping`, `$fieldAttributeMapping` and `$subfieldMapping`) move out of `FieldtypeMapping.php` into the constants of `FieldtypeMappingData`, in `data/Forms/GravityForms/` under a second PSR-4 root, `UAMSWeb\Aether\WordPressImporter\Data\`. The class's static properties still hold the data from the moment it loads (`protected static array $mapping = FieldtypeMappingData::MAPPING;`), so `FieldtypeMappingTrait` and the tests read the same properties. PHPStan and Rector cover `data/`, and the package archive ships it, since nothing export-ignores it.
 
@@ -1571,7 +1570,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **A host-app run has to carry `data/` too.** One that copies only `src/` and `tests/` into the vendored package misses the mapping, and the host's autoloader knows the `data/` root only after `composer dump-autoload`, or an install of a release that declares it.
 
-## Mutation testing runs on pull requests in CI, with no scheduled full pass (#519)
+## 2026-11-13 Mutation testing runs on pull requests in CI, with no scheduled full pass (#519)
 
 **Decided 2026-11-13, on #519.** `ci.yml` calls the shared chain at `v0.10.1` with `mutate: true` and has no `schedule:` trigger. The chain's `mutate` job mutates the PHP files under `src` that a pull request or push changes, under its 45-minute limit, and fails on any survivor. A pull request that changes a file whose mutants do not finish inside that limit fails `CI` until the file is split or annotated. The full pass stays a local run.
 
@@ -1581,7 +1580,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Rejected: a weekly full pass with a longer limit.** At the rate measured, the full pass is on the order of 36 hours on one runner (an estimate from one file's mutant density), past a hosted job's 6-hour maximum.
 
-## Pull requests' mutation runs get 240 minutes, on the shared chain at `v0.13.0` (#573)
+## 2026-11-14 Pull requests' mutation runs get 240 minutes, on the shared chain at `v0.13.0` (#573)
 
 **Decided 2026-11-14, on #573.** `ci.yml` calls the shared chain at `v0.13.0` and passes `mutate-timeout-minutes: 240`, so the `mutate` job on a pull request or a push runs for up to 240 minutes instead of the chain's default 45. No other input moves, and none had to for `v0.13.0` to start: the tag adds `mutate-timeout-minutes`, `mutate-ignore`, `guard`, `guard-patterns`, `dev-lint` and `dev-lint-exclude`, all off or at their old behavior unless passed, and its `Read the PHP pin` step now refuses a `config.platform.php` that is not a version, which `8.4.27` is. #574 carries the same change for its own run. The #519 entry above keeps the 45-minute limit it was decided under; this entry replaces that limit and nothing else in it.
 
