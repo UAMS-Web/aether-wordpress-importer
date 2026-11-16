@@ -17,11 +17,6 @@ declare(strict_types=1);
  * class maps to a Statamic attribute. A line-coverage run left both
  * unexecuted.
  *
- * The early returns for a class with no `$subfieldMapping` or no
- * `$fieldAttributeMapping` are not covered here: every shipped mapping class
- * defines both, and a test class without them fails PHPStan, which analyzes
- * the whole trait for that class.
- *
  * @command  php vendor/bin/pest tests/Unit/FormsSubfieldHostFieldtypeTest.php
  */
 
