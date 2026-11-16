@@ -1,6 +1,6 @@
 # Decisions
 
-The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, under a heading `## YYYY-MM-DD <title>` dated the day the decision closed, oldest first (#580). The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
+The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, under a heading `## YYYY-MM-DD <title>`, oldest first. The date is the day the decision was made where the entry records one (a `**Decided` line), and otherwise the day the entry was first recorded, which can trail the decision. The #581 pull request lists the source of each date it set. The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
 
 ## 2026-07-18 Versioning and releases
 
