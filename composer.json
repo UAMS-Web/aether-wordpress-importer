@@ -51,7 +51,7 @@
         "php": "^8.4",
         "james-heinrich/getid3": "^1.9",
         "laravel/prompts": "^0.3",
-        "statamic/cms": "6.40.0",
+        "statamic/cms": "6.41.0",
         "uams-web/aether-wordpress-importer-cleanup": "^2.0"
     },
     "require-dev": {
@@ -67,7 +67,7 @@
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpunit/phpunit": "^13.0",
         "rector/rector": "^2.6",
-        "uams-web/patches-pest-plugin-mutate": "^1.0"
+        "uams-web/patches-pest-plugin-mutate": "^1.4"
     },
     "config": {
         "sort-packages": true,
@@ -89,6 +89,7 @@
             "@php scripts/setup-git-hooks.php"
         ],
         "test": "pest --testsuite=Unit,Integration",
+        "mutate": "pest --testsuite=Unit,Integration --mutate --path=src",
         "stan": "phpstan analyse --memory-limit=-1",
         "ci": [
             "@stan",

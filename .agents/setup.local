@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# This repository's own orb setup steps. The shared .agents/setup (synced from
+# UAMS-Web/uams-claude-skills) installs PHP 8.4, Composer 2, Node 22 and the locked dependencies,
+# then runs this file last. It also runs on its own.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+SECONDS=0
+
+# In the primary checkout, the refresh also records the install and re-applies the vendor patches
+# that a plain `composer install` leaves as they were.
+if [[ $(git rev-parse --git-dir) == .git ]]; then
+    echo '[setup.local] Refreshing the primary checkout'
+    node scripts/worktree-slots.mjs refresh primary
+fi
+composer check-platform-reqs
+
+# Prepare one independent branch-work slot when running in the primary checkout.
+if [[ $(git rev-parse --git-dir) == .git && ! -e "$(pwd)-a" ]]; then
+    echo '[setup.local] Preparing worktree slot a'
+    node scripts/worktree-slots.mjs provision a
+fi
+
+echo "[setup.local] Finished after ${SECONDS}s"

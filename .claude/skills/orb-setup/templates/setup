@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Shared Amp orb toolchain setup (UAMS-Web/uams-claude-skills#562). Written by the sync as
+# .agents/setup; edit it in uams-claude-skills, never in the repository. A repository's own steps
+# go in .agents/setup.local, which this script runs last when the file exists.
+#
+# Installs, idempotently: PHP 8.4 (sury.org), Composer 2, Node 22, then the locked dependencies.
+# Every download is verified before use: the sury.org keyring against a pinned sha256, the Composer
+# installer against installer.sig, and the Node archive against SHASUMS256.txt.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+export DEBIAN_FRONTEND=noninteractive
+export COMPOSER_NO_INTERACTION=1
+SECONDS=0
+trap 'printf "Orb setup finished after %ss (exit %s)\n" "$SECONDS" "$?"' EXIT
+
+# sha256 of https://packages.sury.org/debsuryorg-archive-keyring.deb as read on 2026-11-11. When
+# sury.org publishes a new keyring the check fails closed; set SURY_KEYRING_SHA256 after reading the
+# new file, and update this value in uams-claude-skills.
+SURY_KEYRING_SHA256=${SURY_KEYRING_SHA256:-7511384559c9ddf1d5ce5f60be429ae9d4e7d01d9480d6f1b7a30c0810cf8b60}
+NODE_VERSION=${NODE_VERSION:-22.22.3}
+
+fetch() {
+    curl --fail --silent --show-error --location --retry 3 "$1" -o "$2"
+}
+
+echo 'Preparing PHP 8.4 and system dependencies'
+packages=(ca-certificates curl git unzip python3 php8.4-cli php8.4-curl
+    php8.4-gd php8.4-intl php8.4-mbstring php8.4-sqlite3 php8.4-xml
+    php8.4-zip php8.4-pcov)
+missing=()
+for package in "${packages[@]}"; do
+    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then
+        missing+=("$package")
+    fi
+done
+if ((${#missing[@]})); then
+    if [[ ! -f /usr/share/keyrings/debsuryorg-archive-keyring.gpg ]]; then
+        scratch=$(mktemp -d)
+        fetch https://packages.sury.org/debsuryorg-archive-keyring.deb "$scratch/keyring.deb"
+        actual=$(sha256sum "$scratch/keyring.deb" | cut -d' ' -f1)
+        [[ "$actual" == "$SURY_KEYRING_SHA256" ]] || {
+            echo "sury.org keyring checksum mismatch: expected $SURY_KEYRING_SHA256, got $actual" >&2
+            exit 1
+        }
+        sudo env DEBIAN_FRONTEND=noninteractive dpkg -i "$scratch/keyring.deb"
+        rm -rf "$scratch"
+    fi
+    codename=$(. /etc/os-release && printf '%s' "$VERSION_CODENAME")
+    echo "deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ $codename main" \
+        | sudo tee /etc/apt/sources.list.d/php.list >/dev/null
+    sudo apt-get update -qq
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+fi
+sudo update-alternatives --set php /usr/bin/php8.4
+
+echo "[$SECONDS s] Preparing Composer 2"
+if ! command -v composer >/dev/null || [[ $(composer --version --no-ansi) != 'Composer version 2.'* ]]; then
+    scratch=$(mktemp -d)
+    fetch https://getcomposer.org/installer "$scratch/installer.php"
+    expected=$(curl --fail --silent --show-error --location --retry 3 https://composer.github.io/installer.sig)
+    actual=$(php -r 'echo hash_file("sha384", $argv[1]);' "$scratch/installer.php")
+    [[ -n "$expected" && "$actual" == "$expected" ]] || { echo 'Composer installer checksum mismatch' >&2; exit 1; }
+    php "$scratch/installer.php" --2 --install-dir="$scratch" --filename=composer
+    sudo install -m 0755 "$scratch/composer" /usr/local/bin/composer
+    rm -rf "$scratch"
+fi
+
+echo "[$SECONDS s] Preparing Node ${NODE_VERSION%%.*}"
+if ! command -v node >/dev/null || [[ $(node --version) != "v${NODE_VERSION%%.*}."* ]]; then
+    case "$(uname -m)" in
+        x86_64) arch=x64 ;;
+        aarch64) arch=arm64 ;;
+        *) echo 'Unsupported Node architecture' >&2; exit 1 ;;
+    esac
+    scratch=$(mktemp -d)
+    archive="node-v${NODE_VERSION}-linux-$arch.tar.xz"
+    fetch "https://nodejs.org/dist/v${NODE_VERSION}/$archive" "$scratch/$archive"
+    fetch "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" "$scratch/SHASUMS256.txt"
+    (cd "$scratch" && grep "  $archive\$" SHASUMS256.txt | sha256sum --check)
+    sudo tar -xJf "$scratch/$archive" -C /usr/local --strip-components=1
+    rm -rf "$scratch"
+fi
+
+echo "[$SECONDS s] Installing locked dependencies"
+if [[ -f composer.json ]]; then
+    composer install --no-interaction --no-progress --prefer-dist
+fi
+if [[ -f package-lock.json ]]; then
+    npm ci --no-audit --no-fund
+fi
+
+# The repository's own steps (extra worktree slots, a refresh script, anything specific to it).
+if [[ -f .agents/setup.local ]]; then
+    echo "[$SECONDS s] Running .agents/setup.local"
+    bash .agents/setup.local
+fi
+
+echo "[$SECONDS s] Toolchain ready"
+php --version | head -1
+composer --version --no-ansi
+node --version
+npm --version

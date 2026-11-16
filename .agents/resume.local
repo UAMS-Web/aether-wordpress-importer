@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# This repository's own orb wake check. The shared .agents/resume (synced from
+# UAMS-Web/uams-claude-skills) checks the toolchain and that vendor/ and node_modules/ exist, then
+# runs this file last. It installs nothing.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+[[ -f vendor/autoload.php && -x node_modules/.bin/cspell ]] || {
+    echo 'Missing package dependencies; run .agents/setup' >&2
+    exit 1
+}

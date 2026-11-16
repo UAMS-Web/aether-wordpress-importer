@@ -42,7 +42,8 @@ function combineFormsAttributeValue(
 }
 
 /**
- * A string combination over the attributes `b`, `c` and a non-key entry.
+ * A string combination over the attributes `b` and `c`, with a null entry
+ * between them that names no attribute and is skipped, and a float entry.
  *
  * @return array<string, mixed> The attribute configuration
  */
@@ -52,7 +53,7 @@ function combineWithBAndC(): array
         'combine_value_with_other_attribute_value' => [
             'combination_type' => 'string',
             'string_separator' => '|',
-            'attribute_names' => ['b', 'c', 5.5],
+            'attribute_names' => ['b', null, 'c', 5.5],
         ],
     ];
 }

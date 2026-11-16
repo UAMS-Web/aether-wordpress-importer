@@ -965,7 +965,7 @@ The `src/Services/WordPressImport/Entries` directory contains several classes th
 ### BaseEntryCreator
 
 - **Purpose**: Provides common functionality for creating Statamic entries from WordPress content.
-- **File Path**: `src/Services/WordPressImport/Entries/BaseEntryCreator.php`
+- **File Path**: `src/Services/WordPressImport/Entries/BaseEntryCreator.php`, with five traits under `src/Services/WordPressImport/Entries/Concerns/` that keep each file small enough for one pull request's mutation run (#550): `MapsEntryStatusAndDates` (status, visibility, the WP-Members gate and dates), `SavesEntries` (saving under the overwrite behavior and finding an existing entry), `PersistsStoredTaxonomyTerms` (storing per-site taxonomy data and writing its terms), `ImportsTaxonomyTerms` (the category and tag pass before entries, and the term map) and `CreatesTaxonomyTerms` (creating terms directly or through the deferred queue).
 - **Key Functionality**:
   - Manages entry creation with support for custom field mapping and content processing.
   - Handles slug and ID generation, including date prefixing for scheduled content.
