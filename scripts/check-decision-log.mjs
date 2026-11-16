@@ -16,21 +16,16 @@
  * It does not understand the document it is merging, so the three things union
  * can break are structural. This checks exactly those.
  *
- * ## Why this is NOT `uams-statamic`'s `check-decision-log-order.mjs`
+ * ## Why this is not the shared `check-decision-log-order.mjs`
  *
- * That sibling keys on `^## (\d{4}-\d{2}-\d{2})` and enforces date order, which
- * is right for a log whose entries are dated. This log's are not: 47 of its 52
- * headings are claim-shaped (`## Versioning and releases`), and the 5 dated ones
- * are a six-day experiment — 2026-09-04 to 2026-09-10 — that the repository
- * stopped. Every entry written since is undated.
+ * That check, delivered with the `decision-log` skill, keys on
+ * `^## (\d{4}-\d{2}-\d{2})` and enforces date order and the blank line before
+ * each entry heading. This log was undated until #580, which gave every heading
+ * the date its decision closed and put the entries oldest first, so that check
+ * now reads the whole file and owns the order.
  *
- * So the sibling's check does not need porting here; it would have nothing to
- * check. Pointed at this file it matches 5 headings of 52 and passes silently on
- * the rest, which is a guard that cannot see rather than a guard that is green.
- *
- * And this log has no sort key at all — it is append-ordered — so union's
- * ours-then-theirs is correct either way and there is no ordering failure mode
- * to guard. What is left is structure.
+ * This guard keeps the structural faults a union merge can introduce that the
+ * order check does not look for. What is left is structure.
  */
 
 const HEADING = '## '
