@@ -14,8 +14,12 @@ description: Install PHP (8.4 by default), restore the Composer cache, and insta
 # - `extensions`: the set the Pest, PHPStan and Rector jobs loaded. PHPStan and Rector reflect over
 #   DOMDocument and SimpleXMLElement, the suite needs gd and SQLite, and a Windows PHP does not load
 #   `fileinfo` by default, which `composer install` checks.
-# - `ini-values`: OPcache on everywhere, with the tracing JIT off on Windows, where PHP 8.4
-#   segfaults partway through this suite under `opcache.jit=tracing` (#254).
+# - `ini-values`: OPcache on everywhere, with the JIT off on Windows (#254, #341). Under
+#   `opcache.jit=tracing` the Windows Pest leg dies with an access violation (0xC0000005) partway
+#   through this suite on PHP 8.4.27 and on 8.4.28RC1, at a different test each run, and raising
+#   `opcache.jit_max_root_traces` does not avoid it. `opcache.jit=function` cannot start in
+#   Rector's parallel worker processes ("Could not enable JIT: could not compile prologue").
+#   Whenever the PHP 8.4 pin moves, re-try `opcache.jit=tracing` on Windows once.
 # - The Composer GitHub token: every dependency is public, so the token only lifts api.github.com's
 #   anonymous rate limit for dist downloads.
 
@@ -39,29 +43,7 @@ runs:
         extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
         coverage: ${{ inputs.coverage }}
         tools: composer:v2
-        ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
-
-    # Experiment for #341, not for merge: run the Windows leg on the PHP 8.4.28RC1 build from
-    # windows.php.net's QA feed, whose changelog lists tracing-JIT segfault fixes. The zip is
-    # checked against the SHA-256 the feed publishes, unpacked over the install setup-php made,
-    # and setup-php's php.ini is kept, so the extensions and JIT settings above still apply.
-    - name: Replace PHP with 8.4.28RC1 on Windows (#341 experiment)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $zip = Join-Path $env:RUNNER_TEMP 'php-8.4.28RC1.zip'
-        Invoke-WebRequest -Uri 'https://downloads.php.net/~windows/qa/php-8.4.28RC1-nts-Win32-vs17-x64.zip' -OutFile $zip
-        $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($hash -ne '898509521d957ddf0a3eaa5aec0a7d7ae2ccf15606544ef4c48aaf026c2d6386') { throw "SHA-256 mismatch: $hash" }
-        $dir = Split-Path (Get-Command php).Source
-        $ini = Join-Path $dir 'php.ini'
-        $saved = Join-Path $env:RUNNER_TEMP 'php.ini.setup-php'
-        Copy-Item $ini $saved
-        Expand-Archive -Path $zip -DestinationPath $dir -Force
-        Copy-Item $saved $ini -Force
-        php -v
-        php -r "echo 'opcache.jit=', ini_get('opcache.jit'), PHP_EOL;"
-        php -m
+        ini-values: ${{ runner.os == 'Windows' && 'opcache.enable_cli=1, opcache.jit=off' || 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing' }}
 
     - name: Configure Composer GitHub token
       shell: bash
