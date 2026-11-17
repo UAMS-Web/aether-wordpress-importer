@@ -46,11 +46,12 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 beforeEach(function (): void {
     Site::setSites([
         'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
+        'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],
     ]);
 
     // Dated, as the host app's `posts` collection is
     $collection = CollectionFacade::make('posts');
-    $collection->sites(['default']);
+    $collection->sites(['default', 'other']);
     $collection->dated(true);
     $collection->save();
 
@@ -141,19 +142,7 @@ it('keeps the title slug of an unnamed post nothing else holds', function (): vo
 
 it('moves an unnamed post off a slug an entry outside the export holds', function (): void {
     // An entry an editor made in the Control Panel, with an ID of no WordPress shape
-    $existing = EntryFacade::make();
-
-    if (! $existing instanceof Entry) {
-        throw new RuntimeException('Could not make an entry.');
-    }
-
-    $existing->collection('posts');
-    $existing->locale('default');
-    $existing->id('cp-authored');
-    $existing->slug('a-lone-draft');
-    $existing->date('2024-01-01');
-    $existing->data(['title' => 'A Lone Draft']);
-    $existing->save();
+    unnamedPostMakeEntry('posts', 'default', 'cp-authored', 'a-lone-draft');
 
     $export = unnamedPostExport([
         unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
@@ -175,6 +164,124 @@ it('counts on from the ID when the suffixed slug is taken too', function (): voi
 
     expect(unnamedPostSlugs())->toMatchArray(['300' => 'a-lone-draft-300-2']);
 });
+
+it('counts on past every suffixed slug that is taken', function (): void {
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
+        unnamedPostItem('301', 'Taken', 'a-lone-draft', 'publish'),
+        unnamedPostItem('302', 'Also Taken', 'a-lone-draft-300', 'publish'),
+        unnamedPostItem('303', 'Taken Too', 'a-lone-draft-300-2', 'publish'),
+    ]);
+
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toMatchArray(['300' => 'a-lone-draft-300-3']);
+});
+
+it('keeps a one-word title slug across a re-import', function (): void {
+    // A one-word slug gives an entry ID of exactly three parts: `lone-300-<random>`
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'Lone', '', 'draft'),
+    ]);
+
+    unnamedPostRun($export);
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toBe(['300' => 'lone'])
+        ->and(unnamedPostEntryCount())->toBe(1);
+});
+
+it('moves an unnamed post off a slug an earlier import of another post holds', function (): void {
+    // Post 999 came from another export, so only the collection knows its slug
+    unnamedPostMakeEntry('posts', 'default', 'a-lone-draft-999-abcdefghijklmnop', 'a-lone-draft');
+
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
+    ]);
+
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toMatchArray(['300' => 'a-lone-draft-300']);
+});
+
+it('moves off a suffixed slug an earlier import of another post holds', function (): void {
+    // The suffixed slug is held only in the collection, by post 999 from another export
+    unnamedPostMakeEntry('posts', 'default', 'a-lone-draft-300-999-abcdefghijklmnop', 'a-lone-draft-300');
+
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
+        unnamedPostItem('301', 'Taken', 'a-lone-draft', 'publish'),
+    ]);
+
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toMatchArray(['300' => 'a-lone-draft-300-2']);
+});
+
+it('counts an entry whose ID begins with the post ID but has no WordPress shape', function (): void {
+    unnamedPostMakeEntry('posts', 'default', '300-cp', 'a-lone-draft');
+
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
+    ]);
+
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toMatchArray(['300' => 'a-lone-draft-300']);
+});
+
+it('ignores a slug held in another collection', function (): void {
+    $pages = CollectionFacade::make('pages');
+    $pages->sites(['default']);
+    $pages->dated(true);
+    $pages->save();
+    unnamedPostMakeEntry('pages', 'default', 'cp-page', 'a-lone-draft');
+
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
+    ]);
+
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toBe(['300' => 'a-lone-draft']);
+});
+
+it('ignores a slug held in another site', function (): void {
+    unnamedPostMakeEntry('posts', 'other', 'cp-other', 'a-lone-draft');
+
+    $export = unnamedPostExport([
+        unnamedPostItem('300', 'A Lone Draft', '', 'draft'),
+    ]);
+
+    unnamedPostRun($export);
+
+    expect(unnamedPostSlugs())->toBe(['300' => 'a-lone-draft']);
+});
+
+/**
+ * Save an entry that did not come from the export.
+ *
+ * @param  string  $collection  The collection handle
+ * @param  string  $site  The site handle
+ * @param  string  $id  The entry ID
+ * @param  string  $slug  The slug
+ */
+function unnamedPostMakeEntry(string $collection, string $site, string $id, string $slug): void
+{
+    $entry = EntryFacade::make();
+
+    if (! $entry instanceof Entry) {
+        throw new RuntimeException('Could not make an entry.');
+    }
+
+    $entry->collection($collection);
+    $entry->locale($site);
+    $entry->id($id);
+    $entry->slug($slug);
+    $entry->date('2024-01-01');
+    $entry->data(['title' => $slug]);
+    $entry->save();
+}
 
 /**
  * Perform one post-import pass over an export on disk.

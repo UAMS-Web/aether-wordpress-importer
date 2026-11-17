@@ -331,20 +331,21 @@ class PostEntryCreator extends BaseEntryCreator
         }
 
         // ---
-        // Collect every slug the export sets, so a post exported without one cannot
-        // take a slug a later post in the same export holds (#588)
+        // Collect the post that sets each slug in the export, so a post exported
+        // without one cannot take a slug a later post in the same export holds
+        // (#588). A post with an empty name adds an empty key, which no slug built
+        // from a title can equal.
         // ---
         $exportSlugs = [];
 
         foreach ($xmlStreamParser->streamItems('post') as $namedPost) {
-            $exportSlug = XpathHelper::getStringValue(
+            $exportSlugs[XpathHelper::getStringValue(
                 $namedPost,
                 'wp:post_name'
+            )] = XpathHelper::getStringValue(
+                $namedPost,
+                'wp:post_id'
             );
-
-            if ($exportSlug !== '') {
-                $exportSlugs[$exportSlug] = true;
-            }
         }
 
         // Loop through all post items to process each post entry
@@ -653,6 +654,8 @@ class PostEntryCreator extends BaseEntryCreator
             // slug another post holds, so it cannot shadow that post's URI (#588)
             // ---
             if ($slug === '') {
+                // A one-item destructuring has no item to remove: `[] =` does not compile
+                // @pest-mutate-ignore: RemoveArrayItem
                 [$titleSlug] = $this->generateSlugAndId(
                     '',
                     $postId,
