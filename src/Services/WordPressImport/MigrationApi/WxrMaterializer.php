@@ -220,6 +220,10 @@ class WxrMaterializer
         // until it is known.
         $channel = $this->channelFor($site);
 
+        // Read a cleaned site's duplicate disposition now, so a file that cannot be used stops
+        // the run before the whole site is read rather than after (#89)
+        $disposition = self::cleansSite($channel) ? self::dispositionFor($channel) : null;
+
         // Everything after this point is addressed to the target site's OWN REST root
         // rather than scoped with `?site=`. Measured against a live multisite: the two are
         // equivalent for data endpoints, and only the per-site root works for the
@@ -395,7 +399,7 @@ class WxrMaterializer
         // A site with a duplicate disposition first loses the duplicates it names, as its
         // export does when the cleaner runs with `--disposition` (#89).
         if (self::cleansSite($channel)) {
-            $this->cleanParts($paths, self::dispositionFor($channel));
+            $this->cleanParts($paths, $disposition);
         }
 
         // Mark the run complete only once every part is closed. Until this line runs the
@@ -935,12 +939,14 @@ class WxrMaterializer
      * so the file always comes from the same release as the code applying it.
      *
      * @param  array<array-key, mixed>  $channel  The site's discovery payload
+     * @param  string|null  $directory  The directory to read from, for tests; null reads the
+     *                                  installed cleaner's
      * @return DuplicateDisposition|null The site's disposition, or null when there is none
      *
      * @throws MigrationApiException When the file exists but cannot be read, is invalid, or
      *                               names another site
      */
-    public static function dispositionFor(array $channel): ?DuplicateDisposition
+    public static function dispositionFor(array $channel, ?string $directory = null): ?DuplicateDisposition
     {
         $baseBlogUrl = $channel['base_blog_url'] ?? null;
 
@@ -955,7 +961,7 @@ class WxrMaterializer
             return null;
         }
 
-        $path = self::dispositionDirectory().\DIRECTORY_SEPARATOR.self::dispositionFileName($host);
+        $path = ($directory ?? self::dispositionDirectory()).\DIRECTORY_SEPARATOR.self::dispositionFileName($host);
 
         if (! \is_file($path)) {
             return null;

@@ -423,3 +423,40 @@ it('reads the disposition the cleaner ships for news.uams.edu', function (): voi
     expect($disposition?->site)->toBe('news.uams.edu')
         ->and(\count($disposition->sets ?? []))->toBeGreaterThanOrEqual(140);
 });
+
+it('drops a set whose members fall in different parts', function (): void {
+    // Two items a part puts 16831 beside its kept post, and 16828 in the part after 12335
+    dispositionFakeApi('news.uams.edu', dispositionPosts());
+
+    $paths = (new WxrMaterializer(new Client('https://example.test', 'shhh'), $this->workingDirectory, 2))->materialize(1);
+
+    expect($paths)->toHaveCount(3)
+        ->and(\array_column(dispositionParsedPosts($paths), 'id'))->toBe([12240, 12335, 501])
+        ->and(dispositionDroppedIds($this->workingDirectory))->toBe([16831, 12287, 16828]);
+});
+
+it('refuses a disposition file it cannot read', function (): void {
+    \file_put_contents($this->workingDirectory.\DIRECTORY_SEPARATOR.'news-uams-edu.json', '{"format": 2}');
+
+    expect(fn () => WxrMaterializer::dispositionFor(['base_blog_url' => 'https://news.uams.edu'], $this->workingDirectory))
+        ->toThrow(MigrationApiException::class, 'could not be read');
+});
+
+it('refuses a disposition file that names another site', function (): void {
+    \file_put_contents(
+        $this->workingDirectory.\DIRECTORY_SEPARATOR.'news-uams-edu.json',
+        (string) \json_encode(['format' => 1, 'site' => 'health.uams.edu', 'permalink_base' => 'https://health.uams.edu', 'sets' => []])
+    );
+
+    expect(fn () => WxrMaterializer::dispositionFor(['base_blog_url' => 'https://news.uams.edu'], $this->workingDirectory))
+        ->toThrow(MigrationApiException::class, 'is for health.uams.edu, not news.uams.edu');
+});
+
+it('reads a disposition file from the directory it is given', function (): void {
+    \file_put_contents(
+        $this->workingDirectory.\DIRECTORY_SEPARATOR.'news-uams-edu.json',
+        (string) \json_encode(['format' => 1, 'site' => 'news.uams.edu', 'permalink_base' => 'https://news.uams.edu', 'sets' => []])
+    );
+
+    expect(WxrMaterializer::dispositionFor(['base_blog_url' => 'https://news.uams.edu'], $this->workingDirectory)?->sets)->toBe([]);
+});
