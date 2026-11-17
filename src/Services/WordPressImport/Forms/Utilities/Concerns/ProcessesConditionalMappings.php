@@ -532,6 +532,7 @@ trait ProcessesConditionalMappings
      * @param  array<int|string, mixed>  $combinedData  The combined data array
      * @param  ?string  $statamicHandle  The Statamic handle
      * @param  ?string  $preset  The preset value
+     * @param  ?string  $excludeFieldtype  The source fieldtype, which picks a fieldtype-specific value_translation table (#543)
      * @return array<int|string, mixed>|null Returns mapped attributes array or null if no mapping
      */
     protected static function processAttributeMapping(
@@ -540,7 +541,8 @@ trait ProcessesConditionalMappings
         array $attrConfig,
         array $combinedData,
         ?string $statamicHandle,
-        ?string $preset
+        ?string $preset,
+        ?string $excludeFieldtype = null
     ): ?array {
         $statamicAttr = self::mappingValue(
             $attrConfig,
@@ -728,7 +730,7 @@ trait ProcessesConditionalMappings
                     $attrConfig,
                     $attrName,
                     $combinedData,
-                    null,
+                    $excludeFieldtype,
                     null,
                     $resolvedAttribute
                 );
@@ -752,7 +754,8 @@ trait ProcessesConditionalMappings
             $attrConfig,
             $statamicAttrString,
             $combinedData,
-            $attrName
+            $attrName,
+            $excludeFieldtype
         );
 
         return [
@@ -886,6 +889,7 @@ trait ProcessesConditionalMappings
      * @param  string  $statamicAttr  The statamic attribute name
      * @param  array<int|string, mixed>  $data  The full data array for context
      * @param  ?string  $attrName  The attribute name being processed
+     * @param  ?string  $excludeFieldtype  The source fieldtype, which picks a fieldtype-specific value_translation table (#543)
      * @return mixed The processed value
      */
     protected static function processSimpleStatamicAttribute(
@@ -893,7 +897,8 @@ trait ProcessesConditionalMappings
         array $attrConfig,
         string $statamicAttr,
         array $data = [],
-        int|string|null $attrName = null
+        int|string|null $attrName = null,
+        ?string $excludeFieldtype = null
     ): mixed {
         // Apply value_translation if present
         if (isset($attrConfig['value_translation'])) {
@@ -902,7 +907,7 @@ trait ProcessesConditionalMappings
                 $attrConfig,
                 $attrName,
                 $data,
-                null,
+                $excludeFieldtype,
                 null,
                 $statamicAttr
             );
