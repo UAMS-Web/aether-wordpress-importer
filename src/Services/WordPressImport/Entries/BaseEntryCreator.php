@@ -11,6 +11,7 @@ use Statamic\Stache\Query\EntryQueryBuilder;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Concerns\ChoosesUnnamedItemSlugs;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Concerns\CreatesTaxonomyTerms;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Concerns\ImportsTaxonomyTerms;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Concerns\MapsEntryStatusAndDates;
@@ -34,6 +35,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TermMapB
  */
 abstract class BaseEntryCreator
 {
+    use ChoosesUnnamedItemSlugs;
     use CreatesTaxonomyTerms;
     use ImportsTaxonomyTerms;
     use MapsEntryStatusAndDates;
