@@ -441,7 +441,12 @@ trait SavesEntries
             $this->storedEntrySlug($entrySlug, $site)
         );
 
-        foreach ($query->get() as $entry) {
+        // A query's get() returns a collection; the check only narrows the type
+        $entries = $query->get();
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $entries = $entries instanceof Collection ? $entries->all() : [];
+
+        foreach ($entries as $entry) {
             // Read the WordPress ID from the second-to-last part of the entry ID
             $idParts = \explode(
                 '-',
