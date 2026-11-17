@@ -14,8 +14,12 @@ description: Install PHP (8.4 by default), restore the Composer cache, and insta
 # - `extensions`: the set the Pest, PHPStan and Rector jobs loaded. PHPStan and Rector reflect over
 #   DOMDocument and SimpleXMLElement, the suite needs gd and SQLite, and a Windows PHP does not load
 #   `fileinfo` by default, which `composer install` checks.
-# - `ini-values`: OPcache on everywhere, with the tracing JIT off on Windows, where PHP 8.4
-#   segfaults partway through this suite under `opcache.jit=tracing` (#254).
+# - `ini-values`: OPcache on everywhere, with the JIT off on Windows (#254, #341). Under
+#   `opcache.jit=tracing` the Windows Pest leg dies with an access violation (0xC0000005) partway
+#   through this suite on PHP 8.4.27 and on 8.4.28RC1, at a different test each run, and raising
+#   `opcache.jit_max_root_traces` does not avoid it. `opcache.jit=function` cannot start in
+#   Rector's parallel worker processes ("Could not enable JIT: could not compile prologue").
+#   Whenever the PHP 8.4 pin moves, re-try `opcache.jit=tracing` on Windows once.
 # - The Composer GitHub token: every dependency is public, so the token only lifts api.github.com's
 #   anonymous rate limit for dist downloads.
 
