@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi;
 
+use InvalidArgumentException;
+use ReflectionClass;
+use RuntimeException;
+use UAMSWeb\Aether\WordPressImporter\Cleanup\Disposition\ApplyDuplicateDisposition;
+use UAMSWeb\Aether\WordPressImporter\Cleanup\Disposition\DuplicateDisposition;
 use UAMSWeb\Aether\WordPressImporter\Cleanup\Transform;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Traits\WxrMaterializerAttachmentsTrait;
@@ -142,6 +147,13 @@ class WxrMaterializer
     private array $redirectPluginRules = [];
 
     /**
+     * What the site's duplicate disposition did to this run, or null when none applied (#89).
+     *
+     * @var array{file: string, sets: int, dropped: list<int>, renamed: list<int>}|null
+     */
+    private ?array $duplicateDisposition = null;
+
+    /**
      * Create a materializer.
      *
      * @param  Client  $client  The migration API client
@@ -177,6 +189,7 @@ class WxrMaterializer
         $contentType = $contentType !== null && \trim($contentType) !== '' ? \trim($contentType) : null;
         $this->attachmentResolution = null;
         $this->redirectPluginRules = [];
+        $this->duplicateDisposition = null;
 
         // Refuse an output directory that does not exist rather than resolving a relative
         // path against the current working directory, where the parts are indistinguishable
@@ -206,6 +219,10 @@ class WxrMaterializer
         // Read the channel metadata first; every part repeats it, so nothing can be written
         // until it is known.
         $channel = $this->channelFor($site);
+
+        // Read a cleaned site's duplicate disposition now, so a file that cannot be used stops
+        // the run before the whole site is read rather than after (#89)
+        $disposition = self::cleansSite($channel) ? self::dispositionFor($channel) : null;
 
         // Everything after this point is addressed to the target site's OWN REST root
         // rather than scoped with `?site=`. Measured against a live multisite: the two are
@@ -379,8 +396,10 @@ class WxrMaterializer
         // listed sites: the cleaner strips every HTML comment, including the Gutenberg block
         // delimiters other sites' content is parsed from. It runs before the manifest says
         // `complete`, so an interrupted clean leaves the run reading unfinished.
+        // A site with a duplicate disposition first loses the duplicates it names, as its
+        // export does when the cleaner runs with `--disposition` (#89).
         if (self::cleansSite($channel)) {
-            $this->cleanParts($paths);
+            $this->cleanParts($paths, $disposition);
         }
 
         // Mark the run complete only once every part is closed. Until this line runs the
@@ -530,6 +549,10 @@ class WxrMaterializer
             'items' => $items,
             'pre_existing_parts' => $preExisting,
             'stale_parts' => $stale,
+            // The duplicate posts this run left out and the kept posts it renamed, so a reader
+            // counting items against the site can account for them (#89). Null when the site
+            // has no disposition, and while the run is in flight.
+            'duplicate_disposition' => $complete ? $this->duplicateDisposition : null,
         ];
 
         $encoded = \json_encode($manifest, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES);
@@ -800,15 +823,27 @@ class WxrMaterializer
      * `Transform::withDefaultRules()` on each part applies the same rules, in the same order, to
      * the same WXR elements the CLI cleans, without a second copy of the rule list.
      *
+     * When the site has a duplicate disposition, each part first loses the duplicate posts it
+     * names, and each kept post takes its set's canonical slug, exactly as
+     * `bin/wxr-cleanup --disposition` does before its body rules (#89). The cleaner's own
+     * `ApplyDuplicateDisposition` does the work, on the disposition file the cleaner ships, so
+     * both paths read one disposition. A post the disposition names but this run did not read
+     * is skipped, so a scoped or incremental run is safe.
+     *
      * One part is read at a time, so memory is bounded by the part size, not the run.
      *
      * @param  list<string>  $paths  The written part paths
+     * @param  DuplicateDisposition|null  $disposition  The site's duplicate disposition, if any
      *
-     * @throws MigrationApiException When a part cannot be read, cleaned or written back
+     * @throws MigrationApiException When a part cannot be read, cleaned or written back, or
+     *                               when the disposition refuses a post
      */
-    private function cleanParts(array $paths): void
+    private function cleanParts(array $paths, ?DuplicateDisposition $disposition = null): void
     {
         $transform = Transform::withDefaultRules();
+        $apply = $disposition instanceof DuplicateDisposition ? new ApplyDuplicateDisposition($disposition) : null;
+        $dropped = [];
+        $renamed = [];
 
         foreach ($paths as $path) {
             // Read the part as written
@@ -818,6 +853,14 @@ class WxrMaterializer
             // @pest-mutate-ignore: FalseToTrue
             if ($raw === false) {
                 throw new MigrationApiException(\sprintf('Could not read "%s" to clean it.', $path));
+            }
+
+            // Drop the duplicates the disposition names before the body rules, as the CLI does
+            if ($apply instanceof ApplyDuplicateDisposition) {
+                $applied = $this->applyDisposition($apply, $raw, $path);
+                $raw = $applied['wxr'];
+                $dropped = [...$dropped, ...$applied['dropped']];
+                $renamed = [...$renamed, ...$applied['renamed']];
             }
 
             $cleaned = $transform->apply($raw);
@@ -844,7 +887,131 @@ class WxrMaterializer
             }
 
             // Release the part's text before reading the next one
-            unset($raw, $cleaned);
+            unset($raw, $cleaned, $applied);
         }
+
+        // Record what the disposition did across every part, for the manifest
+        if ($disposition instanceof DuplicateDisposition) {
+            $this->duplicateDisposition = [
+                'file' => self::dispositionFileName($disposition->site),
+                'sets' => \count($disposition->sets),
+                'dropped' => $dropped,
+                'renamed' => $renamed,
+            ];
+        }
+    }
+
+    /**
+     * Apply a duplicate disposition to one part (#89).
+     *
+     * The disposition refuses a post whose slug differs from the one it recorded, rather than
+     * dropping a post it may not mean. That refusal stops the run, naming the part, and the
+     * part is left as written.
+     *
+     * @param  ApplyDuplicateDisposition  $apply  The site's disposition
+     * @param  string  $raw  The part as written
+     * @param  string  $path  The part's path, for the error message
+     * @return array{wxr: string, dropped: list<int>, renamed: list<int>} The part without the dropped
+     *                                                                    posts, and the ids dropped
+     *                                                                    and renamed
+     *
+     * @throws MigrationApiException When the disposition refuses a post
+     */
+    private function applyDisposition(ApplyDuplicateDisposition $apply, string $raw, string $path): array
+    {
+        try {
+            return $apply->apply($raw);
+        } catch (RuntimeException $runtimeException) {
+            throw new MigrationApiException(\sprintf(
+                'The duplicate disposition refused "%s": %s The part was left as written.',
+                $path,
+                $runtimeException->getMessage()
+            ), $runtimeException->getCode(), previous: $runtimeException);
+        }
+    }
+
+    /**
+     * The duplicate disposition the WXR cleaner ships for a site, or null when it ships none (#89).
+     *
+     * Read from the installed cleaner package's `dispositions/` directory, the file
+     * `bin/wxr-cleanup --disposition` is given for that site's export, so both paths apply one
+     * disposition rather than two copies. Its directory is found from the class that reads it,
+     * so the file always comes from the same release as the code applying it.
+     *
+     * @param  array<array-key, mixed>  $channel  The site's discovery payload
+     * @param  string|null  $directory  The directory to read from, for tests; null reads the
+     *                                  installed cleaner's
+     * @return DuplicateDisposition|null The site's disposition, or null when there is none
+     *
+     * @throws MigrationApiException When the file exists but cannot be read, is invalid, or
+     *                               names another site
+     */
+    public static function dispositionFor(array $channel, ?string $directory = null): ?DuplicateDisposition
+    {
+        $baseBlogUrl = $channel['base_blog_url'] ?? null;
+
+        if (! \is_string($baseBlogUrl)) {
+            return null;
+        }
+
+        // `parse_url()` answers false, never '', for a URL with no host
+        $host = \parse_url($baseBlogUrl, \PHP_URL_HOST);
+
+        if (! \is_string($host)) {
+            return null;
+        }
+
+        $path = ($directory ?? self::dispositionDirectory()).\DIRECTORY_SEPARATOR.self::dispositionFileName($host);
+
+        if (! \is_file($path)) {
+            return null;
+        }
+
+        try {
+            $disposition = DuplicateDisposition::fromFile($path);
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            throw new MigrationApiException(\sprintf(
+                'The duplicate disposition "%s" could not be read: %s',
+                $path,
+                $invalidArgumentException->getMessage()
+            ), $invalidArgumentException->getCode(), previous: $invalidArgumentException);
+        }
+
+        // A file naming another site would drop that site's post ids from this one
+        if (\strcasecmp($disposition->site, $host) !== 0) {
+            throw new MigrationApiException(\sprintf(
+                'The duplicate disposition "%s" is for %s, not %s.',
+                $path,
+                $disposition->site,
+                $host
+            ));
+        }
+
+        return $disposition;
+    }
+
+    /**
+     * A site's disposition file name: its host, lowercased, with dots as hyphens.
+     *
+     * `news.uams.edu` is `news-uams-edu.json`, the name the cleaner ships its file under.
+     *
+     * @param  string  $host  The site's host
+     */
+    private static function dispositionFileName(string $host): string
+    {
+        return \str_replace('.', '-', \strtolower($host)).'.json';
+    }
+
+    /**
+     * The installed cleaner package's `dispositions/` directory.
+     */
+    private static function dispositionDirectory(): string
+    {
+        // The class is `src/Disposition/DuplicateDisposition.php`, three levels below the root.
+        // `getFileName()` is false only for a class built into PHP, which this is not.
+        // @pest-mutate-ignore: RemoveStringCast
+        $file = (string) new ReflectionClass(DuplicateDisposition::class)->getFileName();
+
+        return \dirname($file, 3).\DIRECTORY_SEPARATOR.'dispositions';
     }
 }

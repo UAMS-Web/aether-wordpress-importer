@@ -1987,6 +1987,15 @@ Only listed sites are cleaned, matched against the host of the site's `base_blog
 
 A part the cleaner cannot parse is refused rather than overwritten: the cleaner hides libxml errors and would return an empty document, so the materializer checks that every `<item>` survived and raises otherwise.
 
+#### Duplicate dispositions
+
+The export is cleaned with `--disposition=dispositions/news-uams-edu.json`, which drops the non-canonical member of each duplicate set and gives the kept post its canonical slug (`UAMS-Web/uams-statamic#46`). A cleaned site's API content gets the same disposition before the body rules: `WxrMaterializer` applies the cleaner's own `ApplyDuplicateDisposition` to each part, reading the disposition file the installed cleaner ships for the site's host (`<host with dots as hyphens>.json`), so both paths read one file (#89). A site with no file there has nothing dropped.
+
+- **Refused, not guessed.** A post whose slug differs from the slug the disposition recorded stops the run, and the manifest stays `in_progress`. The live site may have edited a post since the disposition was built, and dropping it could drop a post nobody meant. A disposition file that is invalid, or names another site, is refused as soon as the site is read, before any post is.
+- **Scoped runs are safe.** A post the disposition names but the run did not read is skipped.
+- **Recorded.** The manifest's `duplicate_disposition` names the file, its set count, and the post ids dropped and renamed. It is `null` when no disposition applied.
+- **Redirects come from the cleaner, not the run.** The pairs depend on the disposition alone, so the cleaner's `dispositions/news-uams-edu.redirects.json`, which `content:generate-migration-redirects --dedup-redirects` reads, covers posts dropped on either path. The materializer writes no pairs of its own.
+
 ### Vanity redirect domains
 
 A vanity domain is not a Statamic site, so its redirect rules are stored in the host application's `redirect_domains` collection, one entry per rule, rather than in a site's `redirects` global set (`UAMS-Web/uams-statamic-archive#2594`, #1306). An import routes there when the host of the export's `wp:base_blog_url` matches the list exactly, ignoring case:
