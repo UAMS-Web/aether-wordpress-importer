@@ -790,12 +790,12 @@ class PostEntryCreator extends BaseEntryCreator
 
             // Process content based on post format
             if ($isAudioFormat) {
-                // Set additional audio entry defaults required by the post/audio template
+                // Set additional audio entry defaults required by the host app's posts/audio template
                 $data['excerpt_display_query'] = true;
                 $data['title_options'] = 'normal';
                 $data['cover_image_query'] = true;
                 $data['series_boilerplate_display_query'] = true;
-                $data['template'] = 'post/audio';
+                $data['template'] = 'posts/audio';
 
                 // Use PostAudioProcessor for audio format posts
                 // Initialize the post audio processor for specialized audio content handling
