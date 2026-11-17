@@ -363,6 +363,101 @@ trait SavesEntries
     }
 
     /**
+     * Choose the slug for an item WordPress exported with an empty `wp:post_name`.
+     *
+     * WordPress leaves the name empty on many drafts, and the slug is then built
+     * from the title, which a published item can already hold. Two entries on one
+     * slug share a URI, and Statamic serves whichever it finds first, so the
+     * published one can stop resolving (#588).
+     *
+     * The title slug is kept when no other item holds it, counting every name the
+     * export sets and every entry in the collection and site that belongs to a
+     * different WordPress item. Otherwise the WordPress ID is appended. Both
+     * checks give the same answer on every run of the same export, whatever order
+     * the items come in, so a re-import finds the entry the last one created.
+     *
+     * @param  string  $collectionHandle  The collection handle
+     * @param  string  $site  The site handle
+     * @param  string  $titleSlug  The slug built from the title
+     * @param  string  $postId  The WordPress post ID
+     * @param  array<string, true>  $exportSlugs  Every non-empty `wp:post_name` in the export, as keys
+     * @return string The slug to give the entry
+     */
+    protected function slugForUnnamedItem(
+        string $collectionHandle,
+        string $site,
+        string $titleSlug,
+        string $postId,
+        array $exportSlugs
+    ): string {
+        $candidate = $titleSlug;
+        $counter = 1;
+
+        // Move off each slug another item holds, by appending the ID and then a counter
+        while (
+            isset($exportSlugs[$candidate])
+            || $this->slugHeldByAnotherItem($collectionHandle, $site, $candidate, $postId)
+        ) {
+            $candidate = $counter === 1
+                ? "$titleSlug-$postId"
+                : "$titleSlug-$postId-$counter";
+            $counter++;
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * Check whether an entry for a different WordPress item holds a slug.
+     *
+     * The WordPress ID is read from the entry ID, whose format is
+     * `slug-postId-random`, as {@see self::findExistingEntry()} reads it. An entry
+     * whose ID does not have that shape was not made from this item, so it counts
+     * as another's.
+     *
+     * @param  string  $collectionHandle  The collection handle
+     * @param  string  $site  The site handle
+     * @param  string  $entrySlug  The slug to check
+     * @param  string  $postId  The WordPress post ID of the item asking
+     * @return bool Whether another item's entry holds the slug
+     */
+    private function slugHeldByAnotherItem(
+        string $collectionHandle,
+        string $site,
+        string $entrySlug,
+        string $postId
+    ): bool {
+        $query = $this->newEntryQuery();
+        $query->where(
+            'collection',
+            $collectionHandle
+        );
+        $query->where(
+            'site',
+            $site
+        );
+        $query->where(
+            'slug',
+            $this->storedEntrySlug($entrySlug, $site)
+        );
+
+        foreach ($query->get() as $entry) {
+            // Read the WordPress ID from the second-to-last part of the entry ID
+            $idParts = \explode(
+                '-',
+                $entry instanceof Entry ? self::mixedToStringValue($entry->id()) : ''
+            );
+            $count = \count($idParts);
+
+            if ($count < 3 || $idParts[$count - 2] !== $postId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Check if an entry already exists, handling both exact ID matches and slug/post
      * ID matches.
      *

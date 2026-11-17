@@ -330,6 +330,23 @@ class PostEntryCreator extends BaseEntryCreator
             $attachments[] = $attachment;
         }
 
+        // ---
+        // Collect every slug the export sets, so a post exported without one cannot
+        // take a slug a later post in the same export holds (#588)
+        // ---
+        $exportSlugs = [];
+
+        foreach ($xmlStreamParser->streamItems('post') as $namedPost) {
+            $exportSlug = XpathHelper::getStringValue(
+                $namedPost,
+                'wp:post_name'
+            );
+
+            if ($exportSlug !== '') {
+                $exportSlugs[$exportSlug] = true;
+            }
+        }
+
         // Loop through all post items to process each post entry
         $audioSeriesConfig = null;
 
@@ -630,6 +647,25 @@ class PostEntryCreator extends BaseEntryCreator
                 $output,
                 wpmemBlock: $this->readWpMembersBlock($post)
             );
+
+            // ---
+            // A post exported without a slug gets one from its title, moved off any
+            // slug another post holds, so it cannot shadow that post's URI (#588)
+            // ---
+            if ($slug === '') {
+                [$titleSlug] = $this->generateSlugAndId(
+                    '',
+                    $postId,
+                    $title
+                );
+                $slug = $this->slugForUnnamedItem(
+                    $collectionHandle,
+                    $site,
+                    $titleSlug,
+                    $postId,
+                    $exportSlugs
+                );
+            }
 
             // Generate slug and ID with date handling if needed
             [$entrySlug, $entryId] = $this->generateSlugAndId(
