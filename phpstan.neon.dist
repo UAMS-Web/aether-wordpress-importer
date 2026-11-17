@@ -4,6 +4,7 @@ parameters:
     level: max
     paths:
         - src
+        - data
         - tests
     tmpDir: .phpstan-cache
     stubFiles:

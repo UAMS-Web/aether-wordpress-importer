@@ -330,6 +330,24 @@ class PostEntryCreator extends BaseEntryCreator
             $attachments[] = $attachment;
         }
 
+        // ---
+        // Collect the post that sets each slug in the export, so a post exported
+        // without one cannot take a slug a later post in the same export holds
+        // (#588). A post with an empty name adds an empty key, which no slug built
+        // from a title can equal.
+        // ---
+        $exportSlugs = [];
+
+        foreach ($xmlStreamParser->streamItems('post') as $namedPost) {
+            $exportSlugs[XpathHelper::getStringValue(
+                $namedPost,
+                'wp:post_name'
+            )] = XpathHelper::getStringValue(
+                $namedPost,
+                'wp:post_id'
+            );
+        }
+
         // Loop through all post items to process each post entry
         $audioSeriesConfig = null;
 
@@ -631,6 +649,27 @@ class PostEntryCreator extends BaseEntryCreator
                 wpmemBlock: $this->readWpMembersBlock($post)
             );
 
+            // ---
+            // A post exported without a slug gets one from its title, moved off any
+            // slug another post holds, so it cannot shadow that post's URI (#588)
+            // ---
+            if ($slug === '') {
+                // A one-item destructuring has no item to remove: `[] =` does not compile
+                // @pest-mutate-ignore: RemoveArrayItem
+                [$titleSlug] = $this->generateSlugAndId(
+                    '',
+                    $postId,
+                    $title
+                );
+                $slug = $this->slugForUnnamedItem(
+                    $collectionHandle,
+                    $site,
+                    $titleSlug,
+                    $postId,
+                    $exportSlugs
+                );
+            }
+
             // Generate slug and ID with date handling if needed
             [$entrySlug, $entryId] = $this->generateSlugAndId(
                 $slug,
@@ -790,12 +829,12 @@ class PostEntryCreator extends BaseEntryCreator
 
             // Process content based on post format
             if ($isAudioFormat) {
-                // Set additional audio entry defaults required by the post/audio template
+                // Set additional audio entry defaults required by the host app's posts/audio template
                 $data['excerpt_display_query'] = true;
                 $data['title_options'] = 'normal';
                 $data['cover_image_query'] = true;
                 $data['series_boilerplate_display_query'] = true;
-                $data['template'] = 'post/audio';
+                $data['template'] = 'posts/audio';
 
                 // Use PostAudioProcessor for audio format posts
                 // Initialize the post audio processor for specialized audio content handling

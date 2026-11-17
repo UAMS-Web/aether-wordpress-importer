@@ -104,11 +104,13 @@ class WpSpacerBlockProcessor implements BlockProcessorInterface
         // Start with the opening comment
         $count = 1;
 
-        // Start with the next sibling of the current node
-        $currentNode = $node->nextSibling;
-
-        // Traverse nodes until we find the closing comment
-        while ($currentNode instanceof DOMNode) {
+        // Traverse the following siblings until the closing comment. The advance
+        // is in the loop header, so no path through the body can skip it
+        for (
+            $currentNode = $node->nextSibling;
+            $currentNode instanceof DOMNode;
+            $currentNode = $currentNode->nextSibling
+        ) {
             // Increment count for each node traversed
             $count++;
 
@@ -129,9 +131,6 @@ class WpSpacerBlockProcessor implements BlockProcessorInterface
                     break;
                 }
             }
-
-            // Move to next sibling node
-            $currentNode = $currentNode->nextSibling;
         }
 
         // Return total count of nodes in the spacer block

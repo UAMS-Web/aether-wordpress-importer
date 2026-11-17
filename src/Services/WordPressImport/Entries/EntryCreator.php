@@ -437,24 +437,6 @@ class EntryCreator
     }
 
     /**
-     * Checks if a new creator for the content type has seen show-people shortcodes.
-     *
-     * Delegates to the appropriate creator's hasShowPeople method based on the
-     * content type. The creator is built for this call and has imported nothing,
-     * so this says nothing about an export's content.
-     *
-     * @param  string  $contentType  The WordPress content type (e.g., 'page', 'uamspeople')
-     * @return bool True if the new creator has seen show-people shortcodes, false otherwise
-     */
-    public function hasShowPeople(
-        string $contentType
-    ): bool {
-        $creator = $this->getCreator($contentType);
-
-        return $creator->hasShowPeople();
-    }
-
-    /**
      * Imports table entries for TablePress content.
      *
      * For content types like 'page' or 'post', imports 'tablepress_table' items
@@ -674,11 +656,13 @@ class EntryCreator
                     $this->contentProcessor
                 );
 
-                // Generate an entry ID in the TablePressEntryCreator format, for the report
-                [, $entryId] = SlugGenerator::generateSlugAndId(
+                // Generate an entry ID in the TablePressEntryCreator format, for the report.
+                // Index the pair rather than destructuring it: a mutant that removes the
+                // one list item becomes `[,] = ...`, which PHP refuses to compile (#577).
+                $entryId = SlugGenerator::generateSlugAndId(
                     "{$site}_tablepress-{$exportId}",
                     $postId
-                );
+                )[1];
 
                 // Define the expected entry file path, on the tree this run writes to
                 $entryPath = ContentRoot::collectionEntry(
@@ -687,25 +671,16 @@ class EntryCreator
                     "{$site}_tablepress-{$exportId}"
                 );
 
-                // ---
-                // Remove any file at the old slug ({site}_tablepress-{exportId}-{postId}).
-                // TablePressEntryCreator::saveEntry() removes it too, but reads the export
-                // ID back out of the entry ID and so misses one with a hyphen (#286).
-                // ---
-                $incorrectPath = ContentRoot::collectionEntry(
-                    'tables',
-                    $site,
-                    "{$site}_tablepress-{$exportId}-{$postId}"
-                );
-
-                if (LaravelFileFacade::exists($incorrectPath)) {
-                    LaravelFileFacade::delete($incorrectPath);
-                }
-
+                // The file at the old slug ({site}_tablepress-{exportId}-{postId}) is
+                // removed by TablePressEntryCreator::deleteOldSlugFile(), which takes
+                // both IDs and so handles an export ID with a hyphen (#286, #577).
                 $retryCount = 5;
                 $retryDelay = 300000; // 300ms
                 $fileExists = false;
-                for ($i = 0; $i < $retryCount; $i++) {
+
+                // Iterate a fixed range rather than a counter: a mutant that reverses
+                // the counter's step (`$i--`) loops forever under `Sleep::fake()` (#577).
+                foreach (\range(1, $retryCount) as $_) {
                     // ---
                     // Check if entry file exists with retry mechanism. A file found
                     // stays found, and the loop waits only after a miss.

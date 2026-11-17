@@ -28,6 +28,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      *
      * @var list<string>
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array HTML_ONLY_SHORTCODES = ['caption'];
 
     /**
@@ -435,13 +437,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             return $processedContent;
         }
 
-        // Check if we processed any shortcodes and meaningful content remains
-        // Without conversion this is the nonempty, trimmed blockContent() result.
-        // @pest-mutate-ignore: UnwrapTrim
-        if (! $hasProcessedShortcode
-        && \trim($processedContent) !== '') {
-            // Check if content exists but no shortcodes were processed
-            // Return original content if no shortcodes were processed but content exists
+        // Without a conversion this is the block's content as blockContent() read
+        // it, which process() has already found is not empty, so it is kept
+        if (! $hasProcessedShortcode) {
             return $processedContent;
         }
 
@@ -452,12 +450,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         // "handled, nothing to add" and drop it silently, whereas null is logged by
         // TextProcessor::processForBard as a block-processor failure. See issue wordpress-importer-archive#317.
         // ---
-        if ($hasProcessedShortcode) {
-            return '';
-        }
-
-        // Return null only if content is truly empty
-        return null;
+        return '';
     }
 
     /**
@@ -612,7 +605,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         DOMNode $node
     ): bool {
         // The only caller, canProcess(), has already required XML_COMMENT_NODE.
-        // @pest-mutate-ignore: InstanceOfToTrue
+        // @pest-mutate-ignore: InstanceOfToTrue, FalseToTrue, RemoveEarlyReturn
         if (! $node instanceof DOMComment) {
             return false;
         }

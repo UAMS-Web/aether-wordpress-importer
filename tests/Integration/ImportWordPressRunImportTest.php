@@ -269,11 +269,6 @@ final class IwriMinerva extends MinervaKbSettingsSelector
 final class IwriEntries extends EntryCreator
 {
     /**
-     * What hasShowPeople() answers.
-     */
-    public bool $showPeople = false;
-
-    /**
      * Run while entries are created, to leave what a real import leaves behind.
      */
     public static ?Closure $onCreate = null;
@@ -313,16 +308,6 @@ final class IwriEntries extends EntryCreator
     public function setKbWithoutTopics(array $kbWithoutTopics): void
     {
         IwriLog::add('entries.kbWithoutTopics', $kbWithoutTopics);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function hasShowPeople(string $contentType): bool
-    {
-        IwriLog::add('entries.hasShowPeople', $contentType);
-
-        return $this->showPeople;
     }
 
     /**
@@ -1188,14 +1173,12 @@ it('warns that only region validation is missing for provider blocks', function 
 it('needs people groups for people and showcases, and not for pages showing people', function (string $type, string $collection, bool $asked): void {
     iwriCollection($collection);
     [$command, $buffer, $stands] = iwriCommand();
-    $stands['entries']->showPeople = true;
     $stands['siteManager']->missingDestinations = ['people_groups'];
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, [$type])]);
 
     expect($status)->toBe($asked ? 1 : 0)
-        ->and(str_contains($output, "Skipping import of '{$type}' as 'people_groups' is not enabled for 'default'."))->toBe($asked)
-        ->and(IwriLog::of('entries.hasShowPeople'))->toBe([]);
+        ->and(str_contains($output, "Skipping import of '{$type}' as 'people_groups' is not enabled for 'default'."))->toBe($asked);
 })->with([
     'people' => ['uamspeople', 'people', true],
     'a showcase' => ['tshowcase', 'people', true],

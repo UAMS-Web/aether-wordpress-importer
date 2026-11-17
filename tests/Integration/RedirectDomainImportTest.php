@@ -52,11 +52,15 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
-    $collection = CollectionFacade::findByHandle(RedirectRuleGlobalCreator::DOMAIN_COLLECTION);
+    foreach ([RedirectRuleGlobalCreator::DOMAIN_COLLECTION, RedirectRuleGlobalCreator::HOST_COLLECTION] as $handle) {
+        $collection = CollectionFacade::findByHandle($handle);
 
-    if ($collection instanceof ConcreteCollection) {
-        $collection->delete();
+        if ($collection instanceof ConcreteCollection) {
+            $collection->delete();
+        }
     }
+
+    ImportWarningManager::clearWarnings();
 
     TemporaryFileRegistry::sweep();
 });
@@ -545,4 +549,206 @@ it('rewrites an entry an earlier import left holding a shadowed rule (#108)', fu
         ->and($output)->toContain('Redirect domain uams.info: 0 created, 1 updated, 0 disabled, 0 unpublished skipped, 1 shadowed.');
 
     ImportWarningManager::clearWarnings();
+});
+
+/**
+ * Create the domain list collection the redirects add-on keeps (#347).
+ */
+function redirectHostCollection(): void
+{
+    $collection = CollectionFacade::make(RedirectRuleGlobalCreator::HOST_COLLECTION);
+    $collection->sites(['default']);
+    $collection->save();
+}
+
+/**
+ * Save a domain list record, as an editor or the add-on's migration would.
+ */
+function redirectHostRecord(string $host, bool $published = true): Entry
+{
+    $record = new Entry;
+    $record->collection(RedirectRuleGlobalCreator::HOST_COLLECTION);
+    $record->locale('default');
+    $record->data(['host' => $host]);
+    $record->published($published);
+    $record->save();
+
+    return $record;
+}
+
+/**
+ * Every domain list record.
+ *
+ * @return list<Entry>
+ */
+function redirectHostRecords(): array
+{
+    $query = EntryQueryHelper::query();
+    $query->where('collection', RedirectRuleGlobalCreator::HOST_COLLECTION);
+    $results = $query->get();
+
+    if (! $results instanceof IlluminateCollection) {
+        return [];
+    }
+
+    return \array_values(\array_filter($results->all(), static fn (mixed $entry): bool => $entry instanceof Entry));
+}
+
+it('writes each rule\'s host as the id of the domain record, creating one record for all of them (#347)', function (): void {
+    redirectHostCollection();
+
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', redirectDomainRules()));
+
+    $records = redirectHostRecords();
+
+    expect($records)->toHaveCount(1);
+
+    $record = $records[0];
+
+    expect($record->get('host'))->toBe('uams.info')
+        ->and($record->get('title'))->toBe('uams.info')
+        ->and($record->published())->toBeTrue()
+        ->and($record->locale())->toBe('default');
+
+    $entries = redirectDomainEntries();
+
+    expect($entries)->toHaveCount(5);
+
+    foreach ($entries as $source => $entry) {
+        expect($entry->get('host'))->toBe(redirectDomainId($record))
+            ->and($entry->get('title'))->toBe('uams.info'.$source);
+    }
+
+    expect($output)->toContain("Redirect domain uams.info: domain record created in 'redirect_hosts'.")
+        ->toContain('Redirect domain uams.info: 5 created, 0 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.')
+        ->toContain('Redirect domain uams.info: 5 stored with a wordpress_post_id.');
+});
+
+it('refers to the record that already names the domain, however it was typed (#347)', function (): void {
+    redirectHostCollection();
+    $other = redirectHostRecord('uams.health');
+    $record = redirectHostRecord(' UAMS.info. ');
+
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', [['id' => 1, 'from' => '/give', 'to' => 'https://a.example/']]));
+
+    expect(redirectHostRecords())->toHaveCount(2)
+        ->and(redirectDomainEntries()['/give']->get('host'))->toBe(redirectDomainId($record))
+        ->and(redirectDomainId($record))->not->toBe(redirectDomainId($other))
+        ->and($output)->not->toContain('domain record created');
+});
+
+it('creates no second record and keeps each rule\'s reference when the import runs again (#347)', function (): void {
+    redirectHostCollection();
+    $parser = redirectDomainParser('https://uams.info', redirectDomainRules());
+
+    redirectDomainRun($parser);
+    $first = [];
+
+    foreach (redirectDomainEntries() as $source => $entry) {
+        $first[$source] = [redirectDomainId($entry), $entry->get('host')];
+    }
+
+    $output = redirectDomainRun($parser);
+    $second = [];
+
+    foreach (redirectDomainEntries() as $source => $entry) {
+        $second[$source] = [redirectDomainId($entry), $entry->get('host')];
+    }
+
+    expect(redirectHostRecords())->toHaveCount(1)
+        ->and($second)->toBe($first)
+        ->and(redirectDomainStored())->toHaveCount(5)
+        ->and($output)->not->toContain('domain record created')
+        ->toContain('Redirect domain uams.info: 0 created, 5 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.');
+});
+
+it('rewrites an entry imported before the domain list existed rather than adding another (#347)', function (): void {
+    // Imported while the host held the domain as a string
+    redirectDomainRun(redirectDomainParser('https://uams.info', [
+        ['id' => 1, 'from' => '/give', 'to' => 'https://a.example/'],
+        ['id' => 2, 'from' => '/gone', 'to' => 'https://b.example/'],
+    ]));
+    $before = redirectDomainEntries();
+
+    expect($before['/give']->get('host'))->toBe('uams.info');
+
+    redirectHostCollection();
+
+    // `/gone` has left the source since, so its entry is disabled
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', [['id' => 1, 'from' => '/give', 'to' => 'https://a.example/']]));
+
+    $record = redirectHostRecords()[0];
+    $after = redirectDomainEntries();
+
+    expect(redirectDomainStored())->toHaveCount(2)
+        ->and(redirectDomainId($after['/give']))->toBe(redirectDomainId($before['/give']))
+        ->and($after['/give']->get('host'))->toBe(redirectDomainId($record))
+        ->and($after['/gone']->get('host'))->toBe(redirectDomainId($record))
+        ->and($after['/gone']->get('enabled'))->toBeFalse()
+        ->and($output)->toContain('Redirect domain uams.info: 0 created, 1 updated, 1 disabled, 0 unpublished skipped, 0 shadowed.')
+        ->toContain('Redirect domain uams.info: 2 stored with a wordpress_post_id.');
+});
+
+it('gives each vanity domain its own record (#347)', function (): void {
+    redirectHostCollection();
+
+    redirectDomainRun(redirectDomainParser('https://uams.info', [['id' => 1, 'from' => '/give', 'to' => 'https://a.example/']]));
+    redirectDomainRun(redirectDomainParser('https://uams.health', [['id' => 1, 'from' => '/give', 'to' => 'https://b.example/']]));
+
+    $records = [];
+
+    foreach (redirectHostRecords() as $record) {
+        $host = $record->get('host');
+        $records[redirectDomainId($record)] = \is_string($host) ? $host : '';
+    }
+
+    $targets = [];
+
+    foreach (redirectDomainStored() as $entry) {
+        $host = $entry->get('host');
+        $targets[$records[\is_string($host) ? $host : ''] ?? ''] = $entry->get('target_url');
+    }
+
+    \ksort($targets);
+
+    expect($records)->toHaveCount(2)
+        ->and($targets)->toBe(['uams.health' => 'https://b.example/', 'uams.info' => 'https://a.example/']);
+});
+
+it('writes no rule for a domain whose record is unpublished, and says why (#347)', function (): void {
+    redirectHostCollection();
+    $record = redirectHostRecord('uams.info', false);
+
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', redirectDomainRules()));
+
+    expect(redirectDomainStored())->toBe([])
+        ->and(redirectHostRecords())->toHaveCount(1)
+        ->and($record->published())->toBeFalse()
+        ->and($output)->toContain("Domain record for uams.info in 'redirect_hosts' is unpublished - skipping redirect rules for uams.info.")
+        ->not->toContain('Redirect domain uams.info:')
+        ->and(ImportWarningManager::getWarnings('redirects', 'unpublished_domain_records'))->toBe([
+            ['host' => 'uams.info', 'record' => redirectDomainId($record)],
+        ]);
+});
+
+it('creates the domain record in the site its collection is configured for (#347)', function (): void {
+    // A collection reports its own sites only with multisite on
+    config(['statamic.system.multisite' => true]);
+
+    Site::setSites([
+        'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
+        'vanity' => ['name' => 'Vanity', 'locale' => 'en_US', 'url' => '/vanity/'],
+    ]);
+
+    $collection = CollectionFacade::make(RedirectRuleGlobalCreator::HOST_COLLECTION);
+    $collection->sites(['vanity']);
+    $collection->save();
+
+    redirectDomainRun(redirectDomainParser('https://uams.info', [['id' => 1, 'from' => '/give', 'to' => 'https://a.example/']]));
+
+    $records = redirectHostRecords();
+
+    expect($records)->toHaveCount(1)
+        ->and($records[0]->locale())->toBe('vanity')
+        ->and(redirectDomainEntries()['/give']->get('host'))->toBe(redirectDomainId($records[0]));
 });

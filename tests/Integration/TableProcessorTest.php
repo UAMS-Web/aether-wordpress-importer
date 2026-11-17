@@ -625,6 +625,18 @@ it('cuts the image snippet to 100 characters and reports a page with no link as 
         ->and(data_get($warnings, '0.content_snippet'))->toBe(mb_substr('<img src="'.$src.'">', 0, 100).'...');
 });
 
+it('cuts the image snippet only when it runs past 100 characters', function (int $length, string $suffix): void {
+    $image = '<img src="'.str_repeat('a', $length - 12).'">';
+    renderedTable('<table><tbody><tr><td>'.$image.' text</td></tr></tbody></table>');
+
+    expect(mb_strlen($image))->toBe($length)
+        ->and(data_get(ImportWarningManager::getWarnings('content', 'images_in_table_cells'), '0.content_snippet'))
+        ->toBe(mb_substr($image, 0, 100).$suffix);
+})->with([
+    '100 characters' => [100, ''],
+    '101 characters' => [101, '...'],
+]);
+
 it('warns of no image for a table without one, or one with no rows to import', function (string $html): void {
     renderedTable($html);
 
@@ -719,4 +731,17 @@ it('reads no table as one of photos unless it is a table of data whose every cel
     'a link with text around the image' => ['<table><tr><td><a href="/mail"><img src="m.jpg"> E-mail This Article</a></td></tr></table>'],
     'a caption element' => ['<table><caption>Gala</caption><tr><td><img src="a.jpg"> A</td></tr></table>'],
     'a caption element, and cells of images only' => ['<table><caption>Gala</caption><tr><td><img src="a.jpg"></td></tr></table>'],
+    'a caption element after white space' => ["<table>\n<caption>Gala</caption><tr><td><img src=\"a.jpg\"> A</td></tr></table>"],
+    'text beside a cell in its row' => ['<table><tr><td><img src="a.jpg"> A</td> B </tr></table>'],
+    'no image, and only a space trim() keeps' => ['<table><tr><td>&#8195;</td></tr></table>'],
 ]);
+
+it("reads the white space between a table's tags as no text outside its cells", function (): void {
+    expect(photoFigures("<table>\n<tr>\n<td><img src=\"a.jpg\"> A</td>\n</tr>\n</table>"))
+        ->toBe(['<figure><img src="a.jpg"><figcaption>A</figcaption></figure>']);
+});
+
+it('reads the text on either side of a break in a caption as two words', function (): void {
+    expect(photoFigures('<table><tr><th>Lead<br>text <img src="a.jpg">Dr. Smith<br>Director</th></tr></table>'))
+        ->toBe(['<figure><img src="a.jpg"><figcaption>Lead text Dr. Smith Director</figcaption></figure>']);
+});

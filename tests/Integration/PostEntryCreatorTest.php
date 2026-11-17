@@ -804,13 +804,23 @@ describe('an audio post', function (): void {
             ->and($entry->get('title_options'))->toBe('normal')
             ->and($entry->get('cover_image_query'))->toBeTrue()
             ->and($entry->get('series_boilerplate_display_query'))->toBeTrue()
-            ->and($entry->get('template'))->toBe('post/audio')
+            ->and($entry->get('template'))->toBe('posts/audio')
             ->and($entry->get('segments'))->toBe([])
             ->and($entry->get('intro'))->not->toBe([])
             ->and($entry->get('content'))->toBeNull()
             ->and(TermFacade::find('audio_series::heres-to-your-health'))->not->toBeNull()
             ->and($run['mapper']->mapped)->toHaveCount(1);
     });
+
+    it('gives no template to a post that is not audio, so it keeps the collection\'s own', function (array $post): void {
+        postEntryRun(postEntryExport([['slug' => 'not-audio', ...$post]]), PostEntryTestConverter::returning(postEntryBody()));
+
+        expect(postEntryData(postEntry('not-audio')))->not->toHaveKey('template');
+    })->with([
+        'a standard post' => [[]],
+        'a news release' => [['meta' => ['media_contact' => 'Pat']]],
+        'a video post' => [['formats' => ['post-format-video']]],
+    ]);
 
     it('creates no series term when no post names a series', function (): void {
         postEntryRun(postEntryExport([['slug' => 'plain-episode', 'formats' => ['post-format-audio']]]), PostEntryTestConverter::returning(postEntryBody()));

@@ -98,6 +98,8 @@
 //       },                                  regexes no tracked file may match
 //       "chain": false,                     true: stop at the first failure
 //       "statusContext": "local-ci",        the context --commit-status posts under
+//       "registeredPatches": true,          false stops the runner adding the patches-registered job
+//                                           it adds when composer.lock locks a uams-web/patches-* package
 //       "jobs": [
 //         { "name": "pint", "run": "vendor/bin/pint --test",
 //           "paths": ["**/*.php", "pint.json"] },
@@ -373,7 +375,7 @@ const asStringList = (value, what) => {
 // Normalize and validate the parsed JSON. Throws on anything the runner could
 // only guess about, so a typo in the config fails here with the key named
 // rather than as a job that never runs.
-const TOP_LEVEL_KEYS = ['base', 'php', 'chain', 'guard', 'jobs', 'prepare', 'statusContext', 'watch']
+const TOP_LEVEL_KEYS = ['base', 'php', 'chain', 'guard', 'jobs', 'prepare', 'registeredPatches', 'statusContext', 'watch']
 const JOB_KEYS = ['name', 'run', 'always', 'each', 'paths', 'requires', 'mutation', 'parallel', 'database', 'php', 'installs']
 const GUARD_KEYS = ['deny']
 const MUTATION_KEYS = ['minScore']
@@ -483,7 +485,66 @@ export function parseConfig(raw) {
         throw new Error('"statusContext" must be a non-empty string of at most 255 characters, such as "local-ci".')
     }
 
-    return { base, php: php === null ? null : String(php), chain, deny, jobs, prepare: parsePrepare(config.prepare), statusContext: statusContext.trim() }
+    const registeredPatches = config.registeredPatches === undefined ? true : config.registeredPatches
+    if (typeof registeredPatches !== 'boolean') {
+        throw new Error('"registeredPatches" must be true or false.')
+    }
+
+    return { base, php: php === null ? null : String(php), chain, deny, jobs, prepare: parsePrepare(config.prepare), registeredPatches, statusContext: statusContext.trim() }
+}
+
+// The check that every patch a locked `uams-web/patches-*` package declares is registered at the
+// root (UAMS-Web/uams-claude-skills#768). The runner adds it as a job on its own when the lock
+// names such a package (UAMS-Web/uams-claude-skills#770), so a repository needs no `local-ci.json`
+// entry, and no per-repository edit when the check moves.
+export const REGISTERED_PATCHES_JOB = 'patches-registered'
+export const REGISTERED_PATCHES_CHECK = '.claude/skills/upstream-patch-lifecycle/scripts/check-registered-patches.mjs'
+const PATCHES_PACKAGE_PREFIX = 'uams-web/patches-'
+
+/**
+ * The `uams-web/patches-*` packages `composer.lock` locks, from `packages` and `packages-dev`.
+ * A missing lock is no packages; a lock that is not JSON is an error, since a run that cannot
+ * read it cannot say whether the check applies.
+ */
+export function lockedPatchesPackages(repoRoot) {
+    const file = join(repoRoot, 'composer.lock')
+    if (!existsSync(file)) {
+        return []
+    }
+    let lock
+    try {
+        lock = JSON.parse(readFileSync(file, 'utf8'))
+    } catch (error) {
+        throw new Error(`composer.lock cannot be read as JSON, so the runner cannot tell whether a patches-* package is locked: ${error.message}`)
+    }
+    const packages = [...(Array.isArray(lock?.packages) ? lock.packages : []), ...(Array.isArray(lock?.['packages-dev']) ? lock['packages-dev'] : [])]
+    return packages.filter((p) => typeof p?.name === 'string' && p.name.toLowerCase().startsWith(PATCHES_PACKAGE_PREFIX)).map((p) => p.name)
+}
+
+/**
+ * The config with the `patches-registered` job added when a patches package is locked, unless
+ * `"registeredPatches": false` opts out or the config already defines a job of that name (the
+ * repository's own entry then stands, so a copy of the template's job is never run twice).
+ */
+export function withImplicitJobs(config, lockedPackages) {
+    if (!config.registeredPatches || lockedPackages.length === 0 || config.jobs.some((job) => job.name === REGISTERED_PATCHES_JOB)) {
+        return config
+    }
+    const job = {
+        name: REGISTERED_PATCHES_JOB,
+        run: `node ${REGISTERED_PATCHES_CHECK}`,
+        paths: [],
+        each: [],
+        always: true,
+        requires: [normalizeRequirement('bin:node', 'the implicit patches-registered job')],
+        mutation: null,
+        parallel: null,
+        database: null,
+        php: null,
+        installs: false,
+        implicit: true,
+    }
+    return { ...config, jobs: [...config.jobs, job] }
 }
 
 const PREPARE_KEYS = ['submodules', 'residue', 'patches']
@@ -725,11 +786,13 @@ export function loadConfig(repoRoot) {
             `${CONFIG_FILE} not found at ${repoRoot}. Copy .claude/skills/local-ci/templates/${CONFIG_FILE} there and edit its jobs.`,
         )
     }
+    let config
     try {
-        return parseConfig(readFileSync(file, 'utf8'))
+        config = parseConfig(readFileSync(file, 'utf8'))
     } catch (error) {
         throw new Error(`${CONFIG_FILE}: ${error.message}`)
     }
+    return withImplicitJobs(config, config.registeredPatches ? lockedPatchesPackages(repoRoot) : [])
 }
 
 // --- globs -----------------------------------------------------------------
@@ -939,11 +1002,15 @@ function partsNote(result) {
 }
 
 export function formatDuration(ms) {
-    if (ms < 60_000) {
-        return `${(ms / 1000).toFixed(1)}s`
+    // Choose the branch on the value as printed, so 59,950 ms (which prints as 60.0) takes the minute form.
+    const tenths = (ms / 1000).toFixed(1)
+    if (Number(tenths) < 60) {
+        return `${tenths}s`
     }
-    const minutes = Math.floor(ms / 60_000)
-    const seconds = Math.round((ms % 60_000) / 1000)
+    // Round once, then derive both fields, so a remainder that rounds to 60 carries into the minute.
+    const total = Math.round(ms / 1000)
+    const minutes = Math.floor(total / 60)
+    const seconds = total % 60
     return `${minutes}m ${String(seconds).padStart(2, '0')}s`
 }
 

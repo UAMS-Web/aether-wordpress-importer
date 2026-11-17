@@ -118,23 +118,12 @@ class ShortcodeProcessor
     private const int LIST_SLASH = 256;
 
     /**
-     * Registered shortcode handlers mapped to set types.
+     * Registered shortcode handlers mapped to set types, filled from
+     * defaultHandlers() on first use.
      *
-     * @var array<string, array{set: string, class: string}>
+     * @var array<string, array{set: string, class: string}>|null
      */
-    private array $handlers = [
-        'show-people' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
-        'show-team' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
-        'gravityform' => ['set' => 'form', 'class' => GravityFormsShortcodeProcessor::class],
-        'formidable' => ['set' => 'form', 'class' => FormidableFormsShortcodeProcessor::class],
-        'ninja_form' => ['set' => 'form', 'class' => NinjaFormsShortcodeProcessor::class],
-        'table' => ['set' => 'table', 'class' => TablePressShortcodeProcessor::class],
-        'caption' => ['set' => 'image', 'class' => CaptionShortcodeProcessor::class],
-        'audio' => ['set' => 'audio', 'class' => AudioShortcodeProcessor::class],
-        'accordion' => ['set' => 'accordion', 'class' => AccordionShortcodeProcessor::class],
-        'gallery' => ['set' => 'gallery', 'class' => GalleryShortcodeProcessor::class],
-        'blogroll' => ['set' => 'news', 'class' => BlogrollShortcodeProcessor::class],
-    ];
+    private ?array $handlers = null;
 
     /**
      * Shortcodes that are recognized but intentionally produce no output.
@@ -156,6 +145,8 @@ class ShortcodeProcessor
      *
      * @var string[]
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private array $droppedShortcodes = [
         'subpage-list',
     ];
@@ -172,6 +163,8 @@ class ShortcodeProcessor
      *
      * @var string
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: EmptyStringToNotEmpty
     protected $pageId = '';
 
     /**
@@ -179,6 +172,8 @@ class ShortcodeProcessor
      *
      * @var string
      */
+    // PCOV records no line for a property default; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: EmptyStringToNotEmpty
     protected $pageLink = '';
 
     /**
@@ -223,7 +218,7 @@ class ShortcodeProcessor
             // Recognized-but-dropped shortcodes (e.g. subpage-list) must still be
             // extracted so callers can strip them; skipping here would leak the raw
             // [shortcode] text and trigger a spurious "No shortcodes extracted" warning.
-            if (! isset($this->handlers[$name]) && ! $this->isDroppedShortcode($name)) {
+            if (! isset($this->handlers()[$name]) && ! $this->isDroppedShortcode($name)) {
                 continue;
             }
 
@@ -332,7 +327,7 @@ class ShortcodeProcessor
         }
 
         // Without a handler, warn and keep the content in an unknown set
-        if (! isset($this->handlers[$shortcodeName])) {
+        if (! isset($this->handlers()[$shortcodeName])) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -509,7 +504,7 @@ class ShortcodeProcessor
         $this->pageLink = self::extractScalarString($shortcode['link'] ?? null);
 
         $name = $shortcodeName;
-        if (! isset($this->handlers[$name])) {
+        if (! isset($this->handlers()[$name])) {
             // Recognized-but-dropped shortcodes emit nothing and are not unaddressed.
             if ($this->isDroppedShortcode($name)) {
                 return null;
@@ -653,7 +648,7 @@ class ShortcodeProcessor
         // A lone registered shortcode wrapped in <p> becomes the handler markup alone
         if (
             \count($shortcodes) === 1
-            && isset($this->handlers[$shortcodes[0]['name']])
+            && isset($this->handlers()[$shortcodes[0]['name']])
             && \preg_match(
                 '/^<p>\s*'.preg_quote(
                     $shortcodes[0]['original'],
@@ -728,7 +723,7 @@ class ShortcodeProcessor
 
             // Leave registered and dropped shortcodes to extract(), and prose alone
             if (
-                isset($this->handlers[$name])
+                isset($this->handlers()[$name])
                 || $this->isDroppedShortcode($name)
                 || ! self::looksLikeShortcode($name, $match[2], isset($match[3]))
             ) {
@@ -1040,7 +1035,8 @@ class ShortcodeProcessor
         string $setType,
         string $handlerClass
     ): void {
-        $this->handlers[$name] = ['set' => $setType, 'class' => $handlerClass];
+        // Fill the defaults first, so a registration adds to them
+        $this->handlers = [...$this->handlers(), $name => ['set' => $setType, 'class' => $handlerClass]];
     }
 
     /**
@@ -1055,11 +1051,46 @@ class ShortcodeProcessor
     private function instantiateHandler(
         string $name
     ): object {
-        $handlerClass = $this->handlers[$name]['class'];
+        $handlerClass = $this->handlers()[$name]['class'];
 
         return ($handlerClass === PeopleShortcodeProcessor::class)
             ? new $handlerClass($name)
             : new $handlerClass;
+    }
+
+    /**
+     * The shortcode handlers registered before any registerHandler() call.
+     *
+     * A method rather than a property default, so the list is built on a line
+     * coverage records and removing an entry is a mutant the tests run.
+     *
+     * @return array<string, array{set: string, class: string}> The handlers
+     */
+    private static function defaultHandlers(): array
+    {
+        return [
+            'show-people' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
+            'show-team' => ['set' => 'people', 'class' => PeopleShortcodeProcessor::class],
+            'gravityform' => ['set' => 'form', 'class' => GravityFormsShortcodeProcessor::class],
+            'formidable' => ['set' => 'form', 'class' => FormidableFormsShortcodeProcessor::class],
+            'ninja_form' => ['set' => 'form', 'class' => NinjaFormsShortcodeProcessor::class],
+            'table' => ['set' => 'table', 'class' => TablePressShortcodeProcessor::class],
+            'caption' => ['set' => 'image', 'class' => CaptionShortcodeProcessor::class],
+            'audio' => ['set' => 'audio', 'class' => AudioShortcodeProcessor::class],
+            'accordion' => ['set' => 'accordion', 'class' => AccordionShortcodeProcessor::class],
+            'gallery' => ['set' => 'gallery', 'class' => GalleryShortcodeProcessor::class],
+            'blogroll' => ['set' => 'news', 'class' => BlogrollShortcodeProcessor::class],
+        ];
+    }
+
+    /**
+     * The registered shortcode handlers, filled from defaultHandlers() on first use.
+     *
+     * @return array<string, array{set: string, class: string}> The handlers
+     */
+    private function handlers(): array
+    {
+        return $this->handlers ??= self::defaultHandlers();
     }
 
     /**
@@ -1071,7 +1102,7 @@ class ShortcodeProcessor
      */
     public function getHandlers(): array
     {
-        return $this->handlers;
+        return $this->handlers();
     }
 
     /**

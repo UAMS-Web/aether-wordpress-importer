@@ -28,12 +28,16 @@ class TableProcessor implements BlockProcessorInterface
      * The most columns a table is laid out to. It is the widest a single `colspan`
      * can be in HTML, and it keeps hostile spans from growing a grid out of memory.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int MAX_COLUMNS = 1000;
 
     /**
      * The longest caption a photo in a table of photos takes, in characters. A
      * longer run of text after a photo is an article, not a caption (#489).
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int MAX_PHOTO_CAPTION_LENGTH = 500;
 
     /**
@@ -393,8 +397,9 @@ class TableProcessor implements BlockProcessorInterface
         }
 
         // saveHTML() returns false only for a node of another document, and the
-        // image belongs to the table's own document
-        // @pest-mutate-ignore: RemoveStringCast
+        // image belongs to the table's own document. The table holds an image, so
+        // it is in a document and its ownerDocument is never null.
+        // @pest-mutate-ignore: RemoveStringCast, RemoveNullSafeOperator
         $image = (string) $table->ownerDocument?->saveHTML($first);
 
         ImportWarningManager::addWarning(
@@ -469,6 +474,8 @@ class TableProcessor implements BlockProcessorInterface
         $document = $table->ownerDocument;
 
         if (
+            // A table that holds an image is in a document
+            // @pest-mutate-ignore: InstanceOfToTrue
             ! $document instanceof DOMDocument
             || $table->getElementsByTagName('img')->length === 0
             || ! $this->isDataTable($table)
@@ -522,6 +529,8 @@ class TableProcessor implements BlockProcessorInterface
 
         foreach ($photos as $photo) {
             $figure = $document->createElement('figure');
+            // An image is a void element with no children, so a deep copy is the same
+            // @pest-mutate-ignore: FalseToTrue
             $figure->appendChild($photo['image']->cloneNode(false));
 
             if ($photo['caption'] !== '') {
@@ -531,6 +540,9 @@ class TableProcessor implements BlockProcessorInterface
             }
 
             $figures[] = [
+                // saveHTML() returns false only for a node of another document, and
+                // the figure was made by the table's own document
+                // @pest-mutate-ignore: RemoveStringCast
                 'figure' => (string) $document->saveHTML($figure),
                 'caption' => $photo['caption'],
             ];
@@ -550,7 +562,7 @@ class TableProcessor implements BlockProcessorInterface
     ): bool {
         foreach ($node->childNodes as $child) {
             // A cell's text is a caption, read with its photos
-            if ($child instanceof DOMElement && \in_array($child->tagName, ['td', 'th'], true)) {
+            if ($child instanceof DOMElement && ($child->tagName === 'td' || $child->tagName === 'th')) {
                 continue;
             }
 
@@ -598,9 +610,13 @@ class TableProcessor implements BlockProcessorInterface
             if ($child instanceof DOMText) {
                 $last = \array_key_last($photos);
 
+                // Each text is read apart from the next, as across a <br>. A caption
+                // is normalized, so which side the space falls on changes nothing.
                 if ($last === null) {
+                    // @pest-mutate-ignore: ConcatSwitchSides
                     $lead .= ' '.$child->textContent;
                 } else {
+                    // @pest-mutate-ignore: ConcatSwitchSides
                     $photos[$last]['caption'] .= ' '.$child->textContent;
                 }
 
@@ -612,8 +628,8 @@ class TableProcessor implements BlockProcessorInterface
     }
 
     /**
-     * Collapses each run of white space in a text to one space, reading a
-     * non-breaking space as white space.
+     * Collapses each run of white space in a text to one space. Under `/u`, `\s`
+     * matches a non-breaking space too.
      *
      * @param  string  $text  The text
      * @return string The text, trimmed, with each run of white space as one space
@@ -621,13 +637,10 @@ class TableProcessor implements BlockProcessorInterface
     private static function normalizeText(
         string $text
     ): string {
-        return \trim(
-            (string) \preg_replace(
-                '/\s+/u',
-                ' ',
-                \str_replace("\u{A0}", ' ', $text)
-            )
-        );
+        // preg_replace() returns null only for text that is not UTF-8, and a DOM
+        // node's text always is
+        // @pest-mutate-ignore: RemoveStringCast
+        return \trim((string) \preg_replace('/\s+/u', ' ', $text));
     }
 
     /**
