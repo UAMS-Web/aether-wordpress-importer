@@ -926,7 +926,7 @@ class WxrMaterializer
                 'The duplicate disposition refused "%s": %s The part was left as written.',
                 $path,
                 $runtimeException->getMessage()
-            ), 0, $runtimeException);
+            ), $runtimeException->getCode(), previous: $runtimeException);
         }
     }
 
@@ -974,7 +974,7 @@ class WxrMaterializer
                 'The duplicate disposition "%s" could not be read: %s',
                 $path,
                 $invalidArgumentException->getMessage()
-            ), 0, $invalidArgumentException);
+            ), $invalidArgumentException->getCode(), previous: $invalidArgumentException);
         }
 
         // A file naming another site would drop that site's post ids from this one
@@ -1007,7 +1007,9 @@ class WxrMaterializer
      */
     private static function dispositionDirectory(): string
     {
-        // The class is `src/Disposition/DuplicateDisposition.php`, three levels below the root
+        // The class is `src/Disposition/DuplicateDisposition.php`, three levels below the root.
+        // `getFileName()` is false only for a class built into PHP, which this is not.
+        // @pest-mutate-ignore: RemoveStringCast
         $file = (string) new ReflectionClass(DuplicateDisposition::class)->getFileName();
 
         return \dirname($file, 3).\DIRECTORY_SEPARATOR.'dispositions';

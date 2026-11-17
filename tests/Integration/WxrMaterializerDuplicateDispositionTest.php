@@ -233,14 +233,25 @@ function dispositionManifest(string $directory): array
  */
 function dispositionDroppedIds(string $directory): array
 {
-    $record = dispositionManifest($directory)['duplicate_disposition'] ?? null;
-    $dropped = \is_array($record) ? ($record['dropped'] ?? null) : null;
+    return dispositionRecordedIds($directory, 'dropped');
+}
 
-    if (! \is_array($dropped)) {
-        throw new RuntimeException('The manifest records no dropped posts.');
+/**
+ * The post ids the run's manifest records under one key of its disposition record.
+ *
+ * @param  string  $key  `dropped` or `renamed`
+ * @return list<int>
+ */
+function dispositionRecordedIds(string $directory, string $key): array
+{
+    $record = dispositionManifest($directory)['duplicate_disposition'] ?? null;
+    $ids = \is_array($record) ? ($record[$key] ?? null) : null;
+
+    if (! \is_array($ids)) {
+        throw new RuntimeException('The manifest records no '.$key.' posts.');
     }
 
-    return \array_values(\array_filter($dropped, \is_int(...)));
+    return \array_values(\array_filter($ids, \is_int(...)));
 }
 
 /**
@@ -432,7 +443,9 @@ it('drops a set whose members fall in different parts', function (): void {
 
     expect($paths)->toHaveCount(3)
         ->and(\array_column(dispositionParsedPosts($paths), 'id'))->toBe([12240, 12335, 501])
-        ->and(dispositionDroppedIds($this->workingDirectory))->toBe([16831, 12287, 16828]);
+        ->and(dispositionDroppedIds($this->workingDirectory))->toBe([16831, 12287, 16828])
+        // 12335 is renamed in the second of three parts, so only a record kept across parts holds it
+        ->and(dispositionRecordedIds($this->workingDirectory, 'renamed'))->toBe([12335]);
 });
 
 it('refuses a disposition file it cannot read', function (): void {
