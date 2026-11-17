@@ -21,7 +21,10 @@ declare(strict_types=1);
  * without the original field, so a `#not_set` entry always matches there: the
  * data lacks the attribute. The cases that show which entry opened the pass
  * therefore carry a `#not_set` entry as well, and read `NS` when the pass ran.
- * A `#not_set` entry writes nothing for an empty target (#458).
+ * A `#not_set` entry writes nothing for an empty target (#458). A fieldtype
+ * table reaches this pass unresolved only when a `based_on` key keeps the
+ * whole `value_translation`, and the pass then maps the attribute again with
+ * the fieldtype, so that table is the one read (#543).
  *
  * The mappings here are written for each case rather than taken from the
  * shipped tables, so each case shows one rule.
@@ -161,6 +164,33 @@ it('reads a table by another attribute whatever the fieldtype table holds (#542)
     expect(mapFormsMissingTranslation(['based_on_other_attribute_value' => $table, 'specific' => ['radio' => ['x' => 'P']]], ['o' => 'v'], 'radio'))->toBe(['a' => 'B'])
         ->and(mapFormsMissingTranslation(['based_on_other_attribute_value' => $table, 'specific' => ['zz' => ['#not_set' => 'N']]], ['o' => 'v'], 'zz'))->toBe(['a' => 'B']);
 });
+
+it('writes the #not_set of a fieldtype table that reaches the last pass whole (#543)', function (
+    array $translation,
+    ?string $fieldtype,
+    ?array $original,
+    mixed $target,
+    array $expected
+): void {
+    // A based_on key keeps value_translation whole rather than resolved to the
+    // fieldtype's table, so only the last pass can write that table's entries
+    expect(mapFormsMissingTranslation(['based_on_attribute_value' => []] + $translation, [], $fieldtype, $original, $target))->toBe($expected);
+})->with([
+    'an unset option' => [['specific' => ['radio' => ['#not_set' => 'N']]], 'radio', FORMS_MT_UNSET, 'a', ['a' => 'N']],
+    'an unset option, over a default' => [['specific' => ['radio' => ['#not_set' => 'N']], 'default' => ['#empty' => 'D']], 'radio', FORMS_MT_UNSET, 'a', ['a' => 'N']],
+    'no original field' => [['specific' => ['radio' => ['#not_set' => 'N']]], 'radio', null, 'a', ['a' => 'N']],
+    'a set option' => [['specific' => ['radio' => ['#not_set' => 'N']]], 'radio', FORMS_MT_SET, 'a', []],
+    'a target kept whole' => [['specific' => ['radio' => ['#not_set' => 'N']]], 'radio', FORMS_MT_UNSET, ['based_on_attribute_value' => [], 'default' => 'a'], ['a' => 'N']],
+    'an empty target' => [['specific' => ['radio' => ['#not_set' => 'N']]], 'radio', FORMS_MT_UNSET, '', []],
+    // Mapping again translates null through the fieldtype's table, where #not_set matches
+    'an empty option, by #empty' => [['specific' => ['radio' => ['#not_set' => 'P', '#empty' => 'E']]], 'radio', FORMS_MT_EMPTY, 'a', ['a' => 'P']],
+    'a set option, by #not_empty' => [['specific' => ['radio' => ['#not_set' => 'P', '#not_empty' => 'X']]], 'radio', FORMS_MT_SET, 'a', ['a' => 'P']],
+    'a set option, by null' => [['specific' => ['radio' => ['#not_set' => 'P', 'null' => 'X']]], 'radio', FORMS_MT_SET, 'a', ['a' => 'P']],
+    // A table for no fieldtype opens nothing: the default's #empty would write `D` if it did
+    'another fieldtype' => [['specific' => ['radio' => ['#not_set' => 'P']], 'default' => ['#empty' => 'D']], 'select', FORMS_MT_EMPTY, 'a', []],
+    'an empty fieldtype' => [['specific' => ['' => ['#not_set' => 'P']], 'default' => ['#empty' => 'D']], '', FORMS_MT_EMPTY, 'a', []],
+    'no fieldtype' => [['specific' => ['' => ['#not_set' => 'P']], 'default' => ['#empty' => 'D']], null, FORMS_MT_EMPTY, 'a', []],
+]);
 
 it('writes to the target the mapping names', function (): void {
     expect(mapFormsMissingTranslation(['#not_set' => 'NS'], [], null, null, ['default' => 'b']))->toBe(['b' => 'NS'])

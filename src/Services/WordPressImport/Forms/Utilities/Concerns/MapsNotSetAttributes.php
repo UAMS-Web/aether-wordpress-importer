@@ -668,10 +668,24 @@ trait MapsNotSetAttributes
                     $hasNotSetCases = true;
                 } else { // Check for complex structure with #not_set or #not_empty
                     $defaultTranslations = self::asArray($translationConfig['default'] ?? null);
+                    $specificTranslations = self::asArray($translationConfig['specific'] ?? null);
                     $basedOnOtherAttributeValue = self::asArray($translationConfig['based_on_other_attribute_value'] ?? null);
 
-                    // A fieldtype table is not read here: an earlier pass has written its special
-                    // cases, and this pass would write the same values again.
+                    // Check the table for the source fieldtype, which the pass below picks under the
+                    // same condition. getFieldtypeSpecificConfig() resolves a fieldtype table to a
+                    // plain one, which the earlier passes write, unless value_translation also holds
+                    // a based_on key; then the table arrives here whole, and no earlier pass writes
+                    // its #not_set (#543).
+                    if (
+                        $excludeFieldtype !== null
+                        && $excludeFieldtype !== ''
+                        && self::arrayKeyExists(
+                            '#not_set',
+                            self::asArray($specificTranslations[$excludeFieldtype] ?? null)
+                        )
+                    ) {
+                        $hasNotSetCases = true;
+                    }
 
                     // Check default translations
                     if (
@@ -924,7 +938,8 @@ trait MapsNotSetAttributes
                                     $config,
                                     $data,
                                     null,
-                                    null
+                                    null,
+                                    $excludeFieldtype
                                 );
                                 if ($resolvedMapping !== null && $resolvedMapping !== []) {
                                     $mappedData = \array_merge(
@@ -951,7 +966,8 @@ trait MapsNotSetAttributes
                                     $config,
                                     $data,
                                     null,
-                                    null
+                                    null,
+                                    $excludeFieldtype
                                 );
                                 if ($resolvedMapping !== null && $resolvedMapping !== []) {
                                     $mappedData = \array_merge(
@@ -988,7 +1004,8 @@ trait MapsNotSetAttributes
                                 $config,
                                 $data,
                                 null,
-                                null
+                                null,
+                                $excludeFieldtype
                             );
                             if ($resolvedMapping !== null && $resolvedMapping !== []) {
                                 $mappedData = \array_merge(
@@ -1024,7 +1041,8 @@ trait MapsNotSetAttributes
                                 $config,
                                 $data,
                                 null,
-                                null
+                                null,
+                                $excludeFieldtype
                             );
                             if ($resolvedMapping !== null && $resolvedMapping !== []) {
                                 $mappedData = \array_merge(
@@ -1053,7 +1071,8 @@ trait MapsNotSetAttributes
                             $config,
                             $data,
                             null,
-                            null
+                            null,
+                            $excludeFieldtype
                         );
                         if ($resolvedMapping !== null && $resolvedMapping !== []) {
                             $mappedData = \array_merge(
