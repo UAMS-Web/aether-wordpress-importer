@@ -39,7 +39,29 @@ runs:
         extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
         coverage: ${{ inputs.coverage }}
         tools: composer:v2
-        ini-values: ${{ runner.os == 'Windows' && 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=function' || 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing' }}
+        ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
+
+    # Experiment for #341, not for merge: run the Windows leg on the PHP 8.4.28RC1 build from
+    # windows.php.net's QA feed, whose changelog lists tracing-JIT segfault fixes. The zip is
+    # checked against the SHA-256 the feed publishes, unpacked over the install setup-php made,
+    # and setup-php's php.ini is kept, so the extensions and JIT settings above still apply.
+    - name: Replace PHP with 8.4.28RC1 on Windows (#341 experiment)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $zip = Join-Path $env:RUNNER_TEMP 'php-8.4.28RC1.zip'
+        Invoke-WebRequest -Uri 'https://downloads.php.net/~windows/qa/php-8.4.28RC1-nts-Win32-vs17-x64.zip' -OutFile $zip
+        $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne '898509521d957ddf0a3eaa5aec0a7d7ae2ccf15606544ef4c48aaf026c2d6386') { throw "SHA-256 mismatch: $hash" }
+        $dir = Split-Path (Get-Command php).Source
+        $ini = Join-Path $dir 'php.ini'
+        $saved = Join-Path $env:RUNNER_TEMP 'php.ini.setup-php'
+        Copy-Item $ini $saved
+        Expand-Archive -Path $zip -DestinationPath $dir -Force
+        Copy-Item $saved $ini -Force
+        php -v
+        php -r "echo 'opcache.jit=', ini_get('opcache.jit'), PHP_EOL;"
+        php -m
 
     - name: Configure Composer GitHub token
       shell: bash
