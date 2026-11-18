@@ -79,7 +79,7 @@ For each comment or docblock changed, check each statement against the code it d
 
 ### Mutation testing
 
-Run `vendor/bin/pest --mutate --class="<Namespace>\\…\\<ChangedClass>"` diff-scoped; a **survivor is a false-green test**. **`0 Mutations for 0 Files created` is a setup failure.**
+Run `vendor/bin/pest --mutate --class="<Namespace>\\…\\<ChangedClass>"` diff-scoped; a **survivor is a false-green test**. **`0 Mutations for 0 Files created` is a setup failure.** **A closing measurement runs without `--covered-only`**: the flag mutates only lines the tests already execute, so a class whose tests miss most of it still reads 100% (100% on 89 mutants with the flag, 37 of 108 killed without it, `UAMS-Web/uams-statamic#1030`).
 
 **The criterion is *no unexplained survivors*, never a score or a `min_score` gate.** Each survivor is **killed**, **deleted** (dead code), or **annotated with why it cannot be killed**.
 
@@ -102,7 +102,7 @@ Or skip the only covering test, confirm it is skipped, and require the mutant to
 
 Here: `vendor/bin/pest --mutate --path=src --class="UAMSWeb\Aether\WordPressImporter\<Class>"`.
 
-Pass a relative `--path`; in a linked worktree, `vendor/bin/pest <test-file> --mutate --path=<source dir>/<Subdir> --class="<Namespace>\<Class>" --covered-only`; on Windows relaunch under a trimmed `env -i`; see [`pcov-setup`](../skills/pcov-setup/SKILL.md).
+Pass a relative `--path`; in a linked worktree, `vendor/bin/pest <test-file> --mutate --path=<source dir>/<Subdir> --class="<Namespace>\<Class>"`; on Windows relaunch under a trimmed `env -i`; see [`pcov-setup`](../skills/pcov-setup/SKILL.md).
 
 ### Property-based / round-trip tests
 

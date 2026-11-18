@@ -233,7 +233,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { accessSync, constants, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, unlinkSync } from 'node:fs'
+import { accessSync, constants, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, unlinkSync } from 'node:fs'
 import { constants as osConstants, homedir, tmpdir } from 'node:os'
 import { basename, delimiter, dirname, extname, join, posix, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -726,6 +726,72 @@ export function mutationProblems(output, minScore) {
         problems.push(`mutation score ${score[1]}% is below the configured minimum of ${minScore}%`)
     }
     return problems
+}
+
+// The plugin Pest's mutation run executes, and the command that restores its patches.
+export const MUTATE_PACKAGE = 'pestphp/pest-plugin-mutate'
+export const MUTATE_REINSTALL = `composer reinstall ${MUTATE_PACKAGE}`
+
+// The patches patches.lock.json records for the mutation plugin, in lock order
+// (UAMS-Web/uams-claude-skills#821). A plain `composer install` that moves the patches package
+// can leave the plugin without patches the lock records, and a mutation run then looks normal while
+// annotations stop working and mutants go uncounted. Text that is not a lock throws: reading it as
+// "no patches" would let a broken lock pass.
+export function lockedMutatePatches(lockText) {
+    if (lockText === null) {
+        return []
+    }
+    let parsed
+    try {
+        parsed = JSON.parse(lockText)
+    } catch (error) {
+        throw new Error(`patches.lock.json is not valid JSON (${error.message}).`)
+    }
+    const patches = parsed?.patches ?? {}
+    if (typeof patches !== 'object' || Array.isArray(patches)) {
+        throw new Error('patches.lock.json has a "patches" that is not an object.')
+    }
+    const entries = patches[MUTATE_PACKAGE] ?? []
+    if (!Array.isArray(entries)) {
+        throw new Error(`patches.lock.json records ${MUTATE_PACKAGE} patches as something other than a list.`)
+    }
+    return entries.map((entry) => ({ url: String(entry?.url ?? ''), description: String(entry?.description ?? ''), depth: Number.isInteger(entry?.depth) ? entry.depth : 1 }))
+}
+
+// The reasons the installed mutation plugin does not carry every patch the lock records (empty when it
+// does, and when the lock records none). A patch is applied when it reverses cleanly, so each is
+// reverse-applied, last first, to a scratch copy of the installed plugin: reversing one in place would
+// change the tree, and a patch that overlaps a later one only reverses once the later one is out.
+// Nothing here reinstalls or writes to vendor/.
+export function missingMutatePatches({ repoRoot, lockText, run = spawnSync }) {
+    const entries = lockedMutatePatches(lockText)
+    if (entries.length === 0) {
+        return []
+    }
+    const installed = join(repoRoot, 'vendor', ...MUTATE_PACKAGE.split('/'))
+    if (!existsSync(installed)) {
+        return [`${MUTATE_PACKAGE} is not installed under vendor/, so its ${entries.length} locked patch${entries.length === 1 ? '' : 'es'} cannot be checked`]
+    }
+    const scratch = mkdtempSync(join(tmpdir(), 'local-ci-mutate-patches-'))
+    try {
+        cpSync(installed, scratch, { recursive: true })
+        const problems = []
+        for (const entry of [...entries].reverse()) {
+            const label = `${basename(entry.url)}${entry.description === '' ? '' : ` (${entry.description})`}`
+            const file = join(repoRoot, entry.url)
+            if (entry.url === '' || !existsSync(file)) {
+                problems.push(`${label}: the patch file is not at ${entry.url === '' ? 'a recorded path' : entry.url}, so whether it is applied cannot be checked`)
+                continue
+            }
+            const result = run('git', ['apply', '--reverse', '--ignore-whitespace', `-p${entry.depth}`, file], { cwd: scratch, encoding: 'utf8' })
+            if (result.error || result.status !== 0) {
+                problems.push(`${label}: not applied to vendor/${MUTATE_PACKAGE}`)
+            }
+        }
+        return problems.reverse()
+    } finally {
+        rmSync(scratch, { recursive: true, force: true })
+    }
 }
 
 const BIN_PREFIX = 'bin:'
@@ -2220,6 +2286,20 @@ function makeExecutor({ repoRoot, config, php, jobPhps = new Map(), trackedFiles
         const jobEnv = { ...jobEnvironment(env, job, config.jobs), ...(own ? { LOCAL_CI_PHP: own.path } : {}) }
         const command = commandFor(job.run, phpPath)
         if (job.mutation) {
+            let missing
+            try {
+                missing = missingMutatePatches({ repoRoot, lockText: readOrNull(join(repoRoot, 'patches.lock.json')) })
+            } catch (error) {
+                missing = [error.message]
+            }
+            if (missing.length > 0) {
+                console.log(red(`  ${MUTATE_PACKAGE} does not carry every patch patches.lock.json records, so the mutation run was not started:`))
+                for (const problem of missing) {
+                    console.log(red(`    ${problem}`))
+                }
+                console.log(red(`  Restore them with: ${MUTATE_REINSTALL}`))
+                return { code: 1 }
+            }
             console.log(`  $ ${command}`)
             const { code, output } = runShell(command, repoRoot, jobEnv, { capture: true })
             process.stdout.write(output === '' || output.endsWith('\n') ? output : `${output}\n`)
