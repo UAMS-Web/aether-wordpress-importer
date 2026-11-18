@@ -6,7 +6,7 @@
     "jobs": [
       {
         "name": "mutate",
-        "run": "vendor/bin/pest tests/Unit/Support/UamsAlert/AlertSiteKeyResolverTest.php --mutate --path=app/Support/UamsAlert --class=\"App\\Support\\UamsAlert\\AlertSiteKeyResolver\" --covered-only",
+        "run": "vendor/bin/pest tests/Unit/Support/UamsAlert/AlertSiteKeyResolverTest.php --mutate --path=app/Support/UamsAlert --class=\"App\\Support\\UamsAlert\\AlertSiteKeyResolver\"",
         "mutation": { "minScore": 100 },
         "paths": ["app/**", "tests/**", "phpunit.xml*", "composer.lock"],
         "requires": ["vendor/bin/pest"]
