@@ -188,4 +188,5 @@ These are pointers for any agent; none of them loads automatically. Open the one
 - [`docs/performance/`](docs/performance) — import performance work.
 - [`docs/migration-api-contract.md`](docs/migration-api-contract.md) — the migration API's endpoints, pagination and query semantics, verified against a running install. Includes what `?site=` is declared on versus refused by, that `/options` is not paginated, and the `exposed`-reflects-plugin-activation trap.
 - [`docs/runbooks/migration-api-secret.md`](docs/runbooks/migration-api-secret.md) — the migration API shared secret: generate, place, verify, rotate, remove. **Read it before any command that touches `wp-config.php` or a host `.env`** — every auth failure returns an identical `401`, and a careless `grep -n` prints the credential into the transcript.
-- [`README.md`](README.md) — install, usage, mappings, safeguards, fixtures, releasing.
+- [`README.md`](README.md): install, a quick start, fixtures, the public surface, releasing.
+- [`docs/wiki/`](docs/wiki): the user documentation (first import, migration API setup, `--verify`, menus and MinervaKB, the command reference, mappings, safeguards, troubleshooting), published to the repository's GitHub wiki by `.github/workflows/publish-wiki.yml`.
