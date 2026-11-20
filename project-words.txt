@@ -336,3 +336,7 @@ userinfo
 wistia
 xuamswp
 youtu
+ampcode
+cntrl
+phpcs
+sprintf

@@ -144,6 +144,16 @@
 //              the first line is absent, when either count is 0 (Pest exits 0
 //              on `0 Mutations for 0 Files created`), when the score line is
 //              absent, or when the score is below `minScore` (default 100).
+//              Before the command starts, the locked plugin patches are
+//              checked and then the pcov-setup skill's
+//              check-mutation-instrument.php runs. instrumentStopsRun
+//              decides what a failed check does: a check that is missing,
+//              crashed or never started, a form that cannot launch without
+//              a guard, an exit 1 where patches are recorded, and an exit 2
+//              or NOT MEASURED on a bare selection fail the job without
+//              starting the run; an exit 2 or NOT MEASURED on a named
+//              selection, and (temporarily, #857) an exit 1 from the probe
+//              child alone where no patch is recorded, run behind a warning.
 //              Not combinable with `each`.
 //     parallel `{"serialGroup": "serial", "memoryLimit": "4G", "processes": 4}`: runs the job as
 //              two parts, for a Pest suite with tests that cannot run in
@@ -747,7 +757,9 @@ export function lockedMutatePatches(lockText) {
     } catch (error) {
         throw new Error(`patches.lock.json is not valid JSON (${error.message}).`)
     }
-    const patches = parsed?.patches ?? {}
+    // composer-patches 2.x writes an empty collection as `"patches": []` (a PHP empty array).
+    const raw = parsed?.patches ?? {}
+    const patches = Array.isArray(raw) && raw.length === 0 ? {} : raw
     if (typeof patches !== 'object' || Array.isArray(patches)) {
         throw new Error('patches.lock.json has a "patches" that is not an object.')
     }
@@ -792,6 +804,177 @@ export function missingMutatePatches({ repoRoot, lockText, run = spawnSync }) {
     } finally {
         rmSync(scratch, { recursive: true, force: true })
     }
+}
+
+// The check that a mutant child can be launched and reaches a test, which the `pcov-setup` skill ships,
+// and the command that restores the patches a `vendor/` is missing (UAMS-Web/uams-claude-skills#849).
+// A child that crashes exits non-zero and the plugin scores it as a kill, so a `vendor/` without a
+// patch its lock records can report every mutant killed; the patch can be on any package (Patchwork's
+// directory wrapper, not the mutation plugin, was the one missing in the run that prompted this).
+export const MUTATION_INSTRUMENT = '.claude/skills/pcov-setup/scripts/check-mutation-instrument.php'
+export const MUTATION_REPATCH = 'composer patches-repatch'
+
+// The first PHP file under a path, in sorted order, or null. A file is its own answer.
+function firstPhpFile(path) {
+    let stat
+    try {
+        stat = statSync(path)
+    } catch {
+        return null
+    }
+    if (stat.isFile()) {
+        return path.endsWith('.php') ? path : null
+    }
+    if (!stat.isDirectory()) {
+        return null
+    }
+    for (const entry of readdirSync(path).sort()) {
+        const found = firstPhpFile(join(path, entry))
+        if (found !== null) {
+            return found
+        }
+    }
+    return null
+}
+
+// The arguments the instrument check takes so its probe child is started the way the job's mutant
+// children are. The plugin starts each child with the parent's argv[0], which PHP sets to the script
+// path as typed, so the program to probe is the script: `vendor/bin/pest` in both `vendor/bin/pest ...`
+// and `php -d memory_limit=4G vendor/bin/pest ...`. Any other form (`composer mutate`) keeps the check's
+// default program. A further word is passed to the probe child only when it names a file or directory
+// in the repository (a test file the job names decides whether a child survives Patchwork's directory
+// read), so an option's separate value (`--filter Foo`) is not taken for a test path. The job's `--path=`
+// gives the source the probe copies, so the probe does not depend on the repository's layout. Words are
+// split on whitespace, so a quoted path with a space is not kept whole.
+export function mutationInstrumentArguments(run, repoRoot) {
+    let words = run.trim().split(/\s+/)
+    let program = null
+    if (words[0] === 'php') {
+        words = words.slice(1)
+        while (words.length > 0 && words[0].startsWith('-')) {
+            words = words.slice(words[0] === '-d' ? 2 : 1)
+        }
+        // Only a `pest` script is what the children are started with. Another script (a repository's
+        // own `scripts/mutate.php`) starts Pest itself, so the check keeps its default program.
+        const script = words.shift() ?? null
+        program = script !== null && /(^|[\\/])pest$/.test(script) ? script : null
+    } else {
+        // A wrapped binary (`herd coverage vendor/bin/pest ...`, `XDEBUG_MODE=coverage vendor/bin/pest
+        // ...`) is still the program: the words before it are the wrapper, not arguments for the child.
+        const at = words.findIndex((word) => /(^|[\\/])pest$/.test(word))
+        if (at !== -1) {
+            program = words[at]
+            words = words.slice(at + 1)
+        }
+    }
+    const args = []
+    let source = null
+    for (const word of words) {
+        const path = word.startsWith('--path=') ? word.slice('--path='.length) : null
+        if (path !== null && source === null) {
+            source = firstPhpFile(join(repoRoot, path))
+            continue
+        }
+        if (!word.startsWith('-') && existsSync(join(repoRoot, word))) {
+            args.push(`--arg=${word}`)
+        }
+    }
+    return [...(source === null ? [] : [`--source=${source}`]), ...args, ...(program === null ? [] : [program])]
+}
+
+// True when patches.lock.json records at least one patch for any package. A repository with no lock,
+// or a lock that records none, has nothing `composer patches-repatch` could restore.
+export function lockRecordsPatches(lockText) {
+    if (lockText === null) {
+        return false
+    }
+    let parsed
+    try {
+        parsed = JSON.parse(lockText)
+    } catch {
+        return true
+    }
+    const patches = parsed?.patches
+    if (patches === undefined || (Array.isArray(patches) && patches.length === 0)) {
+        return false
+    }
+    if (patches === null || typeof patches !== 'object' || Array.isArray(patches)) {
+        return true
+    }
+    return Object.values(patches).some((entries) => !Array.isArray(entries) || entries.length > 0)
+}
+
+// The line the check prints when a probed form cannot launch a child and the plugin has no launch
+// guard. That cause fabricates kills whatever the repository's patches are, so it always stops the run.
+export const LAUNCH_FABRICATES = 'check-mutation-instrument: FABRICATION LIKELY.'
+
+// Whether a failed instrument check stops the run (decided on UAMS-Web/uams-claude-skills#851).
+// Every failure stops it except two, and each goes ahead behind a warning naming the check's verdict:
+// - A check that could not measure (exit 2, or NOT MEASURED) on a NAMED selection, where the job's
+//   test files reached the probe as --arg. Only a bare selection that cannot be probed is refused.
+// - TEMPORARY: an exit 1 whose only cause is the identical-copy probe child dying, in a repository
+//   whose patches.lock.json records no patch, where `composer patches-repatch` has nothing to
+//   restore. A form that cannot launch without a launch guard still stops the run. This exception is
+//   removed by UAMS-Web/uams-claude-skills#857 (blocked by UAMS-Web/UAMSWP-Pusher#442).
+// A form that cannot launch without a launch guard stops the run whatever the exit status. A missing
+// check, one that could not be started, and one that exited with a status that is not one of its own (a PHP
+// fatal, a signal) always stop the run.
+export function instrumentStopsRun(instrument, patchesRegistered) {
+    if (instrument.ok) {
+        return false
+    }
+    if (instrument.output.includes(LAUNCH_FABRICATES)) {
+        return true
+    }
+    if (instrument.cause === 'unmeasured') {
+        return !instrument.named
+    }
+    return instrument.cause !== 'fabricates' || patchesRegistered
+}
+
+// A path that names tests: a `*Test.php` file, or anything under a `tests/` directory. Another
+// existing path a run carries (`phpunit.xml` after `-c`, a source directory after `--path`) is not a
+// test selection, so it does not make the selection named.
+export function isTestPath(path) {
+    const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+    return /Test\.php$/.test(normalized) || /(^|\/)tests?(\/|$)/i.test(normalized)
+}
+
+// Runs the instrument check before a mutation run and classifies its result; instrumentStopsRun
+// decides from that whether the run may start. Exit 1 is a child that cannot launch or dies before a
+// test (`fabricates`). Exit 2, and an exit 0 that says NOT MEASURED, are a check that measured nothing
+// (`unmeasured`). Any other status is a check that did not run to a verdict (`crashed`), and one that
+// could not be spawned is `not-started`. A missing script is `missing`, so the run is never started
+// unchecked; there is no option that skips the check. `named` says whether a test path reached the
+// probe as --arg. `command` is the exact invocation, for the log and a re-run by hand.
+export function checkMutationInstrument({ repoRoot, run, phpPath, env, spawn = spawnSync }) {
+    const script = join(repoRoot, ...MUTATION_INSTRUMENT.split('/'))
+    const args = [MUTATION_INSTRUMENT, `--root=${repoRoot}`, ...mutationInstrumentArguments(run, repoRoot)]
+    const command = [phpPath, ...args].map((arg) => shellQuote(arg)).join(' ')
+    // A named selection: the job's own test files reached the probe as --arg, so the probe ran the
+    // children's real selection rather than a bare directory scan.
+    const named = args.some((arg) => arg.startsWith('--arg=') && isTestPath(arg.slice('--arg='.length)))
+    if (!existsSync(script)) {
+        return { ok: false, cause: 'missing', named, command, output: '', problem: `${MUTATION_INSTRUMENT} is missing, so whether a mutant child can run cannot be checked` }
+    }
+    const result = spawn(phpPath, args, { cwd: repoRoot, env, encoding: 'utf8', maxBuffer: Infinity })
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+    if (result.error) {
+        return { ok: false, cause: 'not-started', named, command, output, problem: `the check could not be started (${result.error.message})` }
+    }
+    if (result.status === 1) {
+        return { ok: false, cause: 'fabricates', named, command, output, problem: 'the check exited 1: a mutant child cannot launch or dies before a test, so its death would be scored as a kill' }
+    }
+    if (result.status === 2) {
+        return { ok: false, cause: 'unmeasured', named, command, output, problem: 'the check exited 2 and measured nothing' }
+    }
+    if (result.status !== 0) {
+        return { ok: false, cause: 'crashed', named, command, output, problem: `the check exited ${result.status === null ? `on signal ${result.signal}` : result.status}, which is not one of its own statuses, so it did not run to a verdict` }
+    }
+    if (/NOT MEASURED/.test(output)) {
+        return { ok: false, cause: 'unmeasured', named, command, output, problem: 'the check exited 0 but reports NOT MEASURED, so whether a mutant child reaches a test is unknown' }
+    }
+    return { ok: true, cause: null, named, command, output, problem: null }
 }
 
 const BIN_PREFIX = 'bin:'
@@ -2286,9 +2469,10 @@ function makeExecutor({ repoRoot, config, php, jobPhps = new Map(), trackedFiles
         const jobEnv = { ...jobEnvironment(env, job, config.jobs), ...(own ? { LOCAL_CI_PHP: own.path } : {}) }
         const command = commandFor(job.run, phpPath)
         if (job.mutation) {
+            const lockText = readOrNull(join(repoRoot, 'patches.lock.json'))
             let missing
             try {
-                missing = missingMutatePatches({ repoRoot, lockText: readOrNull(join(repoRoot, 'patches.lock.json')) })
+                missing = missingMutatePatches({ repoRoot, lockText })
             } catch (error) {
                 missing = [error.message]
             }
@@ -2298,6 +2482,38 @@ function makeExecutor({ repoRoot, config, php, jobPhps = new Map(), trackedFiles
                     console.log(red(`    ${problem}`))
                 }
                 console.log(red(`  Restore them with: ${MUTATE_REINSTALL}`))
+                return { code: 1 }
+            }
+            const instrument = checkMutationInstrument({ repoRoot, run: job.run, phpPath, env: jobEnv })
+            console.log(`  $ ${instrument.command}`)
+            process.stdout.write(instrument.output === '' || instrument.output.endsWith('\n') ? instrument.output : `${instrument.output}\n`)
+            const patchesRegistered = lockRecordsPatches(lockText)
+            if (!instrument.ok && !instrumentStopsRun(instrument, patchesRegistered)) {
+                console.log(yellow(`  The mutation instrument check failed (${instrument.problem}).`))
+                if (instrument.cause === 'unmeasured') {
+                    console.log(yellow('  The probe was given the job\'s named test files, so the selection is not bare, and the run goes ahead.'))
+                } else {
+                    console.log(yellow('  Its only cause is the identical-copy probe child, and patches.lock.json records no patch here, so there is nothing to repatch and the run goes ahead (a temporary exception).'))
+                }
+                console.log(yellow('  Before citing the score, confirm it independently: name the test file in the run, and check that a hand-applied mutant fails a named test.'))
+                console.log(yellow(`  Re-run the check: ${instrument.command}`))
+            } else if (!instrument.ok) {
+                console.log(red(`  The mutation instrument check failed (${instrument.problem}), so the mutation run was not started.`))
+                if (instrument.cause === 'missing') {
+                    console.log(red('  The sync delivers it with the pcov-setup skill; restore the synced copy rather than running without it.'))
+                } else if (instrument.cause === 'not-started' || instrument.cause === 'crashed') {
+                    console.log(red('  The check did not run to a verdict. Read its output above, fix what stopped it, and run it again.'))
+                    console.log(red(`  Re-run the check: ${instrument.command}`))
+                } else if (instrument.cause === 'fabricates' && !patchesRegistered) {
+                    console.log(red('  A probed form cannot launch a mutant child and the plugin has no launch guard. patches.lock.json records no patch here, so start the run through a form that launches, or add the launch patch.'))
+                    console.log(red(`  Then re-run the check: ${instrument.command}`))
+                } else if (instrument.cause === 'fabricates') {
+                    console.log(red(`  Restore the patches the lock records with: ${MUTATION_REPATCH}`))
+                    console.log(red(`  Then re-run the check: ${instrument.command}`))
+                } else {
+                    console.log(red('  Read the check\'s output above for what it could not measure. The selection is bare: name the job\'s test files in its run, so the probe is given them. Where it found no source file, add a --path= naming one to the job\'s run.'))
+                    console.log(red(`  Re-run the check: ${instrument.command}`))
+                }
                 return { code: 1 }
             }
             console.log(`  $ ${command}`)
