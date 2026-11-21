@@ -478,6 +478,9 @@ it('applies a transformation table, flat or by structure', function (mixed $tran
 })->with([
     'flat' => [['as_numeric_string' => true], '5'],
     'a default' => [['default' => ['as_numeric_string' => true]], '5'],
+    // Flattening leaves one `default` key here, so the table is resolved rather than taken as flat
+    'a default holding a default' => [['default' => ['default' => ['as_numeric_string' => true]]], '5'],
+    'a fieldtype table for another fieldtype, beside nothing else' => [['specific' => ['radio' => ['as_numeric_string' => true]]], 5],
     'for the fieldtype' => [['specific' => ['number' => ['as_numeric_string' => true]]], '5'],
     'by the value' => [['based_on_attribute_value' => ['5' => ['as_numeric_string' => true]]], '5'],
     'not a table' => ['as_numeric_string', 5],

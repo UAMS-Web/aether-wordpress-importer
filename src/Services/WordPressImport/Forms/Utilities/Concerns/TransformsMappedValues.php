@@ -273,9 +273,9 @@ trait TransformsMappedValues
      * `value_transformations`.
      *
      * A flat table, one carrying no structural key, is the transformation itself.
-     * `getFieldtypeSpecificConfig()` also reduces a table whose only structural
-     * keys are `default` and `specific` to its flat contents, so a `default`-only
-     * table arrives here flat. Any other table is resolved for its value table
+     * `getFieldtypeSpecificConfig()` has usually reduced a `default`-only table to
+     * its flat contents already; a table still carrying a structural key, such as
+     * a `default` holding another `default`, is resolved instead. Any other table is resolved for its value table
      * first, then for `default` when the value table matches nothing (#544).
      * Both an attribute the data carries and a missing one's `#not_set` value go
      * through here, so the two transform alike (#601).
@@ -296,15 +296,8 @@ trait TransformsMappedValues
         }
 
         // A flat table is already the transformation to apply
-        $isFlatConfig = (
-            // getFieldtypeSpecificConfig() flattens a table whose only
-            // structural keys are `default` and `specific`, so either one
-            // reaches here only beside a key checked below, and these two
-            // read as an `or` answer the same
-            // @pest-mutate-ignore: BooleanAndToBooleanOr
-            ! isset($valueTransformations['default'])
+        $isFlatConfig = ! isset($valueTransformations['default'])
             && ! isset($valueTransformations['specific'])
-        )
             && ! isset($valueTransformations['based_on_attribute_value'])
             && ! isset($valueTransformations['based_on_other_attribute_value'])
             && ! isset($valueTransformations['specific_based_on_attribute_value']);
