@@ -254,31 +254,12 @@ trait MapsNotSetAttributes
 
                         // Apply value transformations if configured
                         if (isset($config['value_transformations']) && $mappedValue !== null) {
-                            // Normalize the transformations config to an array
-                            $valueTransformations = self::asArray(
-                                $config['value_transformations']
-                            );
-
-                            // Apply value transformations using the resolveValueTransformations method
-                            // This method handles all the different transformation structures
-                            $transformationConfig = static::resolveValueTransformations(
-                                $valueTransformations,
+                            // Resolve the transformation as mapAttributesFromMapping() does (#601)
+                            $transformationConfig = static::resolveMappedValueTransformation(
+                                $config['value_transformations'],
                                 $data,
-                                'based_on_attribute_value',
                                 $excludeFieldtype
                             );
-
-                            // Fall back to `default` when the value table matched nothing,
-                            // as mapAttributesFromMapping() does (#544)
-                            if ($transformationConfig === null || $transformationConfig === []) {
-                                $transformationConfig = static::resolveValueTransformations(
-                                    $valueTransformations,
-                                    $data,
-                                    'default',
-                                    $excludeFieldtype
-                                );
-                            }
-
                             if ($transformationConfig !== null && $transformationConfig !== []) {
                                 $mappedValue = static::applyValueTransformation(
                                     $mappedValue,
