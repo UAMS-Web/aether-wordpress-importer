@@ -269,6 +269,69 @@ trait TransformsMappedValues
     }
 
     /**
+     * Resolve the transformation to apply to a mapped value from an attribute's
+     * `value_transformations`.
+     *
+     * A flat table, one carrying no structural key, is the transformation itself.
+     * `getFieldtypeSpecificConfig()` also reduces a table whose only structural
+     * keys are `default` and `specific` to its flat contents, so a `default`-only
+     * table arrives here flat. Any other table is resolved for its value table
+     * first, then for `default` when the value table matches nothing (#544).
+     * Both an attribute the data carries and a missing one's `#not_set` value go
+     * through here, so the two transform alike (#601).
+     *
+     * @param  mixed  $valueTransformations  The attribute's `value_transformations`
+     * @param  array<int|string, mixed>  $data  The field data
+     * @param  ?string  $fieldtype  The current fieldtype
+     * @return array<int|string, mixed>|null The transformation to apply, or null for none
+     */
+    protected static function resolveMappedValueTransformation(
+        mixed $valueTransformations,
+        array $data,
+        ?string $fieldtype
+    ): ?array {
+        // A table that is not an array transforms nothing
+        if (! \is_array($valueTransformations)) {
+            return null;
+        }
+
+        // A flat table is already the transformation to apply
+        $isFlatConfig = (
+            // getFieldtypeSpecificConfig() flattens a table whose only
+            // structural keys are `default` and `specific`, so either one
+            // reaches here only beside a key checked below, and these two
+            // read as an `or` answer the same
+            // @pest-mutate-ignore: BooleanAndToBooleanOr
+            ! isset($valueTransformations['default'])
+            && ! isset($valueTransformations['specific'])
+        )
+            && ! isset($valueTransformations['based_on_attribute_value'])
+            && ! isset($valueTransformations['based_on_other_attribute_value'])
+            && ! isset($valueTransformations['specific_based_on_attribute_value']);
+        if ($isFlatConfig) {
+            return $valueTransformations;
+        }
+
+        // Resolve the value table, then fall back to `default` when it matches nothing
+        $transformationConfig = static::resolveValueTransformations(
+            $valueTransformations,
+            $data,
+            'based_on_attribute_value',
+            $fieldtype
+        );
+        if ($transformationConfig === null || $transformationConfig === []) {
+            $transformationConfig = static::resolveValueTransformations(
+                $valueTransformations,
+                $data,
+                'default',
+                $fieldtype
+            );
+        }
+
+        return $transformationConfig;
+    }
+
+    /**
      * Resolve value transformations based on fieldtype and attribute values.
      *
      * Each attribute read here is a key of the data, so a `#not_set` case never
