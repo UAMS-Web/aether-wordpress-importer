@@ -274,6 +274,10 @@ trait TransformsMappedValues
      * Each attribute read here is a key of the data, so a `#not_set` case never
      * applies and is not looked up.
      *
+     * A lookup for the key `based_on_attribute_value` that nothing in the table
+     * matches no longer returns the whole table; unless a later structure answers
+     * it, it returns null, so a caller can fall back to `default`.
+     *
      * @param  array<int|string, mixed>  $valueTransformations  The value transformations configuration
      * @param  array<int|string, mixed>  $data  The field data
      * @param  string  $key  The key to get transformations for
@@ -865,8 +869,14 @@ trait TransformsMappedValues
             );
         }
 
-        // Check for simple structure (legacy)
-        if (self::arrayKeyExists($key, $valueTransformations)) {
+        // Check for simple structure (legacy). The key `based_on_attribute_value`
+        // names the value table itself here, so a lookup for it that matched
+        // nothing above resolves nothing rather than the whole table, and the
+        // caller can fall back to `default` (#544)
+        if (
+            $key !== 'based_on_attribute_value'
+            && self::arrayKeyExists($key, $valueTransformations)
+        ) {
             return self::normalizeTransformationConfig(
                 self::mappingValue(
                     $valueTransformations,

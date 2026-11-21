@@ -483,6 +483,10 @@ it('applies a transformation table, flat or by structure', function (mixed $tran
     'not a table' => ['as_numeric_string', 5],
     // With no value table to read, the default applies
     'by another attribute that matches nothing, falling back to the default' => [['based_on_other_attribute_value' => ['kind' => ['x' => ['as_numeric_string' => false]]], 'default' => ['as_numeric_string' => true]], '5'],
+    // A value table that matches nothing resolves nothing, so the default applies (#544)
+    'by a value table that matches nothing, falling back to the default' => [['based_on_attribute_value' => ['9' => ['as_numeric_string' => true]], 'default' => ['as_numeric_string' => true]], '5'],
+    'by a value table that matches nothing, with no default' => [['based_on_attribute_value' => ['9' => ['as_numeric_string' => true]]], 5],
+    'by a value table that matches, before the default' => [['based_on_attribute_value' => ['5' => ['as_numeric_string' => true]], 'default' => ['as_numeric_string' => false]], '5'],
 ]);
 
 it('reads no value for a key that cannot be an array key, even beside an empty-string key', function (): void {
