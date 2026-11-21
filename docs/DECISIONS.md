@@ -1587,3 +1587,15 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Why.** A pull request mutates the whole of every PHP file it changes, so one that moves or splits a large file mutates all of it. #574's split of `FieldtypeMappingTrait.php` (#556) touches about 3,770 mutants, about 200 minutes at the 3.2 seconds per mutant measured on #536. Its first run was cancelled at 45 minutes, which made `CI` red. 240 minutes covers it with room for coverage and stays under the chain's 360-minute cap.
 
 **Rejected: merging #574 over a red `CI`.** It leaves the next pull request that moves a large file in the same place, and makes a red required check something to step around.
+
+## 2026-11-21 A `value_transformations` default applies when its value table matches nothing (#544)
+
+**Decided 2026-11-21, on #544.** When an attribute's `value_transformations` carries a `based_on_attribute_value` value table and a `default`, a value that matches nothing in the value table gets the `default` transformation. The fix goes in `resolveValueTransformations()`: a lookup for the key `based_on_attribute_value` that matches nothing returns `null` rather than the whole table, and the `#not_set` path (`MapsNotSetAttributes`) falls back to `default` as `mapAttributesFromMapping()` does. #599 builds it.
+
+**Why.** The default is ignored only because the unmatched lookup falls through to the resolver's final top-level branch, which returns the whole value table; `mapAttributesFromMapping()` tries `default` only on `null` or `[]`, and applying the table leaves the value unchanged. `FormsValueTransformationResolutionTest` characterizes that return rather than intending it, and no shipped table depends on it. Measured 2026-11-21 on Windows 11, PHP 8.4.27, against `main` `028bb487`: of the 6 `value_transformations` tables in the shipped mapping data, all Gravity Forms, 0 carry both a top-level `based_on_attribute_value` and a top-level `default`, so no shipped output changes. The measurement is on #544.
+
+**Rejected: unmatched values pass through unchanged.** It keeps today's output, but leaves a `default` written beside a value table silently dead, the failure #544 was filed about.
+
+**Rejected: refusing a table that carries both keys.** It is safe, and it forbids a reasonable table shape instead of making it work.
+
+**Rejected: falling back at the `mapAttributesFromMapping()` call site only.** It fixes one of the resolver's five call sites and leaves the other four able to receive the whole table.
