@@ -103,6 +103,22 @@ it('maps no date exceptions when there are none', function (): void {
         ->not->toHaveKey('date_exceptions');
 });
 
+it('maps a listed date offset through the shipped value table, and writes an unlisted one unchanged (#544)', function (string $offset, mixed $expected): void {
+    $field = [
+        'id' => 5,
+        'type' => 'date',
+        'label' => 'Due Date',
+        'gpLimitDatesminDateExcludeBeforeTodayMod' => $offset,
+    ];
+
+    expect(FieldtypeMapping::mapFieldAttributes($field, [$field], 'date')['earliest_date_today_offset'] ?? 'absent')
+        ->toBe($expected);
+})->with([
+    'a listed offset' => ['+6 weeks', [['id' => 'due_date_5_earliest_date_today_offset_1', 'operator' => 'add', 'number' => 6, 'unit' => 'week']]],
+    // The table has no `default`, so an offset it does not list is written as it came
+    'an unlisted offset' => ['+3 years', '+3 years'],
+]);
+
 it('fills the template once for a string, in keys, values and nested arrays', function (): void {
     expect(transformToComplexArrayTemplate('a'))->toBe([
         'id' => 'due_date_5_x_4',

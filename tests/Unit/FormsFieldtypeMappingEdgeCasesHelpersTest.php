@@ -145,11 +145,11 @@ describe('resolveValueTransformations()', function (): void {
         'an empty array' => [[]],
     ]);
 
-    it('takes the whole table for the transformation type while the attribute is empty', function (mixed $empty): void {
-        // The not-empty table does not apply, so the legacy key lookup returns the
-        // `based_on_attribute_value` table as it stands.
+    it('resolves nothing for the transformation type while the attribute is empty', function (mixed $empty): void {
+        // The not-empty table does not apply, so nothing matches and the caller can
+        // fall back to `default`, rather than receiving the whole table (#544)
         expect(fmhTransformation(['based_on_attribute_value' => ['#not_empty' => ['t' => 'X']]], ['a' => $empty], 'based_on_attribute_value'))
-            ->toBe(['#not_empty' => ['t' => 'X']]);
+            ->toBeNull();
     })->with([
         'null' => [null],
         'an empty string' => [''],

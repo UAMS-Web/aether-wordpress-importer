@@ -114,6 +114,10 @@ it('writes a #not_set translation for an option the original field does not set'
     'no transformation without data' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['#not_empty' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', [], ['x_hd' => 5]],
     'a transformation that is not a table' => [['statamic_attribute' => 'x_*', 'value_transformations' => 'x', 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5]],
     'a default transformation only' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['default' => ['as_numeric_string' => true]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5]],
+    // A value table that matches nothing resolves nothing, so the default applies, as it does for an attribute the data carries (#544)
+    'a value table that matches nothing, falling back to the default' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['q' => ['as_numeric_string' => true]], 'default' => ['as_numeric_string' => true]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => '5']],
+    'a value table that matches nothing, with no default' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['q' => ['as_numeric_string' => true]]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => 5]],
+    'a value table that matches, before the default' => [['statamic_attribute' => 'x_*', 'value_transformations' => ['based_on_attribute_value' => ['v' => ['as_numeric_string' => true]], 'default' => ['as_numeric_string' => false]], 'value_translation' => ['#not_set' => 5]], FORMS_MA_UNSET, 'hd', ['o' => 'v'], ['x_hd' => '5']],
     'nothing to map to' => [['value_translation' => ['#not_set' => 'M']], FORMS_MA_UNSET, 'hd', [], []],
     'only other field values' => [['statamic_other_field_value' => ['f' => 1]], FORMS_MA_UNSET, 'hd', [], []],
 ]);

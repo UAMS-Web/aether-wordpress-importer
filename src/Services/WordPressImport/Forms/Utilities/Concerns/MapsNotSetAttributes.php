@@ -267,6 +267,18 @@ trait MapsNotSetAttributes
                                 'based_on_attribute_value',
                                 $excludeFieldtype
                             );
+
+                            // Fall back to `default` when the value table matched nothing,
+                            // as mapAttributesFromMapping() does (#544)
+                            if ($transformationConfig === null || $transformationConfig === []) {
+                                $transformationConfig = static::resolveValueTransformations(
+                                    $valueTransformations,
+                                    $data,
+                                    'default',
+                                    $excludeFieldtype
+                                );
+                            }
+
                             if ($transformationConfig !== null && $transformationConfig !== []) {
                                 $mappedValue = static::applyValueTransformation(
                                     $mappedValue,

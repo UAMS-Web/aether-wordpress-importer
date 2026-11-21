@@ -13,14 +13,15 @@ declare(strict_types=1);
  * `default`, then the key at the top level. A scalar result is wrapped as
  * `[key => value]`. No standalone test named it before this file.
  *
- * Three behaviors are characterized rather than changed:
+ * A lookup for the key `based_on_attribute_value` that nothing matches
+ * resolves to `null` rather than to the whole table, so a caller falls back to
+ * `default` (#544).
+ *
+ * Two behaviors are characterized rather than changed:
  *
  * - the flat and `default` conditions of `based_on_attribute_value` test every
  *   attribute in the field data, not the attribute being mapped, and their
  *   `#not_set` entries never match, since each attribute they test is present;
- * - a lookup for the key `based_on_attribute_value` that nothing else matches
- *   returns the whole `based_on_attribute_value` table through the top-level
- *   lookup;
  * - a flat `#not_empty` or `#empty` entry mapped to `null` resolves to
  *   `[key => null]` rather than to nothing.
  *
@@ -112,9 +113,20 @@ it('resolves the flat conditions of based_on_attribute_value against any attribu
     'no value table for a list' => [['["a"]' => ['x' => 1], 'q' => ['x' => 2]], ['z' => ['a'], 'y' => 'q'], 'based_on_attribute_value', ['x' => 2]],
     'not empty before a value table' => [['#not_empty' => ['n' => 1], 'v' => ['x' => 1]], ['z' => 'v'], 'based_on_attribute_value', ['n' => 1]],
     'empty before a value table' => [['#empty' => ['e' => 1], '' => ['x' => 1]], ['z' => ''], 'based_on_attribute_value', ['e' => 1]],
-    'a not-set table, never matched' => [['#not_set' => ['s' => 1]], ['z' => 'v'], 'based_on_attribute_value', ['#not_set' => ['s' => 1]]],
-    'a miss for the type key, returning the table' => [['+6 weeks' => ['x' => 1]], ['z' => '+3 weeks'], 'based_on_attribute_value', ['+6 weeks' => ['x' => 1]]],
+    'a not-set table, never matched' => [['#not_set' => ['s' => 1]], ['z' => 'v'], 'based_on_attribute_value', null],
+    'a miss for the type key, resolving nothing' => [['+6 weeks' => ['x' => 1]], ['z' => '+3 weeks'], 'based_on_attribute_value', null],
 ]);
+
+it('resolves nothing for an unmatched value table, and the default for the default key (#544)', function (): void {
+    $valueTransformations = [
+        'based_on_attribute_value' => ['9' => ['as_numeric_string' => true]],
+        'default' => ['as_numeric_string' => true],
+    ];
+
+    expect(resolveFormsTransformation($valueTransformations, ['size' => 5], 'based_on_attribute_value'))->toBeNull()
+        ->and(resolveFormsTransformation($valueTransformations, ['size' => 9], 'based_on_attribute_value'))->toBe(['as_numeric_string' => true])
+        ->and(resolveFormsTransformation($valueTransformations, ['size' => 5], 'default'))->toBe(['as_numeric_string' => true]);
+});
 
 it('resolves the per-fieldtype table of based_on_attribute_value', function (
     array $attributes,
@@ -188,8 +200,8 @@ it('resolves the default table of based_on_attribute_value', function (
     'an attribute value entry without the key' => [['t' => ['x' => ['other' => 1]]], ['t' => 'x'], 'k', null],
     'an attribute value entry, for the type key' => [['t' => ['x' => ['a' => 1]]], ['t' => 'x'], 'based_on_attribute_value', ['a' => 1]],
     'an attribute value scalar, for the type key' => [['t' => ['x' => true]], ['t' => 'x'], 'based_on_attribute_value', ['based_on_attribute_value' => true]],
-    'an attribute value null, for the type key' => [['t' => ['x' => null]], ['t' => 'x'], 'based_on_attribute_value', ['default' => ['t' => ['x' => null]]]],
-    'an attribute value entry on a list, for the type key' => [['t' => ['x' => ['a' => 1]]], ['t' => ['x']], 'based_on_attribute_value', ['default' => ['t' => ['x' => ['a' => 1]]]]],
+    'an attribute value null, for the type key' => [['t' => ['x' => null]], ['t' => 'x'], 'based_on_attribute_value', null],
+    'an attribute value entry on a list, for the type key' => [['t' => ['x' => ['a' => 1]]], ['t' => ['x']], 'based_on_attribute_value', null],
     'an attribute not set before not empty' => [['t' => ['#not_set' => ['k' => 'S'], '#empty' => ['k' => 'E']]], ['z' => 'q'], 'k', ['k' => 'S']],
     'an attribute not empty before a value entry' => [['t' => ['#not_empty' => ['k' => 'N'], 'x' => ['k' => 'X']]], ['t' => 'x'], 'k', ['k' => 'N']],
     'an attribute empty before a value entry' => [['t' => ['#empty' => ['k' => 'E'], '' => ['k' => 'X']]], ['t' => ''], 'k', ['k' => 'E']],
