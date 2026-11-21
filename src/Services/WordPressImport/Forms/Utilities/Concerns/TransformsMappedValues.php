@@ -274,8 +274,9 @@ trait TransformsMappedValues
      * Each attribute read here is a key of the data, so a `#not_set` case never
      * applies and is not looked up.
      *
-     * A lookup for the key `based_on_attribute_value` that no condition or value
-     * in the table matches returns null, so a caller can fall back to `default`.
+     * A lookup for the key `based_on_attribute_value` that nothing in the table
+     * matches no longer returns the whole table; unless a later structure answers
+     * it, it returns null, so a caller can fall back to `default`.
      *
      * @param  array<int|string, mixed>  $valueTransformations  The value transformations configuration
      * @param  array<int|string, mixed>  $data  The field data

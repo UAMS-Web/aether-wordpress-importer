@@ -1151,9 +1151,10 @@ final class FieldtypeMappingData
      *         ],
      *     ],
      *
-     * A `based_on_attribute_value` table picks a transformation by the attribute's
-     * value. When nothing in it matches the value, `default` applies; with no
-     * `default`, the value is written untransformed.
+     * A `based_on_attribute_value` table picks a transformation by value. Every
+     * attribute of the field is tested against it, not only the one being mapped.
+     * When nothing in it matches, `default` applies; with no `default`, the value
+     * is written untransformed.
      *
      *     '<gravity_forms_attribute_name>' => [
      *         'value_transformations' => [
