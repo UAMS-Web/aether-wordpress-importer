@@ -6,6 +6,7 @@ use App\Services\BardContentSanitizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Database\Schema\Blueprint as SchemaBlueprint;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -264,6 +265,32 @@ it('leaves the directories unchanged when the run fails partway', function (): v
         ->and($savedTo[0])->toContain('wordpress-import-verify-')
         ->and(\is_dir(\dirname($savedTo[0])))->toBeFalse()
         ->and(verifyListing())->toBe($before);
+});
+
+it('names the temporary copy it could not remove, so it can be deleted by hand', function (): void {
+    // Only the workspace's own removal fails; every other directory is removed as usual
+    $real = new Filesystem;
+    File::partialMock()->shouldReceive('deleteDirectory')->andReturnUsing(
+        static fn (string $directory, bool $preserve = false): bool => \str_contains($directory, 'wordpress-import-verify-')
+            ? false
+            : $real->deleteDirectory($directory, $preserve)
+    );
+
+    [$status, $output] = verifyRun(true);
+    $matched = \preg_match("/Verification run: the temporary copy at '([^']+)' could not be removed\\. Delete it by hand\\./", $output, $match);
+    $left = $matched === 1 ? $match[1] : '';
+
+    try {
+        expect($status)->toBe(0)
+            ->and($left)->toContain('wordpress-import-verify-')
+            ->and(\is_dir($left))->toBeTrue()
+            ->and($output)->not->toContain('the temporary copy was removed');
+    } finally {
+        // The copy is the test's to remove, since the run could not
+        if ($left !== '') {
+            $real->deleteDirectory($left);
+        }
+    }
 });
 
 it('puts every location and setting back when the run ends', function (): void {

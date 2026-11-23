@@ -265,12 +265,18 @@ class ImportWordPress extends Command
      *
      * Bounds the dataless-entry sweep to files this run produced (wordpress-importer-archive#1160).
      */
+    // Every run sets this before the sweep reads it, and any default predates every file, so
+    // a default of 1.0 or -1.0 sweeps exactly what 0.0 does.
+    // @pest-mutate-ignore: IncrementFloat, DecrementFloat
     private float $runStartedAt = 0.0;
 
     /**
      * Whether this command is running an import, so a command that finishes inside it
      * hands Laravel Prompts back (#228).
      */
+    // Only the listener runImportForParts() registers reads this, and that method sets it to
+    // true before any command can finish, so the starting value is never read.
+    // @pest-mutate-ignore: FalseToTrue
     private bool $importing = false;
 
     /**

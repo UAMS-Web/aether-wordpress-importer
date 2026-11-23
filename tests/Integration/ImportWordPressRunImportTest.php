@@ -20,6 +20,7 @@ use Statamic\Stache\Stores\Store;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -1197,6 +1198,56 @@ it('needs classified categories for classifieds', function (): void {
 
     expect($status)->toBe(1)
         ->and($output)->toContain("Skipping import of 'advert' as 'classified_categories' is not enabled for 'default'.\n");
+});
+
+/**
+ * An output that removes a file the moment a given line is written, so a run can lose a part
+ * between two steps that read it.
+ */
+final class IwriRemovingOutput extends BufferedOutput
+{
+    /**
+     * @param  string  $line  The line whose writing removes the file
+     * @param  string  $path  The file to remove
+     */
+    public function __construct(private readonly string $line, private readonly string $path)
+    {
+        parent::__construct();
+    }
+
+    /**
+     * Write the message, then remove the file when the message holds the line.
+     *
+     * @param  string  $message  The message
+     * @param  bool  $newline  Whether to end the line
+     */
+    protected function doWrite(string $message, bool $newline): void
+    {
+        parent::doWrite($message, $newline);
+
+        if (str_contains($message, $this->line) && is_file($this->path)) {
+            unlink($this->path);
+        }
+    }
+}
+
+it('stops with an error when a part the memory check read cannot be parsed', function (): void {
+    iwriCollection('pages');
+    $part = iwriPart($this, ['page']);
+    [$command] = iwriCommand();
+    // The parse announces itself, then opens the part; the part is gone by then
+    $output = new IwriRemovingOutput('Using streaming parser for memory efficiency.', $part);
+    $input = new ArrayInput([], $command->getDefinition());
+    $input->setInteractive(false);
+    $command->setOutput(new OutputStyle($input, $output));
+
+    $status = (new ReflectionMethod(ImportWordPress::class, 'runImportForParts'))->invoke($command, [$part]);
+    $text = $output->fetch();
+
+    expect($status)->toBe(1)
+        ->and($text)->toContain('Analyzing content item sizes...')
+        ->and($text)->toContain('Failed to parse XML file: ')
+        ->and(IwriLog::names())->not->toContain('forms.detect');
 });
 
 /**
