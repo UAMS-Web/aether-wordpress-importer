@@ -216,6 +216,7 @@ it('prints what a run would store and leaves the directories unchanged', functio
     [$status, $output] = verifyRun(true);
 
     expect($status)->toBe(0)
+        ->and($output)->toContain("Verification run: writing to a temporary copy. This application's content and assets will not change.")
         ->and($output)->toContain('Redirect domain go.uams.edu: 1 created, 1 updated, 0 disabled, 0 unpublished skipped, 0 shadowed.')
         ->and($output)->toContain('Redirect domain go.uams.edu: 2 stored with a wordpress_post_id.')
         ->and($output)->toContain('Skipping search index rebuild')

@@ -43,8 +43,10 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBui
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\DroppedAnchorTracker;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
@@ -1195,6 +1197,41 @@ it('needs classified categories for classifieds', function (): void {
 
     expect($status)->toBe(1)
         ->and($output)->toContain("Skipping import of 'advert' as 'classified_categories' is not enabled for 'default'.\n");
+});
+
+/**
+ * Record, on the given page, a link to an id the import dropped.
+ */
+function iwriDropAnchor(string $pageLink, string $fragment): void
+{
+    ProcessingContext::setWordPressPageLink($pageLink);
+    DroppedAnchorTracker::record("<blockquote id=\"{$fragment}\"><p>Q</p></blockquote><a href=\"#{$fragment}\">Jump</a>", []);
+    ProcessingContext::clearWordPressPageLink();
+}
+
+it('reports each link the import left pointing at a dropped id', function (): void {
+    iwriCollection('pages');
+    IwriEntries::$onCreate = static function (): void {
+        iwriDropAnchor('https://old.test/page/', 'during-run');
+    };
+    [$command, $buffer] = iwriCommand();
+
+    [, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
+
+    expect($output)->toContain("content - links_to_dropped_ids:\n")
+        ->and($output)->toContain('"link":"#during-run"');
+    DroppedAnchorTracker::clear();
+});
+
+it('forgets the dropped ids and links a previous run recorded', function (): void {
+    iwriCollection('pages');
+    iwriDropAnchor('https://old.test/stale/', 'from-before');
+    [$command, $buffer] = iwriCommand();
+
+    [, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
+
+    expect($output)->not->toContain('from-before');
+    DroppedAnchorTracker::clear();
 });
 
 it('reports the failed asset downloads of a content type, then forgets them', function (): void {

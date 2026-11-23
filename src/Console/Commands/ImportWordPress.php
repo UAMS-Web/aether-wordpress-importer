@@ -620,7 +620,7 @@ class ImportWordPress extends Command
      */
     private function importParts(
         array $parts,
-        bool $warningsStarted = false
+        bool $warningsStarted
     ): int {
         // Resolve the non-interactive policy for unsupported-content gates
         $unsupportedContentPolicy = $this->resolveUnsupportedContentPolicy();
