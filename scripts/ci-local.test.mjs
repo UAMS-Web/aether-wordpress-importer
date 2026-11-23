@@ -195,13 +195,15 @@ describe('local-ci.json against ci.yml', () => {
         })
 
         // The Windows leg (#186). The chain runs these four on Linux alone unless they are named.
+        // Since `v0.17.0` an absent `linux-only` means true, which drops the Windows and macOS legs
+        // of `pest` and `mutate-ignore`, so the call must pass false explicitly (#605).
         it('keeps every chain job on Windows', () => {
             const listed = (/^ {6}all-platform-jobs: '([^']*)'$/m.exec(own)?.[1] ?? '').split(/\s+/)
 
             for (const job of ['composer-validate', 'pint', 'rector', 'phpstan']) {
                 assert.ok(listed.includes(job), `${job} is not in all-platform-jobs`)
             }
-            assert.doesNotMatch(own, /^ {6}linux-only: true$/m)
+            assert.match(own, /^ {6}linux-only: false$/m)
         })
 
         // Mutation testing runs in the chain on pull requests and pushes. No schedule: the full
