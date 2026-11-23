@@ -1,5 +1,5 @@
 {
-    "_hash": "be466aa0758bf949caf4b660e3f1a63bdf3d1cb14af6aacd28ec9ec9bef9cd4d",
+    "_hash": "4898085178cc0170e70cfb2817fc6ac1126a1ef4ee285f6a21d7ee5731a72089",
     "patches": {
         "pestphp/pest-plugin-mutate": [
             {
@@ -86,7 +86,7 @@
                 "package": "pestphp/pest-plugin-mutate",
                 "description": "Propagate a mutation into isolated test processes and reject a test report that ran no tests, so an isolated run cannot score a mutant killed without running a test (temporary; see UAMS-Web/UAMSWP-Logo-List#82)",
                 "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-isolated-processes.patch",
-                "sha256": "6dd578588121b5291568bf26d001bd865a3a7e74d93f236a31ce93326dc0f3d2",
+                "sha256": "8bc0b3925662aaa307fd857b987d43d2c99be9194db674f99d4a771fa1017360",
                 "depth": 1,
                 "extra": {
                     "provenance": "patches-file:patches.json"
@@ -96,7 +96,7 @@
                 "package": "pestphp/pest-plugin-mutate",
                 "description": "Map a class constant mutant to the tests covering its containing class, since a constant initializer has no executable coverage line (temporary)",
                 "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-class-constant-coverage.patch",
-                "sha256": "e09b3535c7a69db85b35366fd1c0aa676a5cf98d0671d8245323516f8018b8f4",
+                "sha256": "c8775fe4b006f7ca4e9dffb136853cd840545b5acc4f682fe3a6de25acc276dc",
                 "depth": 1,
                 "extra": {
                     "provenance": "patches-file:patches.json"
@@ -137,6 +137,16 @@
                 "description": "Run a mutant child again when it times out once, and score a timeout only when the second attempt times out too, so a transient slowdown of the machine cannot keep --min=100 out of reach (temporary; see UAMS-Web/patches-pest-plugin-mutate#30)",
                 "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-mutant-timeout-retry.patch",
                 "sha256": "2516b97553a04990fbdfd51a2651b7dc24e372f885d9ebd2f247742f2fa94f19",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Report an existing file that cannot be read as present from the mutation stream wrapper's url_stat(), so code that reads it behind an is_file() or file_exists() check reaches the read in a mutant child (temporary; see UAMS-Web/patches-pest-plugin-mutate#52)",
+                "url": "vendor/uams-web/patches-pest-plugin-mutate/patches/pest-plugin-mutate-url-stat-unreadable.patch",
+                "sha256": "c1b7d142cfe2f37d78e898021e22bb60d499ab825fd15be09c968c1b0866186a",
                 "depth": 1,
                 "extra": {
                     "provenance": "patches-file:patches.json"
