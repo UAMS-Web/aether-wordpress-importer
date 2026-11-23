@@ -13,10 +13,13 @@ name: CI
 #   `test:pint`, `test:refactor`, `stan` and `test`, and `tests/skip-baseline.json`.
 #   `test:pint` runs `scripts/run-pint.mjs`, so the chain's Pint job lints the dot-directories a
 #   bare `pint --test` skips, as this workflow's own job did.
-# - `with:` keeps the Windows leg (#186). The chain runs `pest` and `mutate-ignore` on Linux,
-#   Windows and macOS by default, and `composer-validate`, `pint`, `rector` and `phpstan` on Linux
-#   alone; `all-platform-jobs` puts those four back on Windows, which also adds a macOS leg.
-#   The chain has no Linux-and-Windows setting.
+# - `with:` keeps the Windows leg (#186). Since `v0.17.0` the chain runs every job on Linux alone
+#   unless the caller names more runners (#605). `linux-only: false` restores each job's own
+#   classification, which runs `pest` and `mutate-ignore` on Linux, Windows and macOS, and
+#   `composer-validate`, `pint`, `rector` and `phpstan` on Linux alone; `all-platform-jobs` puts
+#   those four back on Windows, which also adds a macOS leg. Together they keep every leg the
+#   chain ran before `v0.17.0`. `windows-jobs` would drop the macOS leg; it is not used, so
+#   macOS stays.
 # - Mutation testing is on for pull requests and pushes (#519). The chain's `mutate` job runs on
 #   `ubuntu-latest` alone, mutates only the PHP files under `src` that a pull request or a push
 #   changes, and fails on any survivor. `mutate-timeout-minutes` gives it 240 minutes (#573; the
@@ -94,8 +97,10 @@ jobs:
   # The shared chain. Keep the reference a release tag.
   checks:
     if: vars.RUN_REMOTE_CI != 'false'
-    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.13.0
+    uses: UAMS-Web/uams-ci-workflows/.github/workflows/ci.yml@v0.17.0
     with:
+      # Keeps the Windows and macOS legs of `pest` and `mutate-ignore`; see the header (#605).
+      linux-only: false
       all-platform-jobs: 'composer-validate pint rector phpstan'
       mutate: true
       mutate-timeout-minutes: 240
