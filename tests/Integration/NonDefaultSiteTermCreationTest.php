@@ -360,3 +360,56 @@ it('creates an audio series term for a non-default site under the series\' own s
     expect($created)->toBeTrue();
     nonDefaultSiteTermAssert($config->getTaxonomyHandle(), $config->getTermSlug(), $config->getTermName());
 });
+
+/**
+ * Save a term holding only a title in the default site.
+ *
+ * @param  string  $taxonomy  The taxonomy
+ * @param  string  $slug  The slug
+ * @param  string  $title  The title
+ */
+function nonDefaultSiteTermSave(string $taxonomy, string $slug, string $title): void
+{
+    $term = TermFacade::make();
+
+    if (! $term instanceof Term) {
+        throw new RuntimeException('Expected a term.');
+    }
+
+    $term->taxonomy($taxonomy);
+    $term->slug($slug);
+    $term->dataForLocale('default', ['title' => $title]);
+    $term->save();
+}
+
+// statamic/cms#15878 narrowed term queries to the taxonomies their ids name. Both lookups
+// below key on `<taxonomy>::<site>_<slug>`, so a slug another taxonomy already holds must not be
+// mistaken for the one being written (#612).
+it('creates a single term in its own taxonomy when another taxonomy holds the same slug', function (): void {
+    nonDefaultSiteTermTaxonomy('probe_a');
+    nonDefaultSiteTermTaxonomy('probe_b');
+    nonDefaultSiteTermSave('probe_a', 'default_shared', 'Probe A Term');
+
+    $created = BaseEntryCreator::createTaxonomyTerm('probe_b', 'shared', 'default', new BufferedOutput);
+
+    expect($created)->toBeTrue();
+
+    // Read from disk first, so the query below answers what was written rather than the store's memory
+    expect(nonDefaultSiteTermData(nonDefaultSiteTermRead('probe_a::default_shared'), 'default')['title'] ?? null)->toBe('Probe A Term')
+        ->and(nonDefaultSiteTermIdsIn('probe_b', 'default'))->toBe(['probe_b::default_shared']);
+});
+
+it('creates batched terms in their own taxonomy when another taxonomy holds the same slug', function (): void {
+    nonDefaultSiteTermTaxonomy('probe_a');
+    nonDefaultSiteTermTaxonomy('probe_b');
+    nonDefaultSiteTermSave('probe_a', 'default_shared', 'Probe A Term');
+    $output = new BufferedOutput;
+
+    nonDefaultSiteTermProbe()->createFromStoredData([['original' => 'shared', 'name' => 'Shared']], 'probe_b', 'default', $output);
+
+    expect($output->fetch())->toContain("Created 'probe_b::default_shared'");
+
+    // Read from disk first, so the query below answers what was written rather than the store's memory
+    expect(nonDefaultSiteTermData(nonDefaultSiteTermRead('probe_a::default_shared'), 'default')['title'] ?? null)->toBe('Probe A Term')
+        ->and(nonDefaultSiteTermIdsIn('probe_b', 'default'))->toBe(['probe_b::default_shared']);
+});

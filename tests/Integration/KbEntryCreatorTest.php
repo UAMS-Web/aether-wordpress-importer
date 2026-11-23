@@ -27,7 +27,9 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site;
 use Statamic\Fields\Blueprint;
+use Statamic\Stache\Query\EntryQueryBuilder;
 use Statamic\Structures\CollectionStructure;
+use Statamic\Structures\Page;
 use Statamic\Structures\Tree;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -719,6 +721,43 @@ describe('a whole import', function (): void {
             ->toContain('Knowledge base tree structure saved.'.PHP_EOL)
             ->toContain('MinervaKB import complete!'.PHP_EOL)
             ->not->toContain('Note:');
+    });
+
+    // statamic/cms#15888 changed how a structured collection's indexes are written when its tree
+    // is saved. The tree file alone is asserted above; this reads the order and parents back
+    // through an entry query, which is what those indexes answer (#612).
+    it('reads the saved order and parents back through an entry query', function (): void {
+        $export = kbEntryExport(
+            [kbEntryTopic('5', 'billing'), kbEntryTopic('6', 'refunds', ['parent' => 'billing']), kbEntryTopic('7', 'shipping')],
+            [kbEntryArticle('901', ['refunds'], ['slug' => 'get-a-refund']), kbEntryArticle('902', ['billing'], ['slug' => 'pay-a-bill'])]
+        );
+
+        kbEntryRun($export);
+
+        // Narrow each step, since the query's where() and orderBy() are untyped
+        $query = EntryFacade::query();
+        $query = $query instanceof EntryQueryBuilder ? $query->where('collection', 'knowledge_bases') : null;
+        $query = $query instanceof EntryQueryBuilder ? $query->orderBy('order') : null;
+        $entries = $query instanceof EntryQueryBuilder ? $query->get() : null;
+        $read = [];
+
+        foreach ($entries instanceof Collection ? $entries->all() : [] as $entry) {
+            if ($entry instanceof Entry) {
+                // parent() answers the structure page above, so read its entry
+                $parent = $entry->parent();
+                $parentEntry = $parent instanceof Page ? $parent->entry() : null;
+                $read[] = [$entry->slug(), $parentEntry instanceof Entry ? $parentEntry->slug() : null];
+            }
+        }
+
+        expect($read)->toBe([
+            ['kb', null],
+            ['billing', 'kb'],
+            ['refunds', 'billing'],
+            ['get-a-refund', 'refunds'],
+            ['pay-a-bill', 'billing'],
+            ['shipping', 'kb'],
+        ]);
     });
 
     it('files a topic that is its own parent under the knowledge base, and reports it', function (): void {
