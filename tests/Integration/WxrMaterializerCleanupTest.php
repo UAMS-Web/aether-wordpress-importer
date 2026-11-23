@@ -198,6 +198,21 @@ it('maps a listed site\'s API post exactly as its cleaned export would', functio
         ->toContain('[caption id="attachment_42"');
 });
 
+// The comparison above runs the same cleaner on both sides, so a change in what the cleaner
+// writes passes it. This pins the body itself (#612), so a cleanup release that changes the
+// output fails here and the change is reviewed in the bump that brings it.
+it('cleans a listed site\'s API post to the exact expected body', function (): void {
+    cleanupFakeApi('https://news.uams.edu', [cleanupPost('A title', CLEANUP_RAW_BODY, '')]);
+
+    // The cleaner writes em dashes, so they are spelled as escapes here
+    $expected = "<p>LITTLE ROCK, Ark. \u{2014} The \"new\" clinic opened \u{2014} today.</p>\n\n"
+        .'[caption id="attachment_42" align="alignleft" width="300"]'
+        .'<img src="https://news.uams.edu/wp-content/uploads/a.jpg" alt="A" width="300"> A caption.[/caption]'
+        ."\n\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+    expect(cleanupMaterializedPost($this->workingDirectory)['content'])->toBe($expected);
+});
+
 it('leaves an unlisted site\'s block content untouched', function (): void {
     $body = '<!-- wp:paragraph --><p class="MsoNormal">Body -- copy.</p><!-- /wp:paragraph -->'
         .'<!-- wp:acf/hero {"name":"acf/hero"} /-->';

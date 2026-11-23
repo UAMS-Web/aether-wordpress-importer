@@ -294,6 +294,8 @@ it('reports an unparseable Location as a refusal instead of throwing', function 
     'scheme with no host' => ['http://'],
     'bare scheme' => ['https://'],
     'unmatched bracket' => ['http://[::1'],
+    // guzzlehttp/psr7 2.13.4 rejects a bracketed host that continues after its `]` (#612)
+    'text after a bracketed host' => ['http://[::1]x/'],
     'space in the authority' => ['http://exa mple.com/'],
 ]);
 
