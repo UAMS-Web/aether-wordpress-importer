@@ -83,6 +83,25 @@ it('resolves a relative Location against the current hop', function (): void {
         ->toBe('http://93.184.216.34/elsewhere/');
 });
 
+// guzzlehttp/psr7 2.13.5 fixed path references whose first segment holds a colon followed by
+// digits: `/a:80/b` is a path on the current host, not a host and port (#609, #612)
+it('resolves a relative Location whose path holds a colon and digits against the current host', function (): void {
+    Http::fake([
+        'http://93.184.216.34/some-page/' => Http::response(
+            '',
+            302,
+            ['Location' => '/a:80/b']
+        ),
+        'http://93.184.216.34/a:80/b' => Http::response(
+            '',
+            200
+        ),
+    ]);
+
+    expect(GuardedHttpFetcher::resolveFinalUrl(PUBLIC_URL))
+        ->toBe('http://93.184.216.34/a:80/b');
+});
+
 it('never requests a URL whose host is a non-public address', function (string $url): void {
     Http::fake();
 
