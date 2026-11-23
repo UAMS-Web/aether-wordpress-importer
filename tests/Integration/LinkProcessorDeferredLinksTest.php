@@ -908,7 +908,9 @@ it('finds nothing when its only lookup returns something other than an entry', f
 });
 
 it('reports an unresolved link\'s entry with an empty ID when its ID is not a string', function (): void {
-    // An entry file can carry a numeric ID, which a lookup by the ID as a string finds
+    // An entry file can carry a numeric ID, which a lookup by the ID as a string finds. It is an
+    // integer, as YAML reads one: statamic/cms 6.42.0 queries by ID through Arr::only(), which
+    // cannot flip a float, so a float ID now fails inside Statamic's own search hook on save
     $entry = EntryFacade::make();
 
     if (! $entry instanceof Entry) {
@@ -918,10 +920,10 @@ it('reports an unresolved link\'s entry with an empty ID when its ID is not a st
     $entry->collection('pages');
     $entry->locale('default');
     $entry->slug('home');
-    $entry->id(1.5);
+    $entry->id(15);
     $entry->data(['title' => 'Home']);
     $entry->save();
-    LinkProcessor::setDeferredInternalLinks(['1.5' => [deferredLink(['post_name' => 'gone', 'post_id' => '98'])]]);
+    LinkProcessor::setDeferredInternalLinks(['15' => [deferredLink(['post_name' => 'gone', 'post_id' => '98'])]]);
     $output = new BufferedOutput;
 
     LinkProcessor::processDeferredInternalLinks('default', $output);
