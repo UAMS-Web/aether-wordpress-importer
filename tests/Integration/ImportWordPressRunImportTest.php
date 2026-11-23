@@ -1403,6 +1403,19 @@ it('starts from a clean slate: no deferred links, warnings, failed downloads or 
         ->and((new ReflectionProperty(BaseEntryCreator::class, 'siteNamesCache'))->getValue())->toBe([]);
 });
 
+// The API path clears the summary before it materializes, so the import must keep what the
+// materializer recorded since rather than clear it a second time (#611).
+it('keeps the warnings recorded before the import when the run already started its summary', function (): void {
+    iwriCollection('pages');
+    ImportWarningManager::addWarning('migration_api', 'emptied_bodies', ['post_id' => 501, 'label' => 'kept-warning-label']);
+    [$command, $buffer] = iwriCommand();
+
+    $status = (new ReflectionMethod(ImportWordPress::class, 'runImportForParts'))->invoke($command, [iwriPart($this, ['page'])], true);
+
+    expect($status)->toBe(0)
+        ->and(str_replace(PHP_EOL, "\n", $buffer->fetch()))->toContain("migration_api - emptied_bodies:\n - {\"post_id\":501,\"label\":\"kept-warning-label\"}\n");
+});
+
 it('measures the codebase and uploads assets when the settings are not given', function (): void {
     $settings = config('wordpress-import');
     config(['wordpress-import' => array_diff_key(is_array($settings) ? $settings : [], array_flip(['measure_filesize', 'upload_images', 'upload_files']))]);
