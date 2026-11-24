@@ -83,10 +83,12 @@
     },
     "scripts": {
         "post-install-cmd": [
-            "@php scripts/setup-git-hooks.php"
+            "@php scripts/setup-git-hooks.php",
+            "@php .claude/skills/upstream-patch-lifecycle/scripts/ensure-patches-applied.php"
         ],
         "post-update-cmd": [
-            "@php scripts/setup-git-hooks.php"
+            "@php scripts/setup-git-hooks.php",
+            "@php .claude/skills/upstream-patch-lifecycle/scripts/ensure-patches-applied.php"
         ],
         "test": "pest --testsuite=Unit,Integration",
         "mutate": "pest --testsuite=Unit,Integration --mutate --path=src",
