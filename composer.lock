@@ -8836,16 +8836,16 @@
         },
         {
             "name": "uams-web/aether-wordpress-importer-cleanup",
-            "version": "v2.1.0",
+            "version": "v2.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup.git",
-                "reference": "6234a0bb361bbeba9785f97cd22d6ab444df8a06"
+                "reference": "51a71a94817b91bca96596da44b1278201751805"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/UAMS-Web/aether-wordpress-importer-cleanup/zipball/6234a0bb361bbeba9785f97cd22d6ab444df8a06",
-                "reference": "6234a0bb361bbeba9785f97cd22d6ab444df8a06",
+                "url": "https://api.github.com/repos/UAMS-Web/aether-wordpress-importer-cleanup/zipball/51a71a94817b91bca96596da44b1278201751805",
+                "reference": "51a71a94817b91bca96596da44b1278201751805",
                 "shasum": ""
             },
             "require": {
@@ -8884,9 +8884,10 @@
             "description": "Deterministic CLI tool to transform WordPress WXR exports — strips legacy <table> markup for Statamic import.",
             "support": {
                 "issues": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup/issues",
-                "source": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup/tree/v2.1.0"
+                "source": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup/tree/v2.2.1"
             },
-            "time": "2026-11-15T15:05:57+00:00"
+            "time": "2026-11-23T12:25:34+00:00",
+            "published-time": "2026-11-23T15:42:31+00:00"
         },
         {
             "name": "ueberdosis/tiptap-php",

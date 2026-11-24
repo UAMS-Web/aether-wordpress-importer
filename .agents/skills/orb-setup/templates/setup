@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Shared Amp orb toolchain setup (UAMS-Web/uams-claude-skills#562). Written by the sync as
 # .agents/setup; edit it in uams-claude-skills, never in the repository. A repository's own steps
-# go in .agents/setup.local, which this script runs last when the file exists.
+# go in .agents/setup.pre.local, which this script runs after the toolchain and before the dependency
+# installs, and in .agents/setup.local, which it runs last. Each runs only when the file exists.
 #
 # Installs, idempotently: PHP 8.4 (sury.org), Composer 2, Node 22, then the locked dependencies.
 # Every download is verified before use: the sury.org keyring against a pinned sha256, the Composer
@@ -80,6 +81,13 @@ if ! command -v node >/dev/null || [[ $(node --version) != "v${NODE_VERSION%%.*}
     (cd "$scratch" && grep "  $archive\$" SHASUMS256.txt | sha256sum --check)
     sudo tar -xJf "$scratch/$archive" -C /usr/local --strip-components=1
     rm -rf "$scratch"
+fi
+
+# The repository's own steps that the dependency installs need first (an npm the lockfile's engines
+# require, submodules its Composer scripts read). PHP, Composer and Node are on PATH by now.
+if [[ -f .agents/setup.pre.local ]]; then
+    echo "[$SECONDS s] Running .agents/setup.pre.local"
+    bash .agents/setup.pre.local
 fi
 
 echo "[$SECONDS s] Installing locked dependencies"

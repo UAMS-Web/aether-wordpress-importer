@@ -265,12 +265,18 @@ class ImportWordPress extends Command
      *
      * Bounds the dataless-entry sweep to files this run produced (wordpress-importer-archive#1160).
      */
+    // Every run sets this before the sweep reads it, and any default predates every file, so
+    // a default of 1.0 or -1.0 sweeps exactly what 0.0 does.
+    // @pest-mutate-ignore: IncrementFloat, DecrementFloat
     private float $runStartedAt = 0.0;
 
     /**
      * Whether this command is running an import, so a command that finishes inside it
      * hands Laravel Prompts back (#228).
      */
+    // Only the listener runImportForParts() registers reads this, and that method sets it to
+    // true before any command can finish, so the starting value is never read.
+    // @pest-mutate-ignore: FalseToTrue
     private bool $importing = false;
 
     /**
@@ -482,13 +488,19 @@ class ImportWordPress extends Command
         // The API source materializes WXR parts and rejoins the file flow below, so every
         // importer subsystem downstream reads real files exactly as it always has.
         if ($source === 'api') {
+            // Start the run's warning summary before materializing rather than at the import:
+            // the materializer records warnings of its own (what the API does not serve, the
+            // posts the cleaner emptied), and clearing at the import discarded every one of
+            // them before the summary printed (#611).
+            ImportWarningManager::clearWarnings();
+
             $materialized = $this->materializeFromApi();
 
             if ($materialized === null) {
                 return 1;
             }
 
-            return $this->runImportForParts($materialized);
+            return $this->runImportForParts($materialized, warningsStarted: true);
         }
 
         // Set the MinervaKB loader's source explicitly rather than relying on it being
@@ -581,10 +593,13 @@ class ImportWordPress extends Command
      * import hands Prompts back.
      *
      * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
+     * @param  bool  $warningsStarted  Whether the run already cleared the warning summary, so
+     *                                 the warnings recorded since then are kept (#611)
      * @return int Exit code (0 for success, 1 for failure)
      */
     protected function runImportForParts(
-        array $parts
+        array $parts,
+        bool $warningsStarted = false
     ): int {
         // Hand Prompts back after each nested command, and only while this import runs
         Event::listen(CommandFinished::class, function (): void {
@@ -596,7 +611,7 @@ class ImportWordPress extends Command
         $this->importing = true;
 
         try {
-            return $this->importParts($parts);
+            return $this->importParts($parts, $warningsStarted);
         } finally {
             $this->importing = false;
         }
@@ -606,10 +621,12 @@ class ImportWordPress extends Command
      * Import an already-resolved part-set.
      *
      * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
+     * @param  bool  $warningsStarted  Whether the run already cleared the warning summary
      * @return int Exit code (0 for success, 1 for failure)
      */
     private function importParts(
-        array $parts
+        array $parts,
+        bool $warningsStarted
     ): int {
         // Resolve the non-interactive policy for unsupported-content gates
         $unsupportedContentPolicy = $this->resolveUnsupportedContentPolicy();
@@ -665,8 +682,11 @@ class ImportWordPress extends Command
             );
         }
 
-        // Clear all import warnings at the start of import
-        ImportWarningManager::clearWarnings();
+        // Clear all import warnings at the start of import, unless the run already did so
+        // before materializing its parts, whose warnings must reach the summary
+        if (! $warningsStarted) {
+            ImportWarningManager::clearWarnings();
+        }
 
         // Forget the ids and fragment links a previous run recorded (#502)
         DroppedAnchorTracker::clear();

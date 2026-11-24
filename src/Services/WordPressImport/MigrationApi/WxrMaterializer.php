@@ -14,6 +14,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators\R
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Traits\WxrMaterializerAttachmentsTrait;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Traits\WxrMaterializerUnservedContentTrait;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Traits\WxrMaterializerXmlWriterTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use XMLWriter;
 
 /**
@@ -398,8 +399,12 @@ class WxrMaterializer
         // `complete`, so an interrupted clean leaves the run reading unfinished.
         // A site with a duplicate disposition first loses the duplicates it names, as its
         // export does when the cleaner runs with `--disposition` (#89).
-        if (self::cleansSite($channel)) {
-            $this->cleanParts($paths, $disposition);
+        // `cleansSite()` already refuses a site whose `base_blog_url` is not a string, so the
+        // first check only carries that type to the call
+        $baseBlogUrl = $channel['base_blog_url'] ?? null;
+
+        if (\is_string($baseBlogUrl) && self::cleansSite($channel)) {
+            $this->cleanParts($paths, $baseBlogUrl, $disposition);
         }
 
         // Mark the run complete only once every part is closed. Until this line runs the
@@ -830,17 +835,22 @@ class WxrMaterializer
      * both paths read one disposition. A post the disposition names but this run did not read
      * is skipped, so a scoped or incremental run is safe.
      *
+     * A post whose body held text and cleaned to nothing is still imported, as its cleaned
+     * export would be, but each one is recorded as an import warning naming the site and the
+     * post, so the run's summary says which articles were lost (#611).
+     *
      * One part is read at a time, so memory is bounded by the part size, not the run.
      *
      * @param  list<string>  $paths  The written part paths
+     * @param  string  $site  The site's `base_blog_url`, for the warnings
      * @param  DuplicateDisposition|null  $disposition  The site's duplicate disposition, if any
      *
      * @throws MigrationApiException When a part cannot be read, cleaned or written back, or
      *                               when the disposition refuses a post
      */
-    private function cleanParts(array $paths, ?DuplicateDisposition $disposition = null): void
+    private function cleanParts(array $paths, string $site, ?DuplicateDisposition $disposition = null): void
     {
-        $transform = Transform::withDefaultRules();
+        $transform = $this->cleanupTransform();
         $apply = $disposition instanceof DuplicateDisposition ? new ApplyDuplicateDisposition($disposition) : null;
         $dropped = [];
         $renamed = [];
@@ -863,7 +873,9 @@ class WxrMaterializer
                 $renamed = [...$renamed, ...$applied['renamed']];
             }
 
-            $cleaned = $transform->apply($raw);
+            // Clean the part, with each post whose body cleaned to nothing named
+            $result = $this->cleanPart($transform, $raw, $path);
+            $cleaned = $result['wxr'];
 
             // The cleaner suppresses libxml errors, so a part it could not parse comes back as an
             // empty document rather than an exception. Refuse to write that over the part: every
@@ -886,8 +898,11 @@ class WxrMaterializer
                 throw new MigrationApiException(\sprintf('Could not write the cleaned "%s".', $path));
             }
 
+            // Name each post that lost its whole body, now that the part holding it is written
+            $this->recordEmptiedBodies($result['emptied'], $site, $path);
+
             // Release the part's text before reading the next one
-            unset($raw, $cleaned, $applied);
+            unset($raw, $cleaned, $result, $applied);
         }
 
         // Record what the disposition did across every part, for the manifest
@@ -898,6 +913,72 @@ class WxrMaterializer
                 'dropped' => $dropped,
                 'renamed' => $renamed,
             ];
+        }
+    }
+
+    /**
+     * The cleaner each part runs through: the default pipeline `bin/wxr-cleanup` runs.
+     *
+     * Protected so a test can hand in a pipeline that fails or empties a body, which no real
+     * post can be relied on to do.
+     *
+     * @return Transform The cleaner's default pipeline
+     */
+    protected function cleanupTransform(): Transform
+    {
+        return Transform::withDefaultRules();
+    }
+
+    /**
+     * Clean one part, reporting each post whose body cleaned to nothing (#611).
+     *
+     * The cleaner throws `RuntimeException` when its rules do not settle, or when it cannot
+     * parse or write back a body, and `InvalidArgumentException` for an empty input. Either
+     * stops the run as a migration API failure naming the part, which is left as written.
+     * Nothing else is caught, so a programming error still surfaces as itself.
+     *
+     * @param  Transform  $transform  The cleaner
+     * @param  string  $raw  The part as written
+     * @param  string  $path  The part's path, for the error message
+     * @return array{wxr: string, emptied: list<string>} The cleaned part, and a label
+     *                                                   (`wp:post_id N`) for each post whose
+     *                                                   body cleaned to nothing
+     *
+     * @throws MigrationApiException When the cleaner fails on the part
+     */
+    private function cleanPart(Transform $transform, string $raw, string $path): array
+    {
+        try {
+            return $transform->applyReporting($raw);
+        } catch (RuntimeException|InvalidArgumentException $exception) {
+            throw new MigrationApiException(\sprintf(
+                'The WXR cleaner failed on "%s": %s The part was left as written.',
+                $path,
+                $exception->getMessage()
+            ), $exception->getCode(), previous: $exception);
+        }
+    }
+
+    /**
+     * Record each post whose body cleaned to nothing as an import warning (#611).
+     *
+     * The cleaner labels each one `wp:post_id N`, or `an item without wp:post_id` when the
+     * item carries none, so the post id is read from the label and is null for the second.
+     * The label is kept beside it, so a warning with no id still says what it names.
+     *
+     * @param  list<string>  $emptied  The cleaner's labels for the emptied posts
+     * @param  string  $site  The site's `base_blog_url`
+     * @param  string  $path  The part the posts are in
+     */
+    private function recordEmptiedBodies(array $emptied, string $site, string $path): void
+    {
+        foreach ($emptied as $label) {
+            ImportWarningManager::addWarning('migration_api', 'emptied_bodies', [
+                'site' => $site,
+                'post_id' => \preg_match('/^wp:post_id (\d+)$/', $label, $match) === 1 ? (int) $match[1] : null,
+                'label' => $label,
+                'part' => $path,
+            ]);
         }
     }
 

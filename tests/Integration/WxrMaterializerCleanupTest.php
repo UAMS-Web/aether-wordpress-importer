@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
+use Dom\HTMLDocument;
 use Illuminate\Support\Facades\Http;
+use UAMSWeb\Aether\WordPressImporter\Cleanup\Rule;
 use UAMSWeb\Aether\WordPressImporter\Cleanup\Transform;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
@@ -37,12 +40,64 @@ const CLEANUP_RAW_BODY = '<table width="600" border="0"><tbody><tr><td>'
     .'<p><embed src="https://www.youtube.com/v/dQw4w9WgXcQ" type="application/x-shockwave-flash" width="425" height="350"></embed></p>'
     .'</td></tr></tbody></table>';
 
+/**
+ * A rule that adds to every body on each pass, so the cleaner's output never settles.
+ */
+final class CleanupNeverSettles implements Rule
+{
+    /**
+     * {@inheritDoc}
+     */
+    public function apply(HTMLDocument $document): void
+    {
+        $document->body?->append('x');
+    }
+}
+
+/**
+ * A rule that fails as a programming error would, which the materializer must not catch.
+ */
+final class CleanupThrowsLogicError implements Rule
+{
+    /**
+     * {@inheritDoc}
+     */
+    public function apply(HTMLDocument $document): void
+    {
+        throw new LogicException('A rule broke.');
+    }
+}
+
+/**
+ * A materializer that cleans with the given pipeline in place of the default one.
+ */
+final class CleanupTransformMaterializer extends WxrMaterializer
+{
+    /**
+     * Create the materializer over a client that is never called, cleaning with the pipeline.
+     */
+    public function __construct(string $directory, private readonly Transform $transform)
+    {
+        parent::__construct(new Client('https://example.test', 'shhh'), $directory);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function cleanupTransform(): Transform
+    {
+        return $this->transform;
+    }
+}
+
 beforeEach(function (): void {
     $this->workingDirectory = \sys_get_temp_dir().\DIRECTORY_SEPARATOR.\uniqid('wxr_clean_', true);
     \mkdir($this->workingDirectory);
+    ImportWarningManager::clearWarnings();
 });
 
 afterEach(function (): void {
+    ImportWarningManager::clearWarnings();
     $entries = \glob($this->workingDirectory.\DIRECTORY_SEPARATOR.'*');
 
     foreach ($entries === false ? [] : $entries as $entry) {
@@ -176,6 +231,47 @@ function cleanupExportPost(string $directory, string $title, string $content, st
     }
 }
 
+/**
+ * Clean one part on disk through the materializer's own `cleanParts()`, for the site
+ * `https://news.uams.edu`.
+ */
+function cleanupCleanPart(WxrMaterializer $materializer, string $path): void
+{
+    $clean = Closure::bind(function (string $part): void {
+        $this->cleanParts([$part], 'https://news.uams.edu');
+    }, $materializer, WxrMaterializer::class);
+
+    if ($clean === null) {
+        throw new RuntimeException('Could not bind to the materializer.');
+    }
+
+    $clean($path);
+}
+
+/**
+ * Write a part holding an item for each body, keyed by its post id, or by a string key for an
+ * item with no post id, and answer its path.
+ *
+ * @param  array<int|string, string>  $bodies  Each item's body, by post id
+ */
+function cleanupWritePart(string $directory, array $bodies): string
+{
+    $items = '';
+
+    foreach ($bodies as $postId => $body) {
+        $items .= '<item><title>A title</title><content:encoded><![CDATA['.$body.']]></content:encoded>'
+            .(\is_int($postId) ? '<wp:post_id>'.$postId.'</wp:post_id>' : '')
+            .'</item>';
+    }
+
+    $path = $directory.\DIRECTORY_SEPARATOR.'wxr.000.xml';
+    \file_put_contents($path, '<?xml version="1.0" encoding="UTF-8"?>'
+        .'<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wp="http://wordpress.org/export/1.2/">'
+        .'<channel>'.$items.'</channel></rss>');
+
+    return $path;
+}
+
 it('maps a listed site\'s API post exactly as its cleaned export would', function (): void {
     $title = 'The &ldquo;new&rdquo; clinic -- opens';
     $excerpt = '<p>LITTLE ROCK – The <span style="color:red">clinic</span> opened.</p>';
@@ -259,14 +355,87 @@ it('refuses to overwrite a part the cleaner could not read', function (): void {
     \file_put_contents($path, $broken);
 
     $materializer = new WxrMaterializer(new Client('https://example.test', 'shhh'), $this->workingDirectory);
-    $cleanPart = Closure::bind(function (string $part): void {
-        $this->cleanParts([$part]);
-    }, $materializer, WxrMaterializer::class);
 
-    if ($cleanPart === null) {
-        throw new RuntimeException('Could not bind to the materializer.');
+    expect(fn () => cleanupCleanPart($materializer, $path))->toThrow(MigrationApiException::class, 'returned 0 of its 2 items');
+    expect(\file_get_contents($path))->toBe($broken);
+});
+
+// The cleaner reruns its rules until the output stops changing, and gives up past five
+// passes. That failure has to stop the run naming the part, not escape as a bare
+// `RuntimeException` naming nothing (#611).
+it('stops on a cleaner that does not settle, naming the part and leaving it as written', function (): void {
+    $path = cleanupWritePart($this->workingDirectory, [501 => '<p>Body.</p>']);
+    $written = \file_get_contents($path);
+    $materializer = new CleanupTransformMaterializer($this->workingDirectory, new Transform([new CleanupNeverSettles]));
+
+    try {
+        cleanupCleanPart($materializer, $path);
+        $thrown = null;
+    } catch (MigrationApiException $exception) {
+        $thrown = $exception;
     }
 
-    expect(fn () => $cleanPart($path))->toThrow(MigrationApiException::class, 'returned 0 of its 2 items');
-    expect(\file_get_contents($path))->toBe($broken);
+    expect($thrown?->getMessage())->toBe(\sprintf(
+        'The WXR cleaner failed on "%s": Cleanup rules did not settle after 5 passes; a rule keeps undoing another rule\'s work. The part was left as written.',
+        $path
+    ))
+        ->and($thrown?->getPrevious())->toBeInstanceOf(RuntimeException::class)
+        ->and(\file_get_contents($path))->toBe($written)
+        ->and(ImportWarningManager::getAllWarnings())->toBe([]);
+});
+
+it('stops on a part the cleaner refuses as empty, naming the part and leaving it as written', function (): void {
+    // Nothing but characters XML forbids, which the cleaner strips to nothing and refuses
+    $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'wxr.000.xml';
+    \file_put_contents($path, "\x01\x02");
+    $materializer = new WxrMaterializer(new Client('https://example.test', 'shhh'), $this->workingDirectory);
+
+    expect(fn () => cleanupCleanPart($materializer, $path))->toThrow(
+        MigrationApiException::class,
+        \sprintf('The WXR cleaner failed on "%s": WXR input is empty. The part was left as written.', $path)
+    );
+    expect(\file_get_contents($path))->toBe("\x01\x02");
+});
+
+it('lets an error that is not the cleaner\'s own surface as itself', function (): void {
+    $path = cleanupWritePart($this->workingDirectory, [501 => '<p>Body.</p>']);
+    $materializer = new CleanupTransformMaterializer($this->workingDirectory, new Transform([new CleanupThrowsLogicError]));
+
+    expect(fn () => cleanupCleanPart($materializer, $path))->toThrow(LogicException::class, 'A rule broke.');
+});
+
+// A post whose whole body cleans away is imported empty, as its cleaned export would be, so
+// the only sign of it is the warning that names it (#611).
+it('imports a post whose body cleans to nothing, naming it in a warning with the site and the post id', function (): void {
+    cleanupFakeApi('https://news.uams.edu', [cleanupPost('A title', '<p>&nbsp;</p>', '')]);
+
+    $paths = (new WxrMaterializer(new Client('https://example.test', 'shhh'), $this->workingDirectory))->materialize(1);
+
+    expect(cleanupParsedPost($paths)['content'])->toBe('')
+        ->and(ImportWarningManager::getAllWarnings())->toBe(['migration_api' => ['emptied_bodies' => [[
+            'site' => 'https://news.uams.edu',
+            'post_id' => 501,
+            'label' => 'wp:post_id 501',
+            'part' => $paths[0],
+        ]]]]);
+});
+
+it('names every emptied post in a part, and only those, with no id for an item that has none', function (): void {
+    $path = cleanupWritePart($this->workingDirectory, [501 => '<p>&nbsp;</p>', 502 => '<p>Kept text.</p>', 'no id' => '<p></p>']);
+
+    cleanupCleanPart(new WxrMaterializer(new Client('https://example.test', 'shhh'), $this->workingDirectory), $path);
+
+    expect(ImportWarningManager::getAllWarnings())->toBe(['migration_api' => ['emptied_bodies' => [
+        ['site' => 'https://news.uams.edu', 'post_id' => 501, 'label' => 'wp:post_id 501', 'part' => $path],
+        ['site' => 'https://news.uams.edu', 'post_id' => null, 'label' => 'an item without wp:post_id', 'part' => $path],
+    ]]]);
+});
+
+it('records no warning when every body keeps text', function (): void {
+    cleanupFakeApi('https://news.uams.edu', [cleanupPost('A title', CLEANUP_RAW_BODY, '')]);
+
+    $paths = (new WxrMaterializer(new Client('https://example.test', 'shhh'), $this->workingDirectory))->materialize(1);
+
+    expect(cleanupParsedPost($paths)['content'])->not->toBe('')
+        ->and(ImportWarningManager::getAllWarnings())->toBe([]);
 });
