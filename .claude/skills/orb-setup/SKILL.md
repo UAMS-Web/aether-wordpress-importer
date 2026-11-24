@@ -2,9 +2,9 @@
 name: orb-setup
 description: >-
   The shared toolchain setup for Amp orbs: `.agents/setup` installs PHP 8.4, Composer 2 and Node 22
-  with every download verified, installs the locked dependencies, and runs a repository's own
-  `.agents/setup.local` when it exists; `.agents/resume` checks on wake that nothing needs
-  installing and runs `.agents/resume.local`. The sync writes both files, executable, to a
+  with every download verified, runs a repository's own `.agents/setup.pre.local` before it installs
+  the locked dependencies and `.agents/setup.local` after, each when it exists; `.agents/resume`
+  checks on wake that nothing needs installing and runs `.agents/resume.local`. The sync writes both files, executable, to a
   repository that takes the `orb` profile. Activate when adding or changing a repository's orb
   setup, moving a repository onto the shared script, or fixing an orb setup failure.
 ---
@@ -28,15 +28,30 @@ flag: the sync rewrites them whole whenever they differ and keeps them mode `075
    sha256 before `dpkg -i`; a mismatch stops the run.
 2. Installs Composer 2, checking the installer against `installer.sig`.
 3. Installs Node 22, checking the archive against `SHASUMS256.txt`.
-4. Runs `composer install` when `composer.json` exists and `npm ci` when `package-lock.json` exists.
-5. Runs `.agents/setup.local` when it exists.
+4. Runs `.agents/setup.pre.local` when it exists.
+5. Runs `composer install` when `composer.json` exists and `npm ci` when `package-lock.json` exists.
+6. Runs `.agents/setup.local` when it exists.
 
 Every step is skipped when its result is already present, so a second run changes nothing.
 
 ## Repository-specific steps
 
-Put them in `.agents/setup.local` (and wake checks in `.agents/resume.local`). The sync never writes
-or deletes those two files. They run with `bash`, from the repository root, after the shared steps.
+Put them in `.agents/setup.local` (and wake checks in `.agents/resume.local`). They run with `bash`,
+from the repository root, after the shared steps.
+
+A step the dependency installs need first goes in `.agents/setup.pre.local` (UAMS-Web/uams-claude-skills#890).
+It runs with `bash`, from the repository root, after PHP, Composer and Node are installed and before
+`composer install` and `npm ci`, so the tools are on `PATH` and nothing from the lockfiles is installed
+yet. Two cases need it:
+
+- **An npm newer than the bundled one.** The shared Node ships its own npm, and a `package.json` whose
+  `engines.npm` floor is higher, with `engine-strict=true` in `.npmrc`, makes `npm ci` refuse. Upgrade
+  npm to that floor here, for example `sudo npm install -g npm@11.10.0`.
+- **Files the Composer scripts read.** `composer install` runs the repository's Composer scripts, so
+  anything they need (submodules, for example `git submodule update --init`) is prepared here.
+
+A failing step stops setup before any dependency is installed. Without the file, setup runs exactly as
+before. The sync never writes or deletes any of the three files.
 
 ## When the sury.org keyring changes
 
@@ -46,3 +61,5 @@ The check fails closed with both hashes in the message. Read the new keyring, th
 ## Measured
 
 The tests in `scripts/seeds.test.mjs` run both scripts under Git Bash on Windows against stub tools: nothing is downloaded when the tools are present, `.agents/setup.local` runs when present and is absent from the output when not, a failing local file fails setup, and a keyring whose checksum differs is never installed. Not measured: a run on a bare Linux orb, and macOS (not a target for these files).
+
+The `.agents/setup.pre.local` tests in the same file (UAMS-Web/uams-claude-skills#890) were run under bash 3.2.57 on macOS against the same stubs. They show that the file runs from the repository root before `composer install`, with `setup.local` still last. Without the file, nothing about it is printed. A failing file stops setup before any install. An npm stub that refuses `npm ci` below `>=11.10.0` passes once the file upgrades it and refuses without that upgrade, but that stub stands in for npm's own engine check, which was not run. Moving the hook after `composer install` fails the order test. Not yet measured: these tests under Git Bash on Windows, and a fresh orb.
