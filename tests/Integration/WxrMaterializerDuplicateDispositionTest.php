@@ -138,7 +138,7 @@ function dispositionMaterialize(string $directory): array
  * Each post in the given WXR files as the importer's parser reads it, in file order.
  *
  * @param  list<string>  $paths  WXR file paths
- * @return list<array{id: int, slug: string, title: string, date: string, content: string}>
+ * @return list<array{id: int, slug: string, link: string, title: string, date: string, content: string}>
  */
 function dispositionParsedPosts(array $paths): array
 {
@@ -152,6 +152,7 @@ function dispositionParsedPosts(array $paths): array
         $posts[] = [
             'id' => (int) $wp->post_id,
             'slug' => (string) $wp->post_name,
+            'link' => (string) $item->link,
             'title' => (string) $item->title,
             'date' => (string) $wp->post_date,
             'content' => (string) $item->children('content', true)->encoded,
@@ -169,7 +170,7 @@ function dispositionParsedPosts(array $paths): array
  * `Transform::withDefaultRules()`.
  *
  * @param  list<array{0: int, 1: string, 2: string}>  $posts  The posts, as `[id, slug, date]`
- * @return list<array{id: int, slug: string, title: string, date: string, content: string}>
+ * @return list<array{id: int, slug: string, link: string, title: string, date: string, content: string}>
  */
 function dispositionExportPosts(string $directory, array $posts): array
 {
@@ -321,6 +322,11 @@ it('imports one post per duplicate set from an API capture, exactly as from the 
         12335 => 'researcher-receives-grant-to-study-brain-activity-of-addicts',
         501 => 'a-post-in-no-set',
     ]);
+
+    // The renamed post's link follows its canonical slug, so the importer records the canonical
+    // permalink as its original URL (cleaner v2.1.1, UAMS-Web/aether-wordpress-importer-cleanup#87)
+    expect(\array_column($fromApi, 'link', 'id')[12335] ?? null)
+        ->toBe('https://news.uams.edu/2008/10/08/researcher-receives-grant-to-study-brain-activity-of-addicts/');
 });
 
 it('records the posts it dropped and renamed in the manifest', function (): void {
