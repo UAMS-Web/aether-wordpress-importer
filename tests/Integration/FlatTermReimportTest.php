@@ -237,3 +237,28 @@ it('makes the next additional term on a third run, beside the first', function (
     expect(flatTermTitles())->toBe(['default_news' => 'Default — News', 'default_news-1' => 'Default — News', 'default_news-2' => 'Default — News'])
         ->and($output)->toContain("Created 'tags::default_news-2'");
 });
+
+it('finds the terms it saved straight after the pass, when the store warms its title index', function (array $indexes): void {
+    // A store that warms its title index builds it during the pass's own rebuild. Under
+    // statamic/cms 6.43 that is every store a query has read by title; naming the index
+    // here makes 6.42 warm it too (#618)
+    config(['statamic.stache.indexes' => $indexes]);
+
+    flatTermImport([['original' => 'news', 'name' => 'News'], ['original' => 'events', 'name' => 'Events']]);
+
+    // No rebuild of the store here: the pass's own rebuild must leave it readable
+    $slugs = [];
+
+    foreach (TermFacade::whereTaxonomy('tags') as $term) {
+        if ($term instanceof LocalizedTerm) {
+            $slugs[] = $term->slug();
+        }
+    }
+
+    sort($slugs);
+
+    expect($slugs)->toBe(['default_events', 'default_news']);
+})->with([
+    'the title index warmed' => [['title']],
+    'only the default indexes warmed' => [[]],
+]);
