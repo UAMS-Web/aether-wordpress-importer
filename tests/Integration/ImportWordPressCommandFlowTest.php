@@ -69,11 +69,19 @@ final class IwcfCommand extends ImportWordPress
     public int $status = 7;
 
     /**
+     * Each import's warnings-started flag, and the warnings it was handed.
+     *
+     * @var list<array{bool, array<int|string, mixed>}>
+     */
+    public array $warningsAtImport = [];
+
+    /**
      * {@inheritDoc}
      */
-    protected function runImportForParts(array $parts): int
+    protected function runImportForParts(array $parts, bool $warningsStarted = false): int
     {
         $this->imports[] = $parts;
+        $this->warningsAtImport[] = [$warningsStarted, ImportWarningManager::getAllWarnings()];
         $this->listenersDuring[] = [count(Event::getListeners(TermSaved::class)), count(Event::getListeners(AssetDeleted::class))];
 
         return $this->status;
@@ -99,6 +107,9 @@ final class IwcfCommand extends ImportWordPress
              */
             public function materialize(?int $site = null, ?string $modifiedAfter = null, array $consumedOptions = [], ?string $contentType = null): array
             {
+                // Record a warning, as a real read does for what it cannot import
+                ImportWarningManager::addWarning('migration_api', 'emptied_bodies', ['post_id' => 501]);
+
                 return [$this->directory.'/wordpress-export.001.xml'];
             }
         };
@@ -316,6 +327,28 @@ it('imports what the migration API materializes', function (): void {
     expect(iwcfCall($command, 'runImport'))->toBe(7)
         ->and($command->imports)->toBe([[$this->root.'/wordpress-export.001.xml']])
         ->and(iwcfOutput($buffer))->toContain("Materialized 1 WXR part(s) into {$this->root}\n");
+});
+
+// The import clears the warning summary when it starts, which on the API path came after the
+// materializer had recorded its own warnings, so none of them reached the summary (#611).
+it('starts the warning summary before materializing, so the import keeps what the materializer recorded', function (): void {
+    [$command] = iwcfCommand(['file' => $this->root, '--source' => 'api', '--network' => 'https://network.test', '--key-from-stdin' => true]);
+    ImportWarningManager::addWarning('content', 'dataless_entries_removed', ['path' => 'from-an-earlier-run']);
+
+    iwcfCall($command, 'runImport');
+
+    expect($command->warningsAtImport)->toBe([[true, ['migration_api' => ['emptied_bodies' => [['post_id' => 501]]]]]]);
+    ImportWarningManager::clearWarnings();
+});
+
+it('leaves a file-sourced run to start its warning summary at the import', function (): void {
+    [$command] = iwcfCommand(['file' => iwcfFile($this->root.'/site.xml')]);
+    ImportWarningManager::addWarning('content', 'dataless_entries_removed', ['path' => 'from-an-earlier-run']);
+
+    iwcfCall($command, 'runImport');
+
+    expect(array_column($command->warningsAtImport, 0))->toBe([false]);
+    ImportWarningManager::clearWarnings();
 });
 
 it('stops when the migration API materializes nothing', function (): void {

@@ -1,0 +1,26 @@
+<?php
+
+namespace UAMSWeb\Aether\WordPressImporter\Cleanup;
+
+/**
+ * PHPStan stub for the WXR cleaner's `Transform`, declaring the exception `v2.1.0` omits.
+ *
+ * At `uams-web/aether-wordpress-importer-cleanup` `v2.1.0`, `applyReporting()` declares only
+ * `@throws InvalidArgumentException`, but its private `settle()` throws `RuntimeException`
+ * when a field is still changing after five passes, and that escapes the public method. With
+ * the tag missing, PHPStan reads the materializer's catch of it as dead (#611). Upstream
+ * declares it from `v2.1.1`; remove this stub, and its `stubFiles` entry, once the lock moves
+ * to `v2.1.1` or later.
+ */
+class Transform
+{
+    /**
+     * @return array{wxr: string, emptied: list<string>}
+     *
+     * @throws \InvalidArgumentException When the input is empty once invalid XML characters are stripped
+     * @throws \RuntimeException When a field is still changing after the pass cap
+     */
+    public function applyReporting(string $wxr): array
+    {
+    }
+}

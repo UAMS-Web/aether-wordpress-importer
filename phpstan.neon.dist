@@ -9,3 +9,4 @@ parameters:
     tmpDir: .phpstan-cache
     stubFiles:
         - tests/Support/IdeStubs/XMLReader.stub
+        - tests/Support/IdeStubs/CleanupTransform.stub
