@@ -657,6 +657,17 @@ trait PersistsStoredTaxonomyTerms
             }
 
             $store->clear();
+
+            // Read the terms from disk before warming. The store keeps the items its last read
+            // returned, and clear() does not drop them, so the pass's own preload, made before
+            // any term was saved, would otherwise be what the warm builds every index from.
+            // Outside a warm this always reads afresh, and the warm reuses what it read. Under
+            // statamic/cms 6.43 the warm builds the title index the term query reads, so a
+            // stale read left every term the pass saved unfindable until the next rebuild (#618)
+            if (\method_exists($store, 'getItemsFromFiles')) {
+                $store->getItemsFromFiles();
+            }
+
             $store->warm();
         } catch (\Throwable $throwable) {
             Log::warning("BaseEntryCreator: failed to rebuild term store '{$statamicTaxonomyHandle}' after bulk term save: ".$throwable->getMessage());
