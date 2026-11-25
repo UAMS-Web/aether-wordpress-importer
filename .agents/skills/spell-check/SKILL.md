@@ -12,7 +12,7 @@ description: >-
 <!--
   Synced from UAMS-Web/uams-claude-skills: shared/.claude/skills/spell-check/SKILL.md
   Edit it there, not here; the next sync overwrites this copy.
-  Delivered to this repository through the profile(s): spell.
+  Delivered to this repository through the profile(s): spell, php.
 -->
 <!-- cspell:ignore cspell -->
 
@@ -31,7 +31,7 @@ Two files at the repository root, both **seeded**: the repository owns each once
 
 The shared words are the vocabulary every repository uses and the base dictionary lacks (`Statamic`, `UAMS`, `multisite`, tool names). A word one repository needs stays in that repository's own `project-words.txt`, below or among the shared ones, where a later sync leaves it alone. A repository that takes the `spell` profile on top of its own spell check keeps its own `cspell.json` untouched and receives only the shared words it lacks.
 
-A repository that does not take the profile receives none of this, and nothing else changes for it. A repository that takes the profile and sets `"shipSeeds": false` in `manifest.json` receives neither file. The `synced-files` check does not hash either file, since a repository is expected to change both.
+A repository that takes neither the `spell` profile nor `php` receives none of this, and nothing else changes for it. The `php` profile carries this skill and both seeds (UAMS-Web/uams-claude-skills#887), so a plugin or theme repository receives them without a `spell` entry of its own. The sync still never writes `package.json`, `scripts/` or a workflow job, so a repository with no `package.json` receives the skill and two root files that nothing reads until it copies the three things below. A repository that takes the profile and sets `"shipSeeds": false` in `manifest.json` receives neither file. The `synced-files` check does not hash either file, since a repository is expected to change both.
 
 ## What a repository copies
 
@@ -49,7 +49,7 @@ The local CI runner's `spell` job (`local-ci.app-jobs.json`) runs the same `npm 
 
 ## Adopting it in a repository that has its own spell check
 
-1. Add `spell` to the repository's `profiles` in `shared/manifest.json` (a change in UAMS-Web/uams-claude-skills) and sync. An existing `cspell.json` and `project-words.txt` are kept; the shared words the file lacks are added.
+1. A repository that lists `php` already receives the setup. Otherwise add `spell` to its `profiles` in `shared/manifest.json` (a change in UAMS-Web/uams-claude-skills) and sync. An existing `cspell.json` and `project-words.txt` are kept; the shared words the file lacks are added.
 2. Compare the repository's `cspell.json` with the template and bring over what it lacks: `"language": "en"`, the `project-words` dictionary with `"addWords": true`, and the `ignorePaths` for `vendor/`, `node_modules/`, built assets, lock files and the three trees the sync writes (`.claude/`, `.agents/`, `.cursor/`). Those three are ignored because their spelling is checked at the source in UAMS-Web/uams-claude-skills; a repository that keeps its own skills or rules there narrows the entry. The template's comments say why each is there.
 3. Copy `spell.mjs` and the `package.json` line, unless the repository already has a script that fails on zero files.
 4. Run `npm run spell`. Fix each flagged word in the prose before adding it to a dictionary.

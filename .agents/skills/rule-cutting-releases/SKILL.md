@@ -40,6 +40,8 @@ History: [cutting-releases.md § Overview](../../../.claude/history/cutting-rele
 
    The verbatim error strings are in [`docs/runbooks/claude-code-cloud-sessions.md`](../../../docs/runbooks/claude-code-cloud-sessions.md#tags-and-releases-cannot-be-written).
 
+7. **Check the wiki before the release is prepared, in a repository that carries `docs/wiki/`.** When the 10:00 check finds a release due, compare the pages in `docs/wiki/` with the release's code, and set the `Written against` line to the release on the footer and on each page the release leaves accurate, in a change merged before the tag. A wiki that publishes on a release republishes whatever `main` holds, so a line still naming the previous release goes live with the new one. Which changes need a page is listed in [`writing-release-notes`](../writing-release-notes/SKILL.md), and how the pages are written and marked is the [`github-wiki`](../github-wiki/SKILL.md) skill's. A check at publish time (`UAMS-Web/uams-claude-skills#910`) is the backstop, and this step does not depend on it.
+
 ## What counts as breaking
 
 **A change is breaking when it alters this package's own declared surface.** The surface is declared in [`README.md`](../../../README.md#public-surface): a console command and its options, the `ServiceProvider` registration and the bindings it performs, and a named list of classes. **The test is applied to a diff, in this repository, without consulting the consuming app:** a diff is breaking when it removes, renames, or changes the contract of anything in that table. Nothing else is, however `public` it happens to be.
