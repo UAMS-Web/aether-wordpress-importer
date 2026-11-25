@@ -54,7 +54,7 @@ That rule exists because three consecutive PRs changed exit-code behavior in `Im
 
 Do not run these in the primary host checkout. It is served, holds the main branch, and may back another session; content mutation and cache churn from a full run is exactly what the [`worktrees`](../../rules/worktrees.md) rule isolates.
 
-**The host keeps long-lived, pre-bootstrapped slots**, so you *claim* one rather than building a worktree. A host slot already carries its dependency installs, an `.env` repointed at its own host, its git-ignored databases, its submodules and an asset build, which is why "create a worktree and bootstrap it" is not a step here.
+**The host keeps long-lived, pre-bootstrapped slots**, so you *claim* one rather than building a worktree. A host slot already carries its dependency installs, an `.env` pointed at its own host, its git-ignored databases, its submodules and an asset build, which is why "create a worktree and bootstrap it" is not a step here.
 
 1. **Claim the slot the host keeps for package test runs**, never one of the host's own ticket slots and never its CI slot. Borrowing a ticket slot costs three things: it **blocks the host's local CI** (the runner checks branches out by name, so a held slot fails its validating run), it makes the occupancy signal **lie** (a host slot on a package branch reads as host ticket work to anyone checking status), and it **halves the host's concurrency budget**, pushing the next host session onto an ephemeral worktree.
 

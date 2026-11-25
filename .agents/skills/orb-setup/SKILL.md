@@ -41,7 +41,7 @@ from the repository root, after the shared steps.
 
 A step the dependency installs need first goes in `.agents/setup.pre.local` (UAMS-Web/uams-claude-skills#890).
 It runs with `bash`, from the repository root, after PHP, Composer and Node are installed and before
-`composer install` and `npm ci`, so the tools are on `PATH` and nothing from the lockfiles is installed
+`composer install` and `npm ci`, so the tools are on `PATH` and nothing from the lock files is installed
 yet. Two cases need it:
 
 - **An npm newer than the bundled one.** The shared Node ships its own npm, and a `package.json` whose
