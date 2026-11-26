@@ -7,6 +7,11 @@
 # Installs, idempotently: PHP 8.4 (sury.org), Composer 2, Node 22, then the locked dependencies.
 # Every download is verified before use: the sury.org keyring against a pinned sha256, the Composer
 # installer against installer.sig, and the Node archive against SHASUMS256.txt.
+#
+# Needs before it starts (UAMS-Web/uams-claude-skills#927): Debian with apt, sudo without a prompt, and
+# curl with ca-certificates. On a fresh machine the sury.org keyring is downloaded before any package
+# is installed, so the package list below cannot supply the last two. A self-hosted orb's own image
+# may lack apt or curl; the orb-setup skill says what Amp documents.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -25,8 +30,9 @@ fetch() {
     curl --fail --silent --show-error --location --retry 3 "$1" -o "$2"
 }
 
+# xz-utils is what `tar -xJf` needs in the Node step below (UAMS-Web/uams-claude-skills#926).
 echo 'Preparing PHP 8.4 and system dependencies'
-packages=(ca-certificates curl git unzip python3 php8.4-cli php8.4-curl
+packages=(ca-certificates curl git unzip xz-utils python3 php8.4-cli php8.4-curl
     php8.4-gd php8.4-intl php8.4-mbstring php8.4-sqlite3 php8.4-xml
     php8.4-zip php8.4-pcov)
 missing=()
