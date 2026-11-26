@@ -159,7 +159,7 @@ The full statement — provisioning, ephemeral worktrees, the file-tool-vs-cwd h
 
 This repo cuts **real releases that another codebase consumes.** `uams-statamic` pins a tagged caret range, so merged work is **unreachable by the app until a tag exists** — and the cadence is genuinely tight (`v0.6.0`, `v0.6.1`, `v0.7.0` inside one week). A missed tag is not cosmetic: `^0.6` could not reach `v0.7.0`'s fix for a silent truncation that imported 103 of 1826 items.
 
-Tag when not tagging would block progress — in practice, before the app adopts the work — and, as the one standing exception to that test, immediately on any breaking change. Everything is a `--prerelease` until `1.0.0`, which is Launch. The *when* is the [`cutting-releases`](.claude/rules/cutting-releases.md) rule; the *how* is [`README.md`](README.md#releasing) and the [`writing-release-notes`](.claude/skills/writing-release-notes/SKILL.md) skill; the versioning rationale is [`docs/DECISIONS.md`](docs/DECISIONS.md).
+Tag when not tagging would block progress — in practice, before the app adopts the work — and, as the one standing exception to that test, immediately on any breaking change. Every `0.x` tag is published as a full release, not a `--prerelease`, until `1.0.0`, which is Launch (#634). The *when* is the [`cutting-releases`](.claude/rules/cutting-releases.md) rule; the *how* is [`README.md`](README.md#releasing) and the [`writing-release-notes`](.claude/skills/writing-release-notes/SKILL.md) skill; the versioning rationale is [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Writing it up
 
