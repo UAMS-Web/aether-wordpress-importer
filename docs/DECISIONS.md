@@ -6,7 +6,7 @@ The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-impo
 
 Releases are **retrospective semver tags on `main`** — a changelog checkpoint, not a deploy gate or a release branch. Trunk-based flow is unchanged: vetted PRs merge to `main` continuously; a tag marks "everything merged since the last tag."
 
-- Stay in `0.x` until `1.0.0` (Launch); every tag before then is a `--prerelease`.
+- Stay in `0.x` until `1.0.0` (Launch). Every `0.x` tag is published as a full GitHub release, not a pre-release: see the 2026-11-26 entry below, which supersedes the `--prerelease` wording this bullet first carried.
 - `0.x.0` (minor) — a feature or structural milestone. `0.x.y` (patch) — refinement only.
 - **Cut a tag before `uams-statamic` consumes the work** — the app pins this package by a tagged caret range (e.g. `^0.5`), not `dev-main`, so a tag must exist for new work to be requirable. A tag survives a force-push to `main`; a raw `dev-main` commit does not (the failure behind `UAMS-Web/uams-statamic-archive#904` / `#905`).
 - **The governing test is whether not tagging would block progress; the breaking-change trigger is a standing exception to it, not a second test** (`wordpress-importer-archive#992`). Both statements were live in the rule with no ordering between them, so a session reading it at a moment when nobody was available — which is what a standing rule is for — found two tests and no way to choose. The exception is kept rather than narrowed away because the cost it prevents is not a blocked consumer but a breaking change buried among unrelated work, where its callout stops standing on its own. **Rejected:** letting the breaking-change trigger govern outright, which would have meant overturning the adoption-anchored cadence in the bullet below rather than adding to it. What makes a change *breaking for this package* is deliberately left open — `wordpress-importer-archive#1051`.
@@ -1599,3 +1599,15 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: refusing a table that carries both keys.** It is safe, and it forbids a reasonable table shape instead of making it work.
 
 **Rejected: falling back at the `mapAttributesFromMapping()` call site only.** It fixes one of the resolver's five call sites and leaves the other four able to receive the whole table.
+
+## 2026-11-26 `0.x` releases are published as full releases, not pre-releases (#634)
+
+Every `0.x` tag is published as a full GitHub release (`gh release create ... --verify-tag`, with no `--prerelease`). This supersedes the `--prerelease` wording in the 2026-07-18 versioning entry, which the published releases had stopped following.
+
+**Why.** The record and the practice had diverged: `gh api repos/UAMS-Web/aether-wordpress-importer/releases?per_page=100` returned 14 published releases on 2026-11-26, `v0.37.0` the newest, and `prerelease: false` on every one of them, and the operator chose a full release for `v0.37.0` that day to match the practice. The flag carries nothing a consumer reads: Composer resolves `vX.Y.Z` as a stable tag whatever the GitHub release says, so `uams-statamic`'s caret range reaches a full release and a pre-release alike. What the flag does change is GitHub's own presentation, where a pre-release is never marked as the latest release, so a repository whose every release is a pre-release shows none as latest.
+
+**Rejected: going back to `--prerelease` for every `0.x` tag.** It matches the original wording, and it would mark every release as not the latest for no change in what a consumer receives, reversing the practice of every published release to satisfy a sentence.
+
+**Rejected: re-flagging the published releases.** Out of scope for #634, and it would edit published artifacts to match a rule the decision above retires.
+
+The README's *Releasing* section and `AGENTS.md` carry the same statement. The synced `cutting-releases` rule and `writing-release-notes` skill are edited in `UAMS-Web/uams-claude-skills`, not here; `uams-statamic` flags all 11 of its releases as pre-releases, so the shared text has to leave the flag to each repository rather than state either answer for all of them.

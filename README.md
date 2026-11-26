@@ -115,7 +115,7 @@ Classes are listed relative to `UAMSWeb\Aether\WordPressImporter\Services\WordPr
 
 Releases are **retrospective semver tags on `main`** — a changelog checkpoint, not a deploy gate. Cut a tag whenever a batch of vetted changes has landed, and always **before `uams-statamic` consumes them**: the app pins this package by a tagged caret range (`"uams-web/aether-wordpress-importer": "^0.20"` as of 2026-09-21), not `dev-main`, so a tag has to exist for the new work to be requirable. A tag survives a force-push to `main`; a raw `dev-main` branch commit does not (the failure behind `UAMS-Web/uams-statamic`#904 / #905).
 
-**Versioning** — stay in `0.x` until the eventual `1.0.0` (Launch); every tag before then is a pre-release.
+**Versioning** — stay in `0.x` until the eventual `1.0.0` (Launch). Every `0.x` tag is published as a full GitHub release, not a pre-release: the flag changes nothing Composer resolves, and the reasoning is in [`docs/DECISIONS.md`](docs/DECISIONS.md) (#634).
 
 - `0.x.0` (minor) — a feature or structural milestone.
 - `0.x.y` (patch) — refinement only.
@@ -128,8 +128,8 @@ git checkout main && git pull
 git tag -a v0.6.0 -m 'v0.6.0 — <Theme>'
 git push origin v0.6.0
 
-# publish the GitHub release (pre-release until 1.0)
-gh release create v0.6.0 --title 'v0.6.0 — <Theme>' --notes-file notes.md --prerelease --verify-tag
+# publish the GitHub release (a full release, not a pre-release)
+gh release create v0.6.0 --title 'v0.6.0 — <Theme>' --notes-file notes.md --verify-tag
 ```
 
 **Release-note style** — title `vX.Y.Z — <Theme>` (em dash), a one-sentence milestone lead, then a closed, ordered set of `##` buckets: `Breaking changes`, `What's new`, `What's fixed`, `Security`, `Maintenance and tooling`. One linked bullet per change (`[#N]` for a PR, a backticked short SHA for a direct commit); no `by @author`; write "and", never `&`; use the Oxford comma. The full style guide and a body generator (`gen_release_notes.py`) live in the consumer repo `UAMS-Web/uams-statamic` under `.claude/skills/writing-release-notes/`.
